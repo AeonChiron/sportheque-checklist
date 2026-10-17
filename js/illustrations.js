@@ -1,6 +1,8 @@
 // Illustrations des tâches, dessinées en SVG (aucune image à télécharger).
 // Couleurs via variables CSS (--il-*) : elles suivent le thème clair/sombre.
-// viewBox 120 × 90. Contour « encre » commun, aplats de couleur.
+// viewBox 96 × 96. Contour « encre » commun, aplats de couleur.
+// Les éléments « a a-… » bougent en boucle, seulement dans un parent .alive
+// (détail d'une tâche, carte « En cours ») et jamais si on réduit les animations.
 
 const S = 'stroke="var(--il-ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"';
 const T = 'stroke="var(--il-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
@@ -10,17 +12,22 @@ const wrap = (body, label = '') =>
 // ombre douce au sol.
 const shadow = (rx = 26) => `<ellipse cx="48" cy="87" rx="${rx}" ry="3.6" fill="var(--il-shadow)"/>`;
 
+// Petit éclat (propre, brillant).
+const spark = (x, y, d) => `<g transform="translate(${x} ${y})"><path class="a a-spark" style="--d:${d}s" d="M0-5.5l1.4 4.1 4.1 1.4-4.1 1.4L0 5.5l-1.4-4.1-4.1-1.4 4.1-1.4z" fill="var(--il-accent)"/></g>`;
+
 const ART = {
-  // Plaque d'interrupteurs : ventilation à ouvrir.
+  // Plaque d'interrupteurs : les 3 ventilations s'allument l'une après l'autre.
   ouverture: () => `${shadow(22)}
     <rect x="24" y="10" width="48" height="74" rx="10" fill="var(--il-fill)" ${S}/>
     <circle cx="48" cy="16.5" r="1.6" fill="var(--il-mid)"/><circle cx="48" cy="77.5" r="1.6" fill="var(--il-mid)"/>
-    ${[22, 40, 58].map((y) => `
+    ${[22, 40, 58].map((y, i) => `
       <rect x="32" y="${y}" width="32" height="14" rx="4" fill="var(--il-fill2)" ${S}/>
-      <rect x="34.5" y="${y + 2.5}" width="14" height="9" rx="2.5" fill="var(--il-accent)"/>
-      <path d="M41.5 ${y + 4.5}v5" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round"/>`).join('')}`,
+      <g class="a a-flip" style="--d:${i * 0.35}s">
+        <rect x="34.5" y="${y + 2.5}" width="14" height="9" rx="2.5" fill="var(--il-accent)"/>
+        <path d="M41.5 ${y + 4.5}v5" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round"/>
+      </g>`).join('')}`,
 
-  // Laveuse à chargement frontal.
+  // Laveuse : le tambour tourne, des bulles montent.
   guenilles: () => `${shadow(28)}
     <rect x="20" y="10" width="56" height="72" rx="8" fill="var(--il-fill)" ${S}/>
     <path d="M20 25h56" ${T}/>
@@ -28,102 +35,122 @@ const ART = {
     <circle cx="68" cy="18" r="3.6" fill="var(--il-fill2)" ${T}/>
     <circle cx="48" cy="53" r="20" fill="var(--il-fill2)" ${S}/>
     <circle cx="48" cy="53" r="14" fill="var(--il-accent-soft)" ${T}/>
-    <path d="M35 56c4.5-3.6 8.5-3.6 13 0s8.5 3.6 13 0" fill="none" stroke="var(--il-accent)" stroke-width="2.5" stroke-linecap="round"/>
-    <path d="M40 46.5a10 10 0 0 1 7-3" fill="none" stroke="var(--il-fill)" stroke-width="2" stroke-linecap="round"/>
+    <g class="a a-drum">
+      <circle cx="48" cy="53" r="14" fill="none"/>
+      <path d="M35 56c4.5-3.6 8.5-3.6 13 0s8.5 3.6 13 0" fill="none" stroke="var(--il-accent)" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M40 46.5a10 10 0 0 1 7-3" fill="none" stroke="var(--il-fill)" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <circle class="a a-bubble" cx="44" cy="60" r="1.8" fill="var(--il-fill)" style="--d:.3s"/>
+    <circle class="a a-bubble" cx="53" cy="62" r="1.3" fill="var(--il-fill)" style="--d:1.2s"/>
     <rect x="25" y="82" width="7" height="3" rx="1" fill="var(--il-ink)"/><rect x="64" y="82" width="7" height="3" rx="1" fill="var(--il-ink)"/>`,
 
-  // Vaporisateur de désinfectant.
+  // Vaporisateur : la gâchette, puis la bruine.
   desinfection: () => `${shadow(18)}
     <path d="M37 24V16h20l9 6h-7v4" fill="var(--il-fill2)" ${S}/>
     <rect x="66" y="19.5" width="5" height="5" rx="1.5" fill="var(--il-ink)"/>
-    <path d="M45 26c-1.5 3-0.5 6 2 8" fill="none" ${S}/>
+    <path class="a a-trigger" d="M45 26c-1.5 3-0.5 6 2 8" fill="none" ${S}/>
     <rect x="39" y="24" width="15" height="9" rx="2" fill="var(--il-fill2)" ${S}/>
     <path d="M36 33h21l4 8v37a6 6 0 0 1-6 6H38a6 6 0 0 1-6-6V41z" fill="var(--il-fill)" ${S}/>
     <rect x="36" y="50" width="21" height="20" rx="3" fill="var(--il-accent-soft)" ${T}/>
     <path d="M46.5 54.5c3 3.6 4.5 6 4.5 8a4.5 4.5 0 0 1-9 0c0-2 1.5-4.4 4.5-8z" fill="var(--il-accent)"/>
-    <circle cx="77" cy="18" r="1.8" fill="var(--il-accent)"/><circle cx="81" cy="23" r="1.4" fill="var(--il-accent)"/><circle cx="80" cy="13.5" r="1.2" fill="var(--il-accent)"/>`,
+    ${[[77, 18, 1.8, 0], [81, 23, 1.4, 0.15], [80, 13.5, 1.2, 0.3], [85, 17, 1.1, 0.45], [84, 26, 0.9, 0.6]].map(([x, y, r, d]) => `<circle class="a a-mist" cx="${x}" cy="${y}" r="${r}" fill="var(--il-accent)" style="--d:${d}s"/>`).join('')}`,
 
-  // Guenille en microfibre pliée : les points de contact.
+  // Guenille en microfibre : elle essuie, ça brille.
   'points-contact': () => `${shadow(28)}
-    <g transform="rotate(-8 48 50)">
+    <g class="a a-wipe"><g transform="rotate(-8 48 50)">
       <rect x="18" y="26" width="60" height="46" rx="7" fill="var(--il-accent-soft)" ${S}/>
       <path d="M24 34h48M24 41h48M24 48h48" stroke="var(--il-accent)" stroke-width="1.6" stroke-dasharray="2 3.5" stroke-linecap="round" opacity=".7"/>
       <path d="M18 54h60v12a6 6 0 0 1-6 6H24a6 6 0 0 1-6-6z" fill="var(--il-accent)" ${S}/>
       <path d="M24 61h48" stroke="var(--il-fill)" stroke-width="1.6" stroke-dasharray="2 3.5" stroke-linecap="round" opacity=".8"/>
-    </g>`,
+    </g></g>
+    ${spark(80, 20, 0)}${spark(14, 76, 1.1)}`,
 
-  // Poubelle à couvercle basculant.
+  // Poubelle : le couvercle bascule.
   poubelles: () => `${shadow(20)}
     <path d="M29 36h38l-4 44a4 4 0 0 1-4 4H37a4 4 0 0 1-4-4z" fill="var(--il-fill)" ${S}/>
     <path d="M40 44v32M48 44v32M56 44v32" stroke="var(--il-mid)" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M26 36c0-11 9.8-18 22-18s22 7 22 18z" fill="var(--il-fill2)" ${S}/>
-    <rect x="39" y="24" width="18" height="7" rx="2.5" fill="var(--il-accent)" ${T}/>`,
+    <g class="a a-lid">
+      <path d="M26 36c0-11 9.8-18 22-18s22 7 22 18z" fill="var(--il-fill2)" ${S}/>
+      <rect x="39" y="24" width="18" height="7" rx="2.5" fill="var(--il-accent)" ${T}/>
+    </g>`,
 
-  // Aspirateur vertical commercial.
+  // Aspirateur : il avance et recule, la poussière disparaît.
   aspirateur: () => `${shadow(28)}
-    <rect x="52" y="6" width="16" height="7" rx="3.5" fill="var(--il-fill2)" ${S}/>
-    <path d="M59 13l-6 26" ${S} stroke-width="3.2"/>
-    <rect x="39" y="34" width="24" height="34" rx="8" fill="var(--il-accent)" ${S}/>
-    <rect x="43" y="40" width="16" height="5" rx="2.5" fill="var(--il-accent-soft)"/>
-    <path d="M63 46c9 3 12 10 9 22" fill="none" ${T}/>
-    <rect x="44" y="67" width="14" height="7" rx="2" fill="var(--il-fill2)" ${S}/>
-    <path d="M24 78a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v3H24z" fill="var(--il-fill)" ${S}/>
-    <circle cx="31" cy="84" r="3" fill="var(--il-ink)"/><circle cx="65" cy="84" r="3" fill="var(--il-ink)"/>`,
+    ${[[82, 0], [86, 0.5], [79, 1]].map(([x, d]) => `<circle class="a a-dust" cx="${x}" cy="83" r="1.6" fill="var(--il-mid)" style="--d:${d}s"/>`).join('')}
+    <g class="a a-glide">
+      <rect x="52" y="6" width="16" height="7" rx="3.5" fill="var(--il-fill2)" ${S}/>
+      <path d="M59 13l-6 26" ${S} stroke-width="3.2"/>
+      <rect x="39" y="34" width="24" height="34" rx="8" fill="var(--il-accent)" ${S}/>
+      <rect class="a a-led" x="43" y="40" width="16" height="5" rx="2.5" fill="var(--il-accent-soft)"/>
+      <path d="M63 46c9 3 12 10 9 22" fill="none" ${T}/>
+      <rect x="44" y="67" width="14" height="7" rx="2" fill="var(--il-fill2)" ${S}/>
+      <path d="M24 78a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v3H24z" fill="var(--il-fill)" ${S}/>
+      <circle cx="31" cy="84" r="3" fill="var(--il-ink)"/><circle cx="65" cy="84" r="3" fill="var(--il-ink)"/>
+    </g>`,
 
-  // Le tour complet du plancher : une boucle avec flèche.
+  // Le tour complet du plancher : la flèche fait le tour.
   'tour-general': () => `${shadow(28)}
     <rect x="16" y="16" width="64" height="64" rx="12" fill="var(--il-fill2)" ${S}/>
     <path d="M30 34h36M30 48h36M30 62h36" stroke="var(--il-mid)" stroke-width="1.6" stroke-dasharray="2 4" stroke-linecap="round"/>
-    <path d="M62 26A24 24 0 1 1 35 27" fill="none" stroke="var(--il-accent)" stroke-width="4.5" stroke-linecap="round"/>
-    <path d="M27 20l9 6.5-8.5 7" fill="none" stroke="var(--il-accent)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="48" cy="48" r="5" fill="var(--il-ink)"/>`,
+    <g class="a a-orbit">
+      <circle cx="48" cy="48" r="36" fill="none"/>
+      <path d="M62 26A24 24 0 1 1 35 27" fill="none" stroke="var(--il-accent)" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M27 20l9 6.5-8.5 7" fill="none" stroke="var(--il-accent)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <circle class="a a-beat" cx="48" cy="48" r="5" fill="var(--il-ink)"/>`,
 
-  // Haltère hexagonal.
+  // Haltère hexagonal : on le soulève, on le repose à sa place.
   rangement: () => {
     const hex = (cx, cy, r) => Array.from({ length: 6 }, (_, i) => {
       const a = Math.PI / 6 + (i * Math.PI) / 3;
       return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
     }).join(' ');
-    return `${shadow(30)}
-      <rect x="28" y="44" width="40" height="8" rx="3" fill="var(--il-fill2)" ${S}/>
-      <path d="M40 45v6M44 45v6M48 45v6M52 45v6M56 45v6" stroke="var(--il-mid)" stroke-width="1.4"/>
-      <rect x="31" y="40" width="5" height="16" rx="1.5" fill="var(--il-accent)" ${T}/>
-      <rect x="60" y="40" width="5" height="16" rx="1.5" fill="var(--il-accent)" ${T}/>
-      <polygon points="${hex(21, 48, 16)}" fill="var(--il-fill)" ${S}/><polygon points="${hex(21, 48, 8)}" fill="var(--il-fill2)" ${T}/>
-      <polygon points="${hex(75, 48, 16)}" fill="var(--il-fill)" ${S}/><polygon points="${hex(75, 48, 8)}" fill="var(--il-fill2)" ${T}/>`;
+    return `<ellipse class="a a-shadow" cx="48" cy="87" rx="30" ry="3.6" fill="var(--il-shadow)"/>
+      <g class="a a-lift">
+        <rect x="28" y="44" width="40" height="8" rx="3" fill="var(--il-fill2)" ${S}/>
+        <path d="M40 45v6M44 45v6M48 45v6M52 45v6M56 45v6" stroke="var(--il-mid)" stroke-width="1.4"/>
+        <rect x="31" y="40" width="5" height="16" rx="1.5" fill="var(--il-accent)" ${T}/>
+        <rect x="60" y="40" width="5" height="16" rx="1.5" fill="var(--il-accent)" ${T}/>
+        <polygon points="${hex(21, 48, 16)}" fill="var(--il-fill)" ${S}/><polygon points="${hex(21, 48, 8)}" fill="var(--il-fill2)" ${T}/>
+        <polygon points="${hex(75, 48, 16)}" fill="var(--il-fill)" ${S}/><polygon points="${hex(75, 48, 8)}" fill="var(--il-fill2)" ${T}/>
+      </g>`;
   },
 
-  // Planchette d'inspection.
+  // Planchette : la dernière case se coche.
   inspection: () => `${shadow(22)}
     <rect x="22" y="12" width="52" height="72" rx="7" fill="var(--il-fill2)" ${S}/>
     <rect x="29" y="20" width="38" height="58" rx="3" fill="var(--il-fill)" ${T}/>
     <rect x="37" y="7" width="22" height="11" rx="3.5" fill="var(--il-mid)" ${S}/>
     ${[30, 44, 58].map((y, i) => `
       <rect x="34" y="${y}" width="8" height="8" rx="2" fill="${i < 2 ? 'var(--il-accent)' : 'var(--il-fill)'}" ${T}/>
-      ${i < 2 ? `<path d="M35.8 ${y + 4.2}l1.8 1.8 3-3.4" fill="none" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+      ${i < 2
+        ? `<path d="M35.8 ${y + 4.2}l1.8 1.8 3-3.4" fill="none" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
+        : `<rect class="a a-box" x="34" y="${y}" width="8" height="8" rx="2" fill="var(--il-accent)" ${T}/>
+           <path class="a a-check" pathLength="1" d="M35.8 ${y + 4.2}l1.8 1.8 3-3.4" fill="none" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`}
       <path d="M46 ${y + 4}h15" stroke="var(--il-mid)" stroke-width="2.4" stroke-linecap="round"/>`).join('')}`,
 
-  // Seau et moppe.
+  // Seau et moppe : la moppe va et vient, l'eau bouge.
   tuiles: () => `${shadow(26)}
-    <path d="M62 6L50 54" ${S} stroke-width="3.2"/>
+    <path class="a a-mop" d="M62 6L50 54" ${S} stroke-width="3.2"/>
     <path d="M26 46h44l-5 34a4 4 0 0 1-4 4H35a4 4 0 0 1-4-4z" fill="var(--il-fill)" ${S}/>
-    <ellipse cx="48" cy="46" rx="22" ry="5" fill="var(--il-accent-soft)" ${S}/>
+    <ellipse class="a a-ripple" cx="48" cy="46" rx="22" ry="5" fill="var(--il-accent-soft)" ${S}/>
     <path d="M40 46c2-6 14-6 18 0" fill="var(--il-mid)" ${T}/>
     <path d="M27 58h42" ${T} opacity=".5"/>
     <rect x="22" y="56" width="5" height="12" rx="2" fill="var(--il-accent)" ${T}/><rect x="69" y="56" width="5" height="12" rx="2" fill="var(--il-accent)" ${T}/>`,
 
-  // Raclette à miroirs.
+  // Raclette : un passage, des gouttes qui tombent, un éclat.
   miroirs: () => `${shadow(22)}
-    <g transform="rotate(-28 48 48)">
+    <g class="a a-squeegee"><g transform="rotate(-28 48 48)">
       <rect x="44" y="34" width="8" height="46" rx="4" fill="var(--il-fill2)" ${S}/>
       <path d="M44 70h8" ${T}/>
       <rect x="22" y="24" width="52" height="11" rx="3" fill="var(--il-fill)" ${S}/>
       <rect x="20" y="19" width="56" height="6" rx="2" fill="var(--il-accent)" ${S}/>
-    </g>
-    <path d="M70 66c1.5 2.2 2.4 3.6 2.4 4.8a2.4 2.4 0 0 1-4.8 0c0-1.2.9-2.6 2.4-4.8z" fill="var(--il-accent)"/>
-    <path d="M78 56c1.2 1.8 2 3 2 4a2 2 0 0 1-4 0c0-1 .8-2.2 2-4z" fill="var(--il-accent)"/>`,
+    </g></g>
+    <path class="a a-drip" style="--d:0s" d="M70 66c1.5 2.2 2.4 3.6 2.4 4.8a2.4 2.4 0 0 1-4.8 0c0-1.2.9-2.6 2.4-4.8z" fill="var(--il-accent)"/>
+    <path class="a a-drip" style="--d:.9s" d="M78 56c1.2 1.8 2 3 2 4a2 2 0 0 1-4 0c0-1 .8-2.2 2-4z" fill="var(--il-accent)"/>
+    ${spark(16, 18, 0.5)}`,
 
-  // Vélo de spinning, vu de côté.
+  // Vélo de spinning : le volant tourne, le pédalier aussi.
   spinning: () => `${shadow(30)}
     <path d="M20 84h56" ${S} stroke-width="4"/>
     <path d="M30 84l8-30M38 54l-2-12" ${S} stroke-width="3.5"/>
@@ -131,60 +158,83 @@ const ART = {
     <path d="M38 58l26 8M60 84l2-56" ${S} stroke-width="3.5"/>
     <path d="M56 26h12a4 4 0 0 1 4 4v3" fill="none" ${S} stroke-width="3.2"/>
     <circle cx="66" cy="66" r="14" fill="var(--il-fill2)" ${S}/>
-    <circle cx="66" cy="66" r="9" fill="none" stroke="var(--il-mid)" stroke-width="1.8"/>
+    <g class="a a-spin">
+      <circle cx="66" cy="66" r="9" fill="none" stroke="var(--il-mid)" stroke-width="1.8"/>
+      <path d="M66 57.5v17M57.5 66h17" stroke="var(--il-mid)" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
     <circle cx="66" cy="66" r="4.5" fill="var(--il-accent)" ${T}/>
-    <circle cx="46" cy="64" r="4" fill="var(--il-fill)" ${S}/>
-    <path d="M46 64l5 9M48.5 75h6" ${S}/>`,
+    <g class="a a-crank">
+      <circle cx="46" cy="64" r="12" fill="none"/>
+      <path d="M46 64l5 9M48.5 75h6" ${S}/>
+    </g>
+    <circle cx="46" cy="64" r="4" fill="var(--il-fill)" ${S}/>`,
 
-  // Calendrier de la semaine.
+  // Calendrier : le jour avance d'une case à l'autre.
   hebdo: () => `${shadow(26)}
     <rect x="18" y="16" width="60" height="66" rx="8" fill="var(--il-fill)" ${S}/>
     <path d="M18 32V24a8 8 0 0 1 8-8h44a8 8 0 0 1 8 8v8z" fill="var(--il-accent)" ${S}/>
     <rect x="31" y="10" width="5" height="12" rx="2.5" fill="var(--il-fill2)" ${S}/><rect x="60" y="10" width="5" height="12" rx="2.5" fill="var(--il-fill2)" ${S}/>
-    ${[0, 1, 2].map((r) => [0, 1, 2, 3].map((c) => {
-      const on = r === 1 && c === 2;
-      return `<rect x="${25 + c * 12}" y="${40 + r * 12}" width="9" height="9" rx="2.5" fill="${on ? 'var(--il-accent)' : 'var(--il-fill2)'}" ${on ? T : ''}/>`;
-    }).join('')).join('')}
-    <path d="M51.5 56.5l1.8 1.8 3-3.4" fill="none" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+    ${[0, 1, 2].map((r) => [0, 1, 2, 3].map((c) => `<rect x="${25 + c * 12}" y="${40 + r * 12}" width="9" height="9" rx="2.5" fill="var(--il-fill2)"/>`).join('')).join('')}
+    <g class="a a-hop">
+      <rect x="49" y="52" width="9" height="9" rx="2.5" fill="var(--il-accent)" ${T}/>
+      <path d="M51.5 56.5l1.8 1.8 3-3.4" fill="none" stroke="var(--il-fill)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>`,
 
-  // Porte de bureau.
+  // Porte de bureau : elle s'entrouvre.
   bureaux: () => `${shadow(22)}
     <rect x="26" y="8" width="44" height="78" rx="3" fill="var(--il-fill2)" ${S}/>
-    <rect x="31" y="13" width="34" height="73" rx="2" fill="var(--il-fill)" ${S}/>
-    <rect x="36" y="22" width="24" height="8" rx="2" fill="var(--il-accent-soft)" ${T}/>
-    <path d="M40 26h16" stroke="var(--il-accent)" stroke-width="1.8" stroke-linecap="round"/>
-    <rect x="36" y="40" width="24" height="16" rx="2" fill="none" stroke="var(--il-mid)" stroke-width="1.8"/>
-    <rect x="36" y="62" width="24" height="16" rx="2" fill="none" stroke="var(--il-mid)" stroke-width="1.8"/>
-    <circle cx="58" cy="52" r="3" fill="var(--il-accent)" ${T}/>`,
+    <rect x="31" y="13" width="34" height="73" rx="2" fill="var(--il-ink)" opacity=".22"/>
+    <g class="a a-door">
+      <rect x="31" y="13" width="34" height="73" rx="2" fill="var(--il-fill)" ${S}/>
+      <rect x="36" y="22" width="24" height="8" rx="2" fill="var(--il-accent-soft)" ${T}/>
+      <path d="M40 26h16" stroke="var(--il-accent)" stroke-width="1.8" stroke-linecap="round"/>
+      <rect x="36" y="40" width="24" height="16" rx="2" fill="none" stroke="var(--il-mid)" stroke-width="1.8"/>
+      <rect x="36" y="62" width="24" height="16" rx="2" fill="none" stroke="var(--il-mid)" stroke-width="1.8"/>
+      <circle cx="58" cy="52" r="3" fill="var(--il-accent)" ${T}/>
+    </g>`,
 
-  // Grille de ventilation.
+  // Grille de ventilation : l'air sort.
   ventilation: () => `${shadow(26)}
     <rect x="16" y="12" width="64" height="64" rx="10" fill="var(--il-fill)" ${S}/>
     <rect x="24" y="20" width="48" height="48" rx="5" fill="var(--il-fill2)" ${T}/>
-    ${[29, 37, 45, 53, 61].map((y) => `<path d="M29 ${y}h38" ${S} stroke-width="3"/>`).join('')}
+    ${[29, 37, 45, 53, 61].map((y, i) => `<path class="a a-slat" style="--d:${i * 0.12}s" d="M29 ${y}h38" ${S} stroke-width="3"/>`).join('')}
     ${[[20, 16], [76, 16], [20, 72], [76, 72]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6" fill="var(--il-mid)"/>`).join('')}
-    <path d="M30 83c4-3 8 3 12 0s8 3 12 0 8 3 12 0" fill="none" stroke="var(--il-accent)" stroke-width="2.2" stroke-linecap="round"/>`,
+    <path class="a a-flow" d="M24 83c4-3 8 3 12 0s8 3 12 0 8 3 12 0 8 3 12 0" fill="none" stroke="var(--il-accent)" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="7 5"/>`,
 
-  // Clé 124.
+  // Clé 124 : elle se balance doucement.
   'fin-quart': () => `${shadow(26)}
-    <circle cx="28" cy="34" r="12" fill="var(--il-fill)" ${S}/>
-    <circle cx="28" cy="34" r="4.5" fill="var(--il-fill2)" ${T}/>
-    <path d="M38 40l22 13M52 48l-3 6M58 52l-3 6" ${S} stroke-width="4"/>
-    <path d="M24 46l-2 10" ${T}/>
-    <g transform="rotate(12 30 66)">
-      <rect x="14" y="56" width="34" height="20" rx="6" fill="var(--il-accent)" ${S}/>
-      <circle cx="20" cy="66" r="2" fill="var(--il-fill)"/>
-      <text x="35" y="70.5" text-anchor="middle" class="il-num">124</text>
+    <g class="a a-swing">
+      <circle cx="28" cy="34" r="60" fill="none"/>
+      <circle cx="28" cy="34" r="12" fill="var(--il-fill)" ${S}/>
+      <circle cx="28" cy="34" r="4.5" fill="var(--il-fill2)" ${T}/>
+      <path d="M38 40l22 13M52 48l-3 6M58 52l-3 6" ${S} stroke-width="4"/>
+      <path d="M24 46l-2 10" ${T}/>
+      <g transform="rotate(12 30 66)">
+        <rect x="14" y="56" width="34" height="20" rx="6" fill="var(--il-accent)" ${S}/>
+        <circle cx="20" cy="66" r="2" fill="var(--il-fill)"/>
+        <text x="35" y="70.5" text-anchor="middle" class="il-num">124</text>
+      </g>
     </g>`,
 
-  // Cadenas : fermeture du gym.
+  // Cadenas : il se referme d'un clic.
   fermeture: () => `${shadow(22)}
-    <path d="M34 42V31a14 14 0 0 1 28 0v11" fill="none" ${S} stroke-width="4"/>
-    <rect x="24" y="40" width="48" height="42" rx="8" fill="var(--il-fill)" ${S}/>
-    <path d="M24 52h48" stroke="var(--il-accent)" stroke-width="5"/>
-    <circle cx="48" cy="64" r="5" fill="var(--il-ink)"/>
-    <path d="M48 66v8" stroke="var(--il-ink)" stroke-width="4" stroke-linecap="round"/>`,
+    <path class="a a-shackle" d="M34 42V31a14 14 0 0 1 28 0v11" fill="none" ${S} stroke-width="4"/>
+    <g class="a a-thunk">
+      <rect x="24" y="40" width="48" height="42" rx="8" fill="var(--il-fill)" ${S}/>
+      <path d="M24 52h48" stroke="var(--il-accent)" stroke-width="5"/>
+      <circle cx="48" cy="64" r="5" fill="var(--il-ink)"/>
+      <path d="M48 66v8" stroke="var(--il-ink)" stroke-width="4" stroke-linecap="round"/>
+    </g>`,
+
+  // Dossier des rapports : les feuilles glissent dedans.
+  dossier: () => `${shadow(30)}
+    <path d="M14 26a5 5 0 0 1 5-5h18l6 7h34a5 5 0 0 1 5 5v44a5 5 0 0 1-5 5H19a5 5 0 0 1-5-5z" fill="var(--il-fill2)" ${S}/>
+    <g class="a a-sheet" style="--d:0s"><rect x="24" y="20" width="44" height="40" rx="3" fill="var(--il-fill)" ${T}/><path d="M30 29h24M30 36h32M30 43h18" stroke="var(--il-mid)" stroke-width="2" stroke-linecap="round"/></g>
+    <g class="a a-sheet" style="--d:.5s"><rect x="30" y="26" width="44" height="40" rx="3" fill="var(--il-fill)" ${T}/><path d="M36 35h14" stroke="var(--il-accent)" stroke-width="2.4" stroke-linecap="round"/><path d="M36 42h30M36 49h22" stroke="var(--il-mid)" stroke-width="2" stroke-linecap="round"/></g>
+    <path d="M14 44a5 5 0 0 1 5-5h58a5 5 0 0 1 5 5v33a5 5 0 0 1-5 5H19a5 5 0 0 1-5-5z" fill="var(--il-accent-soft)" ${S}/>
+    <rect x="40" y="52" width="16" height="5" rx="2.5" fill="var(--il-accent)"/>`,
 };
+
 ART['aspirateur-muscu'] = ART.aspirateur;
 ART['aspirateur-cardio'] = ART.aspirateur;
 ART['aspirateur-gym'] = ART.aspirateur;
@@ -196,6 +246,7 @@ const miniZone = (z) => () => `${shadow(30)}
     <rect x="14" y="14" width="32" height="38" rx="5" fill="var(${z === 'C' ? '--zC-strong' : '--il-fill2'})" ${S}/>
     <rect x="50" y="14" width="32" height="38" rx="5" fill="var(${z === 'B' ? '--zB-strong' : '--il-fill2'})" ${S}/>
     <rect x="14" y="56" width="68" height="26" rx="5" fill="var(${z === 'A' ? '--zA-strong' : '--il-fill2'})" ${S}/>
+    <rect class="a a-glow" x="${z === 'A' ? 14 : z === 'B' ? 50 : 14}" y="${z === 'A' ? 56 : 14}" width="${z === 'A' ? 68 : 32}" height="${z === 'A' ? 26 : 38}" rx="5" fill="none" stroke="var(--il-accent)" stroke-width="3"/>
     <text x="${z === 'A' ? 48 : z === 'B' ? 66 : 30}" y="${z === 'A' ? 75 : 39}" text-anchor="middle" class="zm-id">${z}</text>`;
 ART['zone-a'] = miniZone('A');
 ART['zone-b'] = miniZone('B');
