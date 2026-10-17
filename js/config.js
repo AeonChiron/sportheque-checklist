@@ -38,7 +38,8 @@ export const CONFIG = {
   // l'adresse par l'alias secret que FormSubmit fournit.
   // 'api' : fonction serveur api/send-report.js (Vercel + Resend).
   sendVia: 'formsubmit',
-  reportTo: 'daniel.desrochers@sportheque.com',
+  // Période de test : les rapports vont à l'adresse de test, pas au superviseur.
+  reportTo: 'thealchemicalseed@gmail.com',
   reportEndpoint: '/api/send-report',
 
   // Bouton de secours « Envoyer avec l'app Mail » (adresse facultative).
