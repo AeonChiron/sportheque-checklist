@@ -1,0 +1,9 @@
+{
+  "name": "sportheque-checklist",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.js",
+    "test": "node --test tests/*.test.js"
+  }
+}
