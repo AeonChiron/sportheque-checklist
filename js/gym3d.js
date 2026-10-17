@@ -4,7 +4,7 @@
 // en pinçant (ou à la molette), on touche une zone pour la voir.
 
 import * as THREE from '../vendor/three.module.min.js';
-import { ZONES, ROOMS, DOORS, GEAR } from './floor-layout.js';
+import { ZONES, ROOMS, DOORS, GEAR, PARTITIONS } from './floor-layout.js';
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -176,6 +176,10 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     platform: (g, it) => part(g, 0, 0, it.w, it.h, 1.4, C.wood, { shadow: false }),
     carpet: (g, it) => part(g, 0, 0, it.w, it.h, 0.8, C.carpet, { shadow: false }),
     mirror: (g, it) => part(g, 0, 0, it.w, it.h, 22, C.glass, { y: 1, extra: { metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.75 } }),
+    aisle: (g, it) => part(g, 0, 0, it.w, it.h, 0.4, C.rubber, { y: 1.5, shadow: false }),
+    window: (g, it) => { part(g, 0, 0, it.w, it.h, 20, C.glass, { y: 2, extra: { metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.45, emissive: C.glass, emissiveIntensity: D ? 0.35 : 0.15 } }); for (let i = 1; i < Math.floor(it.h / 12); i++) part(g, 0, -it.h / 2 + i * 12, it.w + 0.6, 1, 20, C.dark, { y: 2 }); },
+    balls: (g) => { for (const [dx, dz, rr, col] of [[-2.5, -2, 2.6, '#3b7fd0'], [2.5, 1, 2.2, '#e0b03a'], [-1, 3.5, 1.8, '#c9533e']]) { const b = new THREE.Mesh(new THREE.SphereGeometry(rr, 16, 12), mat(col)); b.position.set(dx, y0 + rr, dz); b.castShadow = true; g.add(b); } },
+    barbells: (g, it) => { part(g, -it.w / 2 + 1, 0, 2, it.h, 16, C.metal); part(g, it.w / 2 - 1, 0, 2, it.h, 16, C.metal); for (let i = 0; i < 4; i++) rod(g, 0, -it.h / 2 + 5 + i * 5.5, 0.7, it.w + 6, C.dark, { y: y0 + 4 + i * 3, axis: 'x' }); },
     tv: (g, it) => { part(g, 0, 0, it.w + 1, 2, 9, C.dark, { y: 16 }); part(g, 0, 1.1, it.w - 1, 0.3, 7, C.accent, { y: 17, shadow: false, extra: screen }); },
   };
   for (const it of GEAR) {
@@ -203,6 +207,8 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
       else box(Math.min(x1, x2), y1 - 1.5, Math.abs(x2 - x1), 3, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
     }
   }
+  // Cloison entre les poids et le cardio (avec son ouverture).
+  for (const [x1, y1, x2, y2] of PARTITIONS) seg(x1, y1, x2, y2, 12, 2.5);
   for (const [id, m] of Object.entries(ROOMS)) {
     const sides = { top: [m.x, m.y, m.x + m.w, m.y], left: [m.x, m.y, m.x, m.y + m.h], right: [m.x + m.w, m.y, m.x + m.w, m.y + m.h] };
     for (const [side, [x1, y1, x2, y2]] of Object.entries(sides)) {

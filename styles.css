@@ -982,3 +982,9 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .floor .zm-top { pointer-events: none; }
 .floor .zm:focus-visible .zm-tint { opacity: .7; }
 .floor .zm-room-label.tiny { font-size: 7.5px; letter-spacing: .06em; }
+
+.floor .eq-aisle { fill: url(#fl-rubber); stroke: var(--fl-rubber-line); stroke-width: 1; }
+.floor .eq-window { fill: #bfe3ef; stroke: #6aa9bd; stroke-width: .8; }
+.floor .eq-mullion { stroke: #6aa9bd; stroke-width: .8; }
+.floor .eq-ball { fill: #3b7fd0; stroke: var(--eq-ink); stroke-width: .6; } .floor .eq-ball.b2 { fill: #e0b03a; } .floor .eq-ball.b3 { fill: #c9533e; }
+.floor .zm-wall.part { stroke-width: 2.2; opacity: .8; }

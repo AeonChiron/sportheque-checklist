@@ -1,6 +1,6 @@
 // Illustrations des tâches, dessinées en SVG (aucune image à télécharger).
 // Couleurs via variables CSS (--il-*) : elles suivent le thème clair/sombre.
-import { ZONES, ROOMS, DOORS, GEAR, WALK } from './floor-layout.js';
+import { ZONES, ROOMS, DOORS, GEAR, WALK, PARTITIONS } from './floor-layout.js';
 // viewBox 96 × 96. Contour « encre » commun, aplats de couleur.
 // Les éléments « a a-… » bougent en boucle, seulement dans un parent .alive
 // (détail d'une tâche, carte « En cours ») et jamais si on réduit les animations.
@@ -287,6 +287,10 @@ const GEAR_SVG = {
   carpet: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 5, 'eq-carpet')}<text y="3.5" text-anchor="middle" class="eq-carpet-label">${'{stretch}'}</text>`,
   mirror: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 1.5, 'eq-mirror'),
   tv: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-tv'),
+  aisle: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 3, 'eq-aisle'),
+  window: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-window')}${Array.from({ length: Math.floor(g.h / 12) }, (_, i) => `<path d="M${-g.w / 2} ${-g.h / 2 + 12 * (i + 1)}h${g.w}" class="eq-mullion"/>`).join('')}`,
+  balls: () => `<circle cx="-2.5" cy="-2" r="2.6" class="eq-ball"/><circle cx="2.5" cy="1" r="2.2" class="eq-ball b2"/><circle cx="-1" cy="3.5" r="1.8" class="eq-ball b3"/>`,
+  barbells: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2, 'eq frame')}${Array.from({ length: 4 }, (_, i) => `<path d="M${-g.w / 2 - 2} ${-g.h / 2 + 5 + i * 5.5}h${g.w + 4}" class="eq-bar"/>`).join('')}`,
 };
 export function zoneMap({ highlight = null, selected = null, tags = {}, labels } = {}) {
   const zoneBase = (id, z) => `<g class="zm z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
@@ -355,6 +359,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     <g clip-path="url(#fl-clip)">${Object.entries(ROOMS).map(([id, m]) => room(id, m)).join('')}</g>
     <path class="zm-wall" d="${outer}"/>
     <path class="zm-wall thin" d="${roomWalls}"/>
+    <path class="zm-wall part" d="${PARTITIONS.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join('')}"/>
     <path class="zm-swing" d="${swings}M4 ${en.from}h22M26 ${en.from}A22 22 0 0 1 4 ${en.from + 22}M${tp.from} 4v14M${tp.from} 18A14 14 0 0 0 ${tp.to} 4"/>
     <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
       <rect x="0" y="${en.from - 6}" width="28" height="${en.to - en.from + 12}" fill="transparent"/>
