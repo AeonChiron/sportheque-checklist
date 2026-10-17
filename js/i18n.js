@@ -4,7 +4,9 @@ export const UI = {
   fr: {
     floor: 'Entretien · 2e étage',
     hello: 'Bon quart!',
-    lede: 'Entre tes heures : ton plan de quart se bâtit tout seul.',
+    lede: 'Choisis ton quart : ton plan se bâtit tout seul.',
+    yourHours: 'Ton quart',
+    presets: { jour: 'Jour', soir: 'Soir', 'soir-court': 'Soir court' },
     name: 'Ton nom',
     namePh: 'Prénom',
     start: 'Début',
@@ -149,7 +151,9 @@ export const UI = {
   en: {
     floor: 'Cleaning · 2nd floor',
     hello: 'Have a good shift!',
-    lede: 'Enter your hours: your shift plan builds itself.',
+    lede: 'Pick your shift: your plan builds itself.',
+    yourHours: 'Your shift',
+    presets: { jour: 'Day', soir: 'Evening', 'soir-court': 'Short evening' },
     name: 'Your name',
     namePh: 'First name',
     start: 'Start',

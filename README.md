@@ -6,8 +6,10 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
 ## Ce que ça fait
 
 **Pour l'employé**
-1. Il entre son nom, ses heures, la date, choisit le **superviseur en service**
-   (Daniel ou Mathieu) et la langue du rapport pour lui.
+1. Il entre son nom, touche son quart (**Jour** 7 h 30–15 h 30, **Soir** 16 h 30–23 h,
+   **Soir court** 18 h–23 h) ou entre d'autres heures, la date, choisit le
+   **superviseur en service** (Daniel ou Mathieu) et la langue du rapport pour lui.
+   Le téléphone retient ses dernières heures.
 2. Le plan du quart se bâtit tout seul à partir du **manuel de référence**
    (`RÉFÉRENCE-IA-2026-10-17`) : tâches dans l'ordre, heures, zone A/B/C du jour,
    tâche hebdo, tuiles/miroirs, murs, compost. Des heures différentes de
@@ -54,6 +56,7 @@ L'« algorithme obligatoire » de la section 6 du manuel :
 |---|---|
 | `gymName` | `Sporthèque` |
 | `logo` | vide → mot-symbole texte. Déposer le logo officiel dans `icons/` et mettre son chemin ici. |
+| `shiftPresets` | quarts proposés au début (Jour, Soir, Soir court); en ajouter ou en retirer ici |
 | `supervisors` | Daniel, Mathieu (ajouter `email` pour qu'un superviseur reçoive ses rapports directement) |
 | `reportTo` | adresse de test pendant la période d'essai |
 | `cycleAnchorMonday` | `2026-10-19` |

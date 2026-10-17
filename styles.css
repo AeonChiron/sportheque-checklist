@@ -168,6 +168,26 @@ textarea { resize: vertical; line-height: 1.4; }
 .segmented.tiny button { min-height: 34px; padding: 5px 10px; font-size: 13px; }
 #supervisorPick button { font-family: var(--display); font-size: 18px; font-weight: 600; letter-spacing: .02em; }
 
+/* Quarts habituels : nom, heures, et une petite barre de 6 h à minuit. */
+.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.presets button {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; min-width: 0;
+  text-align: left; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 10px 17px; min-height: 68px;
+  transition: background .2s var(--ease), border-color .2s, color .2s, box-shadow .2s, transform .15s var(--ease);
+}
+.presets b { font-family: var(--display); font-weight: 700; font-size: 17px; line-height: 1.05; letter-spacing: .03em; text-transform: uppercase; }
+.presets .num { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.presets .dayline { position: absolute; left: 10px; right: 10px; bottom: 8px; height: 3px; border-radius: 2px; background: var(--line); }
+.presets .dayline::after { content: ''; position: absolute; top: 0; bottom: 0; left: var(--s); right: calc(100% - var(--e)); border-radius: 2px; background: var(--faint); transition: background .2s; }
+.presets button:active { transform: scale(.97); }
+.presets button[aria-checked="true"] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); box-shadow: 0 8px 20px -12px rgba(0, 0, 0, .55); }
+.presets button[aria-checked="true"] .num { color: inherit; opacity: .82; }
+.presets button[aria-checked="true"] .dayline { background: color-mix(in srgb, currentColor 22%, transparent); }
+.presets button[aria-checked="true"] .dayline::after { background: currentColor; }
+#timeRow.filled input { animation: filled .7s var(--ease); }
+@keyframes filled { from { background: var(--accent-soft); border-color: var(--accent); } }
+
 .preview { background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 7px; }
 .preview .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .preview .top b { font-family: var(--display); font-size: 20px; text-transform: uppercase; letter-spacing: .03em; }

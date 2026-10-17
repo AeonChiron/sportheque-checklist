@@ -41,7 +41,11 @@
         <span data-t="name"></span>
         <input id="fName" name="name" type="text" autocomplete="given-name" autocapitalize="words" data-ph="namePh" required>
       </label>
-      <div class="row2">
+      <div class="field">
+        <span data-t="yourHours"></span>
+        <div class="presets" role="radiogroup" id="presetPick"></div>
+      </div>
+      <div class="row2" id="timeRow">
         <label class="field">
           <span data-t="start"></span>
           <input id="fStart" name="start" type="time" required>

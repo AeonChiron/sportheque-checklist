@@ -21,6 +21,14 @@ export const CONFIG = {
     { name: 'Mathieu', email: '' },
   ],
 
+  // Horaires proposés au début du quart : un toucher remplit Début et Fin.
+  // L'employé peut toujours entrer d'autres heures.
+  shiftPresets: [
+    { id: 'jour', start: '07:30', end: '15:30' },
+    { id: 'soir', start: '16:30', end: '23:00' },
+    { id: 'soir-court', start: '18:00', end: '23:00' },
+  ],
+
   // Langue par défaut de l'interface ('fr' ou 'en'); chaque téléphone
   // garde ensuite son choix. Le superviseur en service et la langue de son
   // rapport sont choisis au début de chaque quart.

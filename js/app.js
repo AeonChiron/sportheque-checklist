@@ -1,7 +1,7 @@
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, FLOOR } from './manual.js';
-import { buildPlan, detectShift, dayInfo, fmt, fmtDuration } from './planner.js';
+import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
 import { buildReport, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS, encodeReport, decodeReport, reportGlance, REVIEW, reportLabels } from './report.js';
 import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink, blobToBase64 } from './photos.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
@@ -24,7 +24,7 @@ function write(key, value) {
 }
 
 // prefs : langue, dernier nom, dernier superviseur, langue de rapport par superviseur.
-const prefs = { lang: CONFIG.defaultLang, name: '', supervisor: '', supervisorLang: {}, swipeSeen: false, ...read(PREFS, {}) };
+const prefs = { lang: CONFIG.defaultLang, name: '', supervisor: '', supervisorLang: {}, lastTimes: {}, swipeSeen: false, ...read(PREFS, {}) };
 const savePrefs = () => write(PREFS, prefs);
 let state = read(KEY, null);
 const save = () => write(KEY, state);
@@ -131,7 +131,7 @@ function setLang(l) {
   prefs.lang = l;
   savePrefs();
   paintStatic();
-  if (!$('#setup').hidden) updatePreview();
+  if (!$('#setup').hidden) { renderPresets(); updatePreview(); }
   if (state && plan) plan = buildPlan({ ...state, lang: lang() });
   if (!$('#checklist').hidden) renderChecklist();
   if (!$('#finish').hidden) openFinish();
@@ -156,12 +156,52 @@ function setReportLang(l) {
 }
 for (const b of document.querySelectorAll('[data-rlang]')) b.addEventListener('click', () => setReportLang(b.dataset.rlang));
 
+// Quarts habituels : un toucher remplit les heures (toujours modifiables).
+const PRESETS = CONFIG.shiftPresets || [];
+function renderPresets() {
+  const names = t('presets') || {};
+  // Petite barre de 6 h à minuit : on voit d'un coup d'œil où tombe le quart.
+  const pos = (hhmm) => Math.max(0, Math.min(100, ((toMin(hhmm) - 360) / 1080) * 100)).toFixed(1);
+  $('#presetPick').innerHTML = PRESETS.map((p) => `
+    <button type="button" role="radio" data-preset="${p.id}" aria-checked="false">
+      <b>${esc(names[p.id] || p.id)}</b>
+      <span class="num">${f(toMin(p.start))} – ${f(toMin(p.end))}</span>
+      <i class="dayline" aria-hidden="true" style="--s:${pos(p.start)}%;--e:${pos(p.end)}%"></i>
+    </button>`).join('');
+  for (const b of document.querySelectorAll('[data-preset]')) b.addEventListener('click', () => pickPreset(b.dataset.preset));
+  syncPresets();
+}
+function syncPresets() {
+  const s = $('#fStart').value;
+  const e = $('#fEnd').value;
+  for (const b of document.querySelectorAll('[data-preset]')) {
+    const p = PRESETS.find((x) => x.id === b.dataset.preset);
+    b.setAttribute('aria-checked', String(p.start === s && p.end === e));
+  }
+}
+function pickPreset(id) {
+  const p = PRESETS.find((x) => x.id === id);
+  if (!p) return;
+  $('#fStart').value = p.start;
+  $('#fEnd').value = p.end;
+  manualShift = null;
+  const row = $('#timeRow');
+  row.classList.remove('filled');
+  void row.offsetWidth; // relance l'animation
+  row.classList.add('filled');
+  updatePreview();
+}
+
 function setupScreen() {
-  const defShift = new Date().getHours() < 16 ? 1 : 2;
+  // Le matin, on propose le quart de jour; l'après-midi, celui du soir.
+  // Chaque téléphone retient les dernières heures choisies pour chacun.
+  const defShift = new Date().getHours() < 12 ? 1 : 2;
+  const last = prefs.lastTimes?.[defShift];
   $('#fName').value = prefs.name;
   $('#fDate').value = todayISO();
-  $('#fStart').value = SHIFTS[defShift].start;
-  $('#fEnd').value = SHIFTS[defShift].end;
+  $('#fStart').value = last?.start || SHIFTS[defShift].start;
+  $('#fEnd').value = last?.end || SHIFTS[defShift].end;
+  renderPresets();
   $('#supervisorPick').innerHTML = CONFIG.supervisors
     .map((s) => `<button type="button" role="radio" data-sup="${esc(s.name)}">${esc(s.name)}</button>`).join('');
   for (const b of document.querySelectorAll('[data-sup]')) b.addEventListener('click', () => setSupervisor(b.dataset.sup));
@@ -185,6 +225,7 @@ function updatePreview() {
   const s = $('#fStart').value;
   const e = $('#fEnd').value;
   const date = $('#fDate').value;
+  syncPresets();
   if (!s || !e || !date) { $('#preview').innerHTML = ''; return; }
   const shift = currentShift();
   const p = buildPlan({ shift, date, start: s, end: e, lang: lang() });
@@ -217,6 +258,7 @@ $('#setupForm').addEventListener('submit', (ev) => {
   prefs.name = name;
   prefs.supervisor = supervisor;
   if (supervisor) prefs.supervisorLang[supervisor] = reportLang;
+  prefs.lastTimes = { ...prefs.lastTimes, [currentShift()]: { start: $('#fStart').value, end: $('#fEnd').value } };
   savePrefs();
   const keep = editing && state ? { tasks: state.tasks, flags: state.flags, notes: state.notes, view: state.view } : {};
   state = {
