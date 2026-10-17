@@ -1,6 +1,6 @@
 // Garde l'app utilisable sans réseau (sous-sol, Wi-Fi faible).
 // Réseau d'abord, cache en secours; l'API n'est jamais mise en cache.
-const CACHE = 'quart-gym-v3';
+const CACHE = 'quart-gym-v4';
 const SHELL = ['./', 'index.html', 'styles.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/config.js', 'js/manual.js', 'js/planner.js', 'js/report.js', 'js/photos.js', 'js/i18n.js'];
 

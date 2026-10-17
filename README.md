@@ -54,22 +54,33 @@ de 21 jours et les cas du manuel (début 18 h, fin avant 19 h…).
 | `custom.pauseIfPresenceAtLeast` — seuil pour la pause de 15 min | 240 min |
 | `custom.mealMinutes` — durée du repas en horaire personnalisé | 60 min |
 
-## Mettre en ligne (Vercel, gratuit)
+## Le rapport et l'espace superviseur
 
-1. Créer un compte sur [resend.com](https://resend.com), vérifier un domaine
-   (ou utiliser `onboarding@resend.dev` pour tester), créer une clé API.
-2. Sur [vercel.com](https://vercel.com) : *Add New → Project*, importer ce dépôt,
-   aucun « build command » ni dossier racine à changer.
-3. Variables d'environnement :
-   - `RESEND_API_KEY` — la clé Resend
-   - `SUPERVISOR_EMAIL` — adresse du superviseur (plusieurs : séparées par des virgules)
-   - `REPORT_FROM` — ex. `Checklist gym <rapports@mondomaine.com>`
-4. Partager l'adresse du site à l'équipe. Sur iPhone : Safari → Partager →
-   **Sur l'écran d'accueil** pour l'avoir comme une app.
+- À la fin du quart, le superviseur reçoit un courriel court avec un bouton
+  **« Voir le rapport »**. Le lien ouvre le même site, en **vue superviseur** :
+  verdict d'un coup d'œil, problèmes signalés, tâches pas faites, checklist complète.
+- Le rapport voyage **dans le lien lui-même** (après le `#`) : aucune base de
+  données, et le contenu n'est jamais envoyé au serveur qui héberge le site.
+- Chaque rapport ouvert s'ajoute à l'**Aperçu des quarts** (bouton « Espace
+  superviseur » sur l'accueil), gardé sur le téléphone du superviseur.
+- Les photos arrivent en pièces jointes du courriel.
 
-L'adresse du superviseur reste sur le serveur : l'app ne peut pas envoyer
-de courriel à quelqu'un d'autre. Si l'envoi échoue, l'app propose l'app Mail
-ou la copie du rapport, et le quart reste enregistré.
+## Mettre en ligne (gratuit)
+
+**Site : GitHub Pages**
+1. Dépôt **Settings → General → Danger Zone → Change visibility → Public**
+   (GitHub Pages est gratuit pour les dépôts publics; il n'y a aucun secret dans le code).
+2. **Settings → Pages** → *Source* : **Deploy from a branch** → **main** → **/(root)** → **Save**.
+3. Après 1 à 2 minutes : `https://aeonchiron.github.io/sportheque-checklist/`.
+
+**Courriel : FormSubmit** (gratuit, sans compte ni clé)
+- L'adresse est dans `js/config.js` (`reportTo`). Au premier envoi, FormSubmit
+  écrit au destinataire pour **activer** l'adresse : il clique une fois, c'est réglé.
+- Ensuite, FormSubmit fournit un alias secret : le mettre dans `reportTo` à la
+  place de l'adresse pour qu'elle ne soit plus visible dans le code public.
+
+**Option plus « pro » (plus tard)** : `sendVia: 'api'` avec Vercel + Resend
+(`api/send-report.js`, variables `RESEND_API_KEY`, `SUPERVISOR_EMAIL`, `REPORT_FROM`).
 
 ## Développement local
 

@@ -32,8 +32,13 @@ export const CONFIG = {
     maxConsecutiveWork: 300,
   },
 
-  // Point d'envoi du rapport (fonction serveur, voir api/send-report.js).
-  // Le courriel part vers SUPERVISOR_EMAIL (boîte des superviseurs).
+  // Envoi du rapport. 'formsubmit' : service gratuit, sans compte ni clé
+  // (https://formsubmit.co). Le destinataire active l'adresse une seule fois
+  // en cliquant le lien du premier courriel. Ensuite, on peut remplacer
+  // l'adresse par l'alias secret que FormSubmit fournit.
+  // 'api' : fonction serveur api/send-report.js (Vercel + Resend).
+  sendVia: 'formsubmit',
+  reportTo: 'daniel.desrochers@sportheque.com',
   reportEndpoint: '/api/send-report',
 
   // Bouton de secours « Envoyer avec l'app Mail » (adresse facultative).

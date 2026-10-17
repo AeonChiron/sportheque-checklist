@@ -54,3 +54,12 @@ test('Rapport en anglais : libellés traduits, remarques de l’employé intacte
   assert.match(txt, /Note : Plus de sacs/);
   assert.match(renderReportHtml(r), /Shift report/);
 });
+
+test('Le rapport voyage dans le lien et revient intact', async () => {
+  const { encodeReport, decodeReport } = await import('../js/report.js');
+  const r = buildReport(plan, state, names);
+  const code = await encodeReport(r);
+  assert.match(code, /^[A-Za-z0-9_-]+$/); // sûr dans une URL
+  assert.deepEqual(await decodeReport(code), r);
+  assert.ok(code.length < 4000);
+});

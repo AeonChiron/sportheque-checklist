@@ -39,6 +39,8 @@ to the supervisor. Plain static site + one serverless function. No build step.
 - **Languages**: UI FR/EN per phone; report in the supervisor's language; employee-typed text (remarks, flags, notes) is never translated.
 - **Voice**: Quebec French, *tu*, short imperatives, local terms (balayeuse, vidanges, guenilles, moppe, brassée, poste de télé). Headline titles follow the manual; details are the simplified layer.
 - **Design**: professional, calm, "tech" through clarity, not decoration. Hairline surfaces, one teal accent, state colors separate, tabular digits, timeline + "Now" card, bottom sheet for details with numbered steps and a "Bon à savoir" callout. Ergonomics first (big tap targets, check on the right, nothing hidden behind toasts).
+- **Supervisor side, all inside the site**: email (FormSubmit, free, no account) = short summary + "Voir le rapport" link. The report is compressed into the link hash (`#r=…`, `encodeReport`/`decodeReport`), opens a glance view (verdict ring, "À voir", full checklist). Opened reports are kept on the supervisor's phone (localStorage `gym-shift-reports`) and listed in "Aperçu des quarts" (`#apercu`). Owner refused Google Sheets / external databases. Everything must stay free.
+- Hosting: GitHub Pages from `main` root (repo public). Vercel/Resend path kept as `sendVia: 'api'` option only.
 - Reference photos of the gym are off (`guidePhotos: false`) until real photos exist in `photos/`.
 
 ## Workflow

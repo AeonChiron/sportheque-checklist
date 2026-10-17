@@ -243,3 +243,70 @@ export function renderReportHtml(r, { photoSrc = {} } = {}) {
   html += `<p style="font-size:12px;color:#98a2b3;margin-top:24px">${esc(t.sent)} ${esc(when)} · ${r.gymName ? `${esc(r.gymName)} · ` : ''}${esc(t.footer)}</p></div>`;
   return html;
 }
+
+// ---------- Lien du rapport ----------
+// Le rapport voyage dans le lien lui-même (après le #) : pas de base de
+// données, et le contenu n'est jamais envoyé au serveur qui héberge le site.
+
+const toB64url = (bytes) => {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+const fromB64url = (str) => {
+  const s = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(s, (c) => c.charCodeAt(0));
+};
+const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+
+export async function encodeReport(report) {
+  const json = new TextEncoder().encode(JSON.stringify(report));
+  return toB64url(await pipe(json, new CompressionStream('deflate-raw')));
+}
+
+export async function decodeReport(code) {
+  const json = await pipe(fromB64url(code), new DecompressionStream('deflate-raw'));
+  return JSON.parse(new TextDecoder().decode(json));
+}
+
+// Résumé court pour le courriel (le détail est dans le lien).
+export function reportGlance(r) {
+  const t = L(r);
+  const notDone = r.items.filter((i) => i.status === 'notdone').length;
+  const unchecked = r.items.filter((i) => i.status === 'unchecked').length;
+  const lines = [
+    `${r.name} · ${r.shiftName} · ${r.weekday} ${r.date} · ${r.hours}`,
+    `${r.completion.done}/${r.completion.total} ${t.done}`,
+  ];
+  if (notDone) lines.push(`${notDone} × ${t.status.notdone}`);
+  if (unchecked) lines.push(`${unchecked} × ${t.status.unchecked}`);
+  if (r.flags.length) lines.push(`⚑ ${r.flags.length} · ${r.flags.map((f) => f.category).join(', ')}`);
+  return lines.join('\n');
+}
+
+// Libellés de la vue superviseur.
+export const REVIEW = {
+  fr: {
+    title: 'Rapport de quart',
+    allGood: 'Tout a été fait',
+    toSee: (n) => `${n} point${n > 1 ? 's' : ''} à voir`,
+    attention: 'À voir',
+    full: 'Checklist complète',
+    photos: (n) => `${n} photo${n > 1 ? 's' : ''} en pièce jointe du courriel.`,
+    open: 'Voir le rapport',
+    bad: 'Ce lien de rapport est incomplet ou abîmé. Ouvre-le directement depuis le courriel.',
+    newShift: 'Commencer un quart',
+  },
+  en: {
+    title: 'Shift report',
+    allGood: 'Everything was done',
+    toSee: (n) => `${n} item${n > 1 ? 's' : ''} to review`,
+    attention: 'To review',
+    full: 'Full checklist',
+    photos: (n) => `${n} photo${n > 1 ? 's' : ''} attached to the email.`,
+    open: 'View the report',
+    bad: 'This report link is incomplete or damaged. Open it straight from the email.',
+    newShift: 'Start a shift',
+  },
+};
+export const reportLabels = (r) => L(r);

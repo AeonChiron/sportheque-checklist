@@ -2,11 +2,12 @@ import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER } from './manual.js';
 import { buildPlan, detectShift, fmt, fmtDuration } from './planner.js';
-import { buildReport, renderReportHtml, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS } from './report.js';
+import { buildReport, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS, encodeReport, decodeReport, reportGlance, REVIEW, reportLabels } from './report.js';
 import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink, blobToBase64 } from './photos.js';
 
 const KEY = 'gym-shift-v2';
 const PREFS = 'gym-shift-prefs';
+const HISTORY = 'gym-shift-reports'; // aperçu du superviseur, sur son téléphone
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -687,31 +688,55 @@ async function send() {
     show('sent');
   };
 
+  const code = await encodeReport(report);
+  const link = `${location.origin}${location.pathname}#r=${code}`;
+
   if (CONFIG.demo) {
-    finishSent(renderReportHtml(report, { photoSrc: Object.fromEntries(blobs.map(([n, b]) => [n, URL.createObjectURL(b)])) }));
+    // Démo : rien n'est envoyé; on montre directement ce que verra le superviseur.
+    state = null;
+    save();
+    clearPhotos();
+    window.history.replaceState(null, '', `#r=${code}`);
+    openReview(report, code, { demo: true, photos: blobs.length });
     return;
   }
   try {
-    const r = await fetch(CONFIG.reportEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...report,
-        attachments: await Promise.all(blobs.map(async ([filename, b]) => ({ filename, content: await blobToBase64(b) }))),
-      }),
-    });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    if (CONFIG.sendVia === 'formsubmit') {
+      const R = REVIEW[report.lang];
+      const fd = new FormData();
+      fd.append('_subject', reportSubject(report));
+      fd.append('_template', 'box');
+      fd.append('_captcha', 'false');
+      fd.append(R.title, reportGlance(report));
+      fd.append(R.open, link);
+      if (report.notes) fd.append(reportLabels(report).notes, report.notes);
+      for (const [filename, b] of blobs) fd.append('attachment', new File([b], filename, { type: 'image/jpeg' }));
+      const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(CONFIG.reportTo)}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok || String(out.success) === 'false') throw new Error(out.message || `HTTP ${r.status}`);
+    } else {
+      const r = await fetch(CONFIG.reportEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...report,
+          link,
+          attachments: await Promise.all(blobs.map(async ([filename, b]) => ({ filename, content: await blobToBase64(b) }))),
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    }
     finishSent(null);
   } catch (err) {
     btn.disabled = false;
     btn.textContent = t('retry');
-    showFallback(report, err.message, blobs.length > 0);
+    showFallback(report, err.message, blobs.length > 0, link);
   }
 }
 
-function showFallback(report, msg, hasPhotos) {
+function showFallback(report, msg, hasPhotos, link) {
   const subject = reportSubject(report);
-  const body = renderReportText(report);
+  const body = `${renderReportText(report)}\n\n${REVIEW[report.lang].open} : ${link}`;
   const mailto = `mailto:${encodeURIComponent(CONFIG.fallbackEmail || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   $('#sendError').innerHTML = `
     <div class="notice bad"><b>${t('sendFail')}</b>${esc(msg)}. ${t('sendFailMore')}${hasPhotos ? t('photosByHand') : ''}</div>
@@ -726,10 +751,170 @@ function showFallback(report, msg, hasPhotos) {
 
 $('#newShiftBtn').addEventListener('click', () => { $('#emailPreview').hidden = true; setupScreen(); });
 
+// ---------- 5-6. Espace superviseur ----------
+// Chaque rapport ouvert depuis un courriel est gardé sur ce téléphone pour
+// l'aperçu. Rien ne quitte l'appareil.
+const savedReports = () => read(HISTORY, []);
+function remember(r, code) {
+  const key = `${r.date}|${r.name}|${r.shiftName}|${r.hours}`;
+  const list = savedReports().filter((h) => h.key !== key);
+  const notDone = r.items.filter((i) => i.status === 'notdone').length;
+  const unchecked = r.items.filter((i) => i.status === 'unchecked').length;
+  list.push({
+    key, code, date: r.date, weekday: r.weekday, name: r.name, shift: r.shiftName, hours: r.hours,
+    done: r.completion.done, total: r.completion.total, notDone, unchecked, flags: r.flags.length,
+  });
+  list.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.hours < b.hours ? 1 : -1));
+  write(HISTORY, list.slice(0, 300));
+}
+
+const STATUS_MARK = { done: '✓', notdone: '✕', unchecked: '○' };
+
+function openReview(r, code, { demo = false, photos = 0 } = {}) {
+  if (code) remember(r, code);
+  const R = REVIEW[r.lang] || REVIEW.fr;
+  const T = reportLabels(r);
+  const notDone = r.items.filter((i) => i.status === 'notdone');
+  const unchecked = r.items.filter((i) => i.status === 'unchecked');
+  const nAttention = r.flags.length + notDone.length + unchecked.length;
+  const pct = r.completion.total ? Math.round((100 * r.completion.done) / r.completion.total) : 0;
+  const detail = (i) => [
+    i.reason ? `<span class="rv-reason">${esc(i.reason)}</span>` : '',
+    i.remark ? `<span class="rv-quote">« ${esc(i.remark)} »</span>` : '',
+    i.photos?.length ? `<span class="rv-meta">📎 ${esc(i.photos.join(', '))}</span>` : '',
+  ].join('');
+  const row = (i) => `<li class="rv-row ${i.status}">
+      <span class="rv-mark">${STATUS_MARK[i.status]}</span>
+      <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
+      <span class="rv-time mono">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
+    </li>`;
+
+  const attention = [
+    ...r.flags.map((f) => `<li class="rv-flag"><span class="rv-mark">⚑</span><span class="rv-main"><span class="rv-title">${esc(f.category)}${f.location ? ` · ${esc(f.location)}` : ''}</span><span class="rv-quote">« ${esc(f.text)} »</span>${f.photos?.length ? `<span class="rv-meta">📎 ${esc(f.photos.join(', '))}</span>` : ''}</span><span class="rv-time mono">${esc(f.at)}</span></li>`),
+    ...notDone.map(row),
+    ...unchecked.map(row),
+  ];
+  const nPhotos = photos || [...r.items, ...r.flags, ...r.overflow].reduce((n, x) => n + (x.photos?.length || 0), 0);
+
+  $('#reviewBody').innerHTML = `
+    ${demo ? `<div class="notice ok"><b>${esc(t('demoText', r.supervisor))}</b></div>` : ''}
+    <div class="rv-head">
+      <p class="eyebrow">${[r.gymName, R.title].filter(Boolean).map(esc).join(' · ')}</p>
+      <h1>${esc(r.name)}</h1>
+      <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(r.date.slice(8))}/${esc(r.date.slice(5, 7))} · <span class="mono">${esc(r.hours)}</span></p>
+      ${r.supervisor ? `<p class="rv-sub">${esc(T.to)} ${esc(r.supervisor)}</p>` : ''}
+    </div>
+    <div class="rv-verdict ${nAttention ? 'warn' : 'ok'}">
+      <div class="rv-ring" style="--p:${pct}"><span class="mono">${pct}%</span></div>
+      <div>
+        <b>${nAttention ? esc(R.toSee(nAttention)) : esc(R.allGood)}</b>
+        <span class="mono">${r.completion.done}/${r.completion.total} ${esc(T.done)}</span>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat ok"><b>${r.completion.done}</b><span>${esc(T.status.done)}</span></div>
+      <div class="stat bad"><b>${notDone.length + unchecked.length}</b><span>${esc(T.status.notdone)}</span></div>
+      <div class="stat warn"><b>${r.flags.length}</b><span>${esc(T.flags)}</span></div>
+    </div>
+    ${attention.length ? `<div class="section-head"><h3>${esc(R.attention)}</h3><span class="mono">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
+    ${r.notes ? `<div class="section-head"><h3>${esc(T.notes)}</h3></div><div class="panel rv-notes">${esc(r.notes)}</div>` : ''}
+    <div class="section-head"><h3>${esc(R.full)}</h3><span class="mono">${r.completion.done}/${r.completion.total}</span></div>
+    <ul class="rv-list">${r.items.map(row).join('')}</ul>
+    ${r.overflow.length ? `<div class="section-head"><h3>${esc(T.overflow)}</h3></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
+    ${r.outOfRange.length ? `<p class="section-note">${esc(T.fixed)} : ${esc(r.outOfRange.join(', '))}</p>` : ''}
+    ${nPhotos && !demo ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}
+    ${demo ? `<button class="btn primary big" id="reviewNew">${esc(R.newShift)}</button>` : ''}`;
+  $('#reviewNew')?.addEventListener('click', () => { window.history.replaceState(null, '', location.pathname); setupScreen(); });
+  paintStatic();
+  show('review');
+}
+
+async function openReviewFromHash() {
+  const code = location.hash.slice(3);
+  try {
+    openReview(await decodeReport(code), code);
+  } catch {
+    $('#reviewBody').innerHTML = `<div class="notice bad"><b>${esc(REVIEW[lang()].bad)}</b></div>`;
+    paintStatic();
+    show('review');
+  }
+}
+
+function mondayOf(iso) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+let overviewRange = 'week';
+function openOverview() {
+  paintStatic();
+  const all = savedReports();
+  const thisWeek = mondayOf(todayISO());
+  const list = overviewRange === 'week' ? all.filter((h) => mondayOf(h.date) === thisWeek) : all;
+  for (const b of document.querySelectorAll('[data-range]')) b.setAttribute('aria-selected', String(b.dataset.range === overviewRange));
+  $('#ovEyebrow').textContent = CONFIG.gymName ? `${CONFIG.gymName} · ${t('supervisorSpace')}` : t('supervisorSpace');
+
+  if (!all.length || !list.length) {
+    $('#overviewBody').innerHTML = `<div class="panel empty">${esc(all.length ? t('emptyWeek') : t('emptyOverview'))}</div>`;
+    show('overview');
+    return;
+  }
+  const done = list.reduce((n, h) => n + h.done, 0);
+  const total = list.reduce((n, h) => n + h.total, 0);
+  const flags = list.reduce((n, h) => n + h.flags, 0);
+  const groups = new Map();
+  for (const h of list) {
+    const wk = mondayOf(h.date);
+    if (!groups.has(wk)) groups.set(wk, []);
+    groups.get(wk).push(h);
+  }
+  const fmtDay = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
+  $('#overviewBody').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat"><b>${list.length}</b><span>${t('shiftsCount')}</span></div>
+      <div class="stat ok"><b>${total ? Math.round((100 * done) / total) : 0}%</b><span>${t('completion')}</span></div>
+      <div class="stat warn"><b>${flags}</b><span>${t('issues')}</span></div>
+    </div>
+    ${[...groups].map(([wk, hs]) => `
+      ${overviewRange === 'all' ? `<p class="group-title">${esc(t('week', fmtDay(wk)))}</p>` : ''}
+      <ul class="ov-list">${hs.map((h) => {
+        const issues = h.notDone + h.unchecked;
+        const ok = !issues && !h.flags;
+        return `<li><button class="ov-row" data-code="${esc(h.code)}">
+          <span class="ov-day"><b>${esc(h.weekday.slice(0, 3))}</b><small class="mono">${fmtDay(h.date)}</small></span>
+          <span class="ov-main"><span class="ov-name">${esc(h.name)}</span><span class="ov-sub">${esc(h.shift)} · <span class="mono">${esc(h.hours)}</span></span></span>
+          <span class="ov-status">
+            <span class="ov-pill ${ok ? 'ok' : 'warn'} mono">${h.done}/${h.total}</span>
+            ${h.flags ? `<span class="ov-pill bad">⚑ ${h.flags}</span>` : ''}
+          </span>
+        </button></li>`;
+      }).join('')}</ul>`).join('')}`;
+  show('overview');
+}
+
+$('#overviewBody').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-code]');
+  if (b) location.hash = `r=${b.dataset.code}`;
+});
+for (const b of document.querySelectorAll('[data-range]')) b.addEventListener('click', () => { overviewRange = b.dataset.range; openOverview(); });
+$('#toOverview').addEventListener('click', () => { location.hash = 'apercu'; });
+$('#reviewBack').addEventListener('click', () => { location.hash = 'apercu'; });
+$('#overviewBack').addEventListener('click', () => {
+  window.history.replaceState(null, '', location.pathname);
+  route();
+});
+
 // ---------- Démarrage ----------
+function route() {
+  if (location.hash.startsWith('#r=')) return openReviewFromHash();
+  if (location.hash === '#apercu') return openOverview();
+  if (state?.name && state?.date) return openChecklist();
+  return setupScreen();
+}
+window.addEventListener('hashchange', route);
 paintStatic();
-if (state?.name && state?.date) openChecklist();
-else setupScreen();
+route();
 
 // Hors ligne (si le service worker est disponible).
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

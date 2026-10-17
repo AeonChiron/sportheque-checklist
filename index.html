@@ -67,6 +67,9 @@
       <div id="preview" class="preview" aria-live="polite"></div>
       <button class="btn primary big" type="submit" data-t="create"></button>
     </form>
+    <button class="btn ghost big supervisor-link" type="button" id="toOverview">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span data-t="supervisorSpace"></span>
+    </button>
     <p class="fineprint" id="manualVersion"></p>
   </section>
 
@@ -135,6 +138,30 @@
     <p class="lede" id="sentText"></p>
     <button class="btn primary big" id="newShiftBtn" data-t="newShift"></button>
     <div class="email-preview" id="emailPreview" hidden></div>
+  </section>
+
+  <!-- 5. Vue superviseur : un rapport -->
+  <section id="review" class="screen" hidden>
+    <header class="review-top">
+      <button class="back" id="reviewBack">‹ <span data-t="overviewShort"></span></button>
+    </header>
+    <div id="reviewBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <!-- 6. Vue superviseur : aperçu des quarts -->
+  <section id="overview" class="screen" hidden>
+    <header class="review-top">
+      <button class="back" id="overviewBack">‹ <span data-t="home"></span></button>
+      <p class="eyebrow" id="ovEyebrow"></p>
+      <h1 data-t="overview"></h1>
+    </header>
+    <div class="segmented view-toggle" role="tablist">
+      <button type="button" role="tab" data-range="week" data-t="thisWeek"></button>
+      <button type="button" role="tab" data-range="all" data-t="allReports"></button>
+    </div>
+    <div id="overviewBody"></div>
+    <div class="bottom-spacer small"></div>
   </section>
 
   <!-- Feuille du bas (détails, signalement, options) -->
