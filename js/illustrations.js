@@ -1,5 +1,6 @@
 // Illustrations des tâches, dessinées en SVG (aucune image à télécharger).
 // Couleurs via variables CSS (--il-*) : elles suivent le thème clair/sombre.
+import { ZONES, ROOMS, DOORS, GEAR, WALK } from './floor-layout.js';
 // viewBox 96 × 96. Contour « encre » commun, aplats de couleur.
 // Les éléments « a a-… » bougent en boucle, seulement dans un parent .alive
 // (détail d'une tâche, carte « En cours ») et jamais si on réduit les animations.
@@ -252,96 +253,112 @@ ART['zone-a'] = miniZone('A');
 ART['zone-b'] = miniZone('B');
 ART['zone-c'] = miniZone('C');
 
-// Plan du 2e étage, d'après le croquis de l'équipe et les photos du gym :
-// vu du dessus, comme un plan d'architecte. Planchers réels (bois sous le
-// cardio, caoutchouc et plateformes de bois aux poids), équipement en
-// rangées, 4 télés au mur, pièces bâties le long du mur du bas, porte (1).
-// C en haut à gauche (haut du corps), B en haut à droite (bas du corps),
-// A en bas (cardio et étirements).
+// Plan du 2e étage, vu du dessus, d'après le croquis, les photos et les
+// corrections de l'équipe. La disposition vient de floor-layout.js (la même
+// que la vue 3D). Planchers réels, équipement, miroirs, télés, pièces bâties
+// dans les murs, portes.
 // Options : highlight (zone de la tâche), selected (zone ou pièce touchée),
-// tags { A: [{ text, state }] } (Matin, Soir, Miroirs… colorés selon le statut),
-// labels { A, B, C, 1..5, r1..r5 }.
+// tags { A: [{ text, state }] } (Matin, Soir… colorés selon le statut),
+// labels { A, B, C, 2..5, r1..r5 }.
 const r = (x, y, w, h, rx, cls) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" class="${cls}"/>`;
-const EQ = {
-  // Support à haltères : une longue tablette, les poids en rangée.
-  rackH: (x, y, len) => `${r(x, y, len, 6, 1.5, 'eq')}${Array.from({ length: Math.floor((len - 4) / 6) }, (_, i) => `<circle cx="${x + 5 + i * 6}" cy="${y + 3}" r="1.7" class="eq-dot"/>`).join('')}`,
-  rackV: (x, y, len) => `${r(x, y, 6, len, 1.5, 'eq')}${Array.from({ length: Math.floor((len - 4) / 6) }, (_, i) => `<circle cx="${x + 3}" cy="${y + 5 + i * 6}" r="1.7" class="eq-dot"/>`).join('')}`,
-  // Cage à squat : cadre carré et barre.
-  squat: (x, y) => `${r(x, y, 18, 18, 1.5, 'eq frame')}<path d="M${x - 3} ${y + 9}h24" class="eq-bar"/>`,
-  machine: (x, y, w = 14, h = 12) => `${r(x, y, w, h, 2.5, 'eq')}${r(x + 3, y + h - 5, w - 6, 3, 1.5, 'eq-seat')}`,
-  bench: (x, y, w = 34) => `${r(x, y, w, 6, 3, 'eq')}${r(x + 2, y + 1.5, 10, 3, 1.5, 'eq-seat')}`,
-  press: (x, y) => `${r(x, y, 3.5, 3.5, 1, 'eq-dark')}${r(x + 16, y, 3.5, 3.5, 1, 'eq-dark')}<path d="M${x - 3} ${y + 1.75}h26" class="eq-bar"/>${r(x + 6.5, y + 6, 6.5, 18, 3, 'eq')}`,
-  plates: (x, y) => `<circle cx="${x}" cy="${y}" r="7" class="eq"/><circle cx="${x}" cy="${y}" r="3" class="eq-seat"/>`,
-  // Tapis roulant vu de haut : courroie, console vers les télés.
-  treadmill: (x, y) => `${r(x, y, 12, 28, 3, 'eq')}${r(x + 2.5, y + 3, 7, 18, 2, 'eq-belt')}${r(x + 1, y + 23, 10, 4, 1.5, 'eq-dark')}`,
-  stair: (x, y) => `${r(x, y, 10, 13, 2.5, 'eq')}${r(x + 2, y + 2, 6, 5, 1.5, 'eq-seat')}`,
-  rower: (x, y) => `${r(x, y, 6, 40, 3, 'eq')}<circle cx="${x + 3}" cy="${y + 26}" r="2.4" class="eq-dark"/>${r(x - 1, y, 8, 5, 2, 'eq-dark')}`,
-  elliptical: (x, y) => `${r(x, y, 9, 24, 4.5, 'eq')}<path d="M${x + 4.5} ${y + 5}v14" class="eq-bar"/>`,
-  mat: (x, y) => r(x, y, 24, 34, 4, 'eq-mat'),
-  tv: (x, y) => r(x, y, 16, 4, 1, 'eq-tv'),
+const dots = (g) => {
+  const vertical = g.h > g.w;
+  const len = vertical ? g.h : g.w;
+  return Array.from({ length: Math.floor((len - 4) / 6) }, (_, i) => {
+    const p = -len / 2 + 5 + i * 6;
+    return `<circle cx="${vertical ? 0 : p}" cy="${vertical ? p : 0}" r="1.7" class="eq-dot"/>`;
+  }).join('');
+};
+// Chaque pièce d'équipement, dessinée autour de (0, 0), l'avant vers le bas.
+const GEAR_SVG = {
+  treadmill: () => `${r(-6, -14, 12, 28, 3, 'eq')}${r(-3.5, -11, 7, 18, 2, 'eq-belt')}${r(-5, 9, 10, 4, 1.5, 'eq-dark')}`,
+  stair: () => `${r(-5, -6.5, 10, 13, 2.5, 'eq')}${r(-3, -4.5, 6, 5, 1.5, 'eq-seat')}`,
+  elliptical: () => `${r(-4.5, -12, 9, 24, 4.5, 'eq')}<path d="M0 -7v14" class="eq-bar"/>`,
+  rower: () => `${r(-3, -20, 6, 40, 3, 'eq')}<circle cy="6" r="2.4" class="eq-dark"/>${r(-4, 15, 8, 5, 2, 'eq-dark')}`,
+  bike: () => `${r(-3, -9, 6, 18, 3, 'eq')}<circle cy="5" r="3" class="eq-dark"/><path d="M-4 -6h8" class="eq-bar"/>`,
+  machine: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2.5, 'eq')}${r(-g.w / 2 + 3, g.h / 2 - 5, g.w - 6, 3, 1.5, 'eq-seat')}`,
+  bench: (g) => `${r(-g.w / 2, -3, g.w, 6, 3, 'eq')}${r(-g.w / 2 + 2, -1.5, 10, 3, 1.5, 'eq-seat')}`,
+  squat: () => `${r(-9, -9, 18, 18, 1.5, 'eq frame')}<path d="M-12 0h24" class="eq-bar"/>`,
+  press: () => `${r(-9.75, -13, 3.5, 3.5, 1, 'eq-dark')}${r(6.25, -13, 3.5, 3.5, 1, 'eq-dark')}<path d="M-13 -11.25h26" class="eq-bar"/>${r(-3.25, -7, 6.5, 20, 3, 'eq')}`,
+  plates: () => `<circle r="7" class="eq"/><circle r="3" class="eq-seat"/>`,
+  pulley: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 3, 'eq')}<circle cx="-5" cy="${-g.h / 2 + 6}" r="2.5" class="eq-dark"/><circle cx="5" cy="${-g.h / 2 + 6}" r="2.5" class="eq-dark"/><path d="M-5 ${-g.h / 2 + 8}v26M5 ${-g.h / 2 + 8}v26" class="eq-bar"/>`,
+  rack: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1.5, 'eq')}${dots(g)}`,
+  platform: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 3, 'eq-wood'),
+  carpet: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 5, 'eq-carpet')}<text y="3.5" text-anchor="middle" class="eq-carpet-label">${'{stretch}'}</text>`,
+  mirror: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 1.5, 'eq-mirror'),
+  tv: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-tv'),
 };
 export function zoneMap({ highlight = null, selected = null, tags = {}, labels } = {}) {
-  const badge = (id, x, y, w) => {
+  const zoneBase = (id, z) => `<g class="zm z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
+      <rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="6" class="zm-floor ${z.floor}"/>
+      <rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="6" class="zm-tint"/>
+    </g>`;
+  const zoneTop = (id, z) => {
+    const x = z.x + 6;
+    const y = z.y + 6;
     const bw = 30 + labels[id].length * 5.3;
-    let tx = w > 250 ? x + bw + 6 : x;
-    const ty = w > 250 ? y : y + 22;
+    let tx = z.w > 200 ? x + bw + 6 : x;
+    const ty = z.w > 200 ? y : y + 22;
     const pills = (tags[id] || []).map((tag) => {
       const tw = 12 + tag.text.length * 6.2;
       const out = `<g class="zm-tag ${tag.state || 'planned'}"><rect x="${tx}" y="${ty}" width="${tw}" height="17" rx="8.5"/><text x="${tx + tw / 2}" y="${ty + 12}" text-anchor="middle">${tag.text}</text></g>`;
       tx += tw + 4;
       return out;
     }).join('');
-    return `<g class="zm-badge"><rect x="${x}" y="${y}" width="${bw}" height="18" rx="6"/><text x="${x + 7}" y="${y + 14}" class="zm-id">${id}</text><text x="${x + 21}" y="${y + 13}" class="zm-label">${labels[id]}</text></g>${pills}`;
+    return `<g class="zm-top z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}">
+      <rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="6" class="zm-edge"/>
+      <g class="zm-badge"><rect x="${x}" y="${y}" width="${bw}" height="18" rx="6"/><text x="${x + 7}" y="${y + 14}" class="zm-id">${id}</text><text x="${x + 21}" y="${y + 13}" class="zm-label">${labels[id]}</text></g>${pills}
+    </g>`;
   };
-  const zone = (id, x, y, w, h, floor, gear) => `<g class="zm z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" class="zm-floor ${floor}"/>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" class="zm-tint"/>
-      <g class="zm-gear">${gear}</g>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" class="zm-edge"/>
-      ${badge(id, x + 6, y + 6, w)}
+  const room = (id, m) => {
+    const cx = m.x + m.w / 2;
+    const cy = m.y + m.h / 2;
+    const label = labels[`r${id}`] || '';
+    return `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id] || label}">
+      <rect x="${m.x}" y="${m.y}" width="${m.w}" height="${m.h}" class="zm-room"/>
+      <text x="${cx}" y="${cy + 4}" text-anchor="middle" class="zm-room-label" ${m.vertical ? `transform="rotate(-90 ${cx} ${cy})"` : ''}>${label}</text>
     </g>`;
-  const room = (id, x, w, gap) => `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
-      <rect x="${x}" y="228" width="${w}" height="48" class="zm-room"/>
-      <text x="${x + w / 2}" y="256" text-anchor="middle" class="zm-room-label">${labels[`r${id}`] || ''}</text>
-      ${gap ? `<path d="M${gap} 228A12 12 0 0 0 ${gap + 12} 240" class="zm-swing"/>` : ''}
-    </g>`;
-  const id = (k) => `fl-${k}`;
+  };
+  // Murs intérieurs des pièces, avec la porte (ou l'ouverture) au bon endroit.
+  const roomWalls = Object.values(ROOMS).map((m) => {
+    const sides = {
+      top: [m.x, m.y, m.x + m.w, m.y], bottom: [m.x, m.y + m.h, m.x + m.w, m.y + m.h],
+      left: [m.x, m.y, m.x, m.y + m.h], right: [m.x + m.w, m.y, m.x + m.w, m.y + m.h],
+    };
+    const inner = Object.entries(sides).filter(([, [x1, y1, x2, y2]]) => !(x1 === x2 && (x1 <= 4 || x1 >= 356)) && !(y1 === y2 && (y1 <= 4 || y1 >= 276)));
+    return inner.map(([side, [x1, y1, x2, y2]]) => {
+      const d = m.door;
+      if (!d || d.side !== side) return `M${x1} ${y1}L${x2} ${y2}`;
+      return x1 === x2 ? `M${x1} ${y1}V${d.from}M${x1} ${d.to}V${y2}` : `M${x1} ${y1}H${d.from}M${d.to} ${y1}H${x2}`;
+    }).join('');
+  }).join('');
+  const swings = Object.values(ROOMS).filter((m) => m.door && !m.open).map((m) => {
+    const d = m.door;
+    if (d.side === 'top') return `M${d.from} ${m.y}A${d.to - d.from} ${d.to - d.from} 0 0 0 ${d.to} ${m.y + (d.to - d.from)}`;
+    if (d.side === 'left') return `M${m.x} ${d.from}A${d.to - d.from} ${d.to - d.from} 0 0 1 ${m.x + (d.to - d.from)} ${d.to}`;
+    return `M${m.x + m.w} ${d.from}A${d.to - d.from} ${d.to - d.from} 0 0 0 ${m.x + m.w - (d.to - d.from)} ${d.to}`;
+  }).join('');
+  const { entrance: en, top: tp } = DOORS;
+  const outer = `M4 ${en.from}V18A14 14 0 0 1 18 4H${tp.from}M${tp.to} 4H342A14 14 0 0 1 356 18V262A14 14 0 0 1 342 276H18A14 14 0 0 1 4 262V${en.to}`;
+  const gear = GEAR.map((g) => `<g transform="translate(${g.x} ${g.y})${g.rot ? ` rotate(${g.rot})` : ''}">${GEAR_SVG[g.t](g).replace('{stretch}', labels.stretch || '')}</g>`).join('');
   return `<svg viewBox="0 0 360 280" class="illus map floor" aria-label="Plan du 2e étage">
     <defs>
-      <pattern id="${id('wood')}" width="36" height="6" patternUnits="userSpaceOnUse"><rect width="36" height="6" class="pt-wood"/><path d="M0 6H36M12 0V3M30 3V6" class="pt-wood-line"/></pattern>
-      <pattern id="${id('rubber')}" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" class="pt-rubber"/><path d="M12 0V12H0" class="pt-rubber-line"/></pattern>
-      <clipPath id="${id('clip')}"><rect x="4" y="4" width="352" height="272" rx="14"/></clipPath>
+      <pattern id="fl-wood" width="36" height="6" patternUnits="userSpaceOnUse"><rect width="36" height="6" class="pt-wood"/><path d="M0 6H36M12 0V3M30 3V6" class="pt-wood-line"/></pattern>
+      <pattern id="fl-rubber" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" class="pt-rubber"/><path d="M12 0V12H0" class="pt-rubber-line"/></pattern>
+      <clipPath id="fl-clip"><rect x="4" y="4" width="352" height="272" rx="14"/></clipPath>
     </defs>
     <rect x="4" y="4" width="352" height="272" rx="14" class="zm-base"/>
-    <path class="zm-walk" d="M8 180H20V126H182V16"/>
-    ${zone('C', 30, 12, 148, 110, 'rubber', `
-      ${r(36, 64, 108, 22, 3, 'eq-wood')}${[0, 1, 2, 3, 4].map((i) => EQ.machine(40 + i * 21, 69)).join('')}
-      ${r(150, 18, 20, 40, 3, 'eq')}<circle cx="155" cy="24" r="2.5" class="eq-dark"/><circle cx="165" cy="24" r="2.5" class="eq-dark"/><path d="M155 26v26M165 26v26" class="eq-bar"/>
-      ${EQ.press(50, 94)}${EQ.press(100, 94)}${EQ.rackV(160, 68, 48)}`)}
-    ${zone('B', 186, 12, 162, 110, 'rubber', `
-      ${EQ.rackH(296, 16, 46)}${EQ.rackV(338, 28, 88)}
-      ${r(192, 70, 76, 46, 3, 'eq-wood')}${EQ.squat(198, 76)}${EQ.squat(224, 76)}${EQ.machine(250, 74, 13, 30)}${EQ.machine(198, 100, 44, 12)}
-      ${EQ.bench(280, 40)}${EQ.bench(280, 58)}${EQ.bench(280, 76)}${EQ.plates(300, 102)}`)}
-    ${zone('A', 30, 130, 318, 90, 'wood', `
-      ${[0, 1, 2, 3, 4, 5].map((i) => EQ.treadmill(42 + i * 18, 158)).join('')}
-      ${[0, 1, 2, 3, 4, 5].map((i) => EQ.stair(43 + i * 18, 194)).join('')}
-      ${EQ.rower(166, 160)}${EQ.rower(180, 160)}
-      ${EQ.elliptical(206, 178)}${EQ.elliptical(220, 178)}
-      ${[0, 1, 2].map((i) => EQ.mat(250 + i * 30, 156)).join('')}
-      ${[0, 1, 2].map((i) => EQ.stair(300 + i * 15, 198)).join('')}`)}
-    ${[0, 1, 2, 3].map((i) => EQ.tv(44 + i * 28, 222)).join('')}
-    <g clip-path="url(#${id('clip')})">
-      ${room('5', 4, 92, 12)}
-      ${room('2', 96, 80, 0)}
-      ${room('3', 176, 86, 236)}
-      ${room('4', 262, 94, 272)}
-    </g>
-    <path class="zm-wall" d="M4 146V18A14 14 0 0 1 18 4H342A14 14 0 0 1 356 18V262A14 14 0 0 1 342 276H18A14 14 0 0 1 4 262V190"/>
-    <path class="zm-wall thin" d="M4 228H12M24 228H110M160 228H236M248 228H272M284 228H356M96 228V276M176 228V276M262 228V276"/>
+    <path class="zm-walk" d="${WALK}"/>
+    ${Object.entries(ZONES).map(([id, z]) => zoneBase(id, z)).join('')}
+    <g class="zm-gear">${gear}</g>
+    ${Object.entries(ZONES).map(([id, z]) => zoneTop(id, z)).join('')}
+    <g clip-path="url(#fl-clip)">${Object.entries(ROOMS).map(([id, m]) => room(id, m)).join('')}</g>
+    <path class="zm-wall" d="${outer}"/>
+    <path class="zm-wall thin" d="${roomWalls}"/>
+    <path class="zm-swing" d="${swings}M4 ${en.from}h22M26 ${en.from}A22 22 0 0 1 4 ${en.from + 22}M${tp.from} 4v14M${tp.from} 18A14 14 0 0 0 ${tp.to} 4"/>
     <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
-      <rect x="0" y="140" width="28" height="56" fill="transparent"/>
-      <path class="zm-swing" d="M4 146h22M26 146A22 22 0 0 1 4 168"/>
-      <text x="13" y="186" text-anchor="middle" class="zm-door-label" transform="rotate(-90 13 186)">${labels.r1 || ''}</text>
+      <rect x="0" y="${en.from - 6}" width="28" height="${en.to - en.from + 12}" fill="transparent"/>
+      <text x="13" y="${(en.from + en.to) / 2 + 6}" text-anchor="middle" class="zm-door-label" transform="rotate(-90 13 ${(en.from + en.to) / 2 + 6})">${labels.r1 || ''}</text>
     </g>
   </svg>`;
 }

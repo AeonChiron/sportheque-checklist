@@ -52,6 +52,7 @@ to the supervisor. Plain static site + one serverless function. No build step.
 
 - **Motion**: illustrations animate only inside `.alive` parents (task sheet visual, Now card, open tip card, empty folder) via `a a-*` classes; screen changes use View Transitions (`show()` tracks `current`, never test `.hidden` for screens); segmented/lang pills slide via a MutationObserver (`syncThumb`); a global touchstart listener enables `:active` on iPhone.
 
+- **Layout source**: `js/floor-layout.js` (ZONES, ROOMS with doors, DOORS, GEAR list, WALK) feeds both `zoneMap` and `gym3d.js`; edit positions there only. Owner corrections: men's locker room on the LEFT wall (door into gym), spinning in the lower RIGHT corner on the right wall, women's door toward the right, a door in the top wall between C and B, mirrors in front of the left cardio, big grey stretching carpet top-right of A with cardio below and a big mirror on A's right. No "Miroirs" tag on the map (confusing); the info card says "Nettoyage des miroirs". B and C interiors are still approximate.
 - **3D view**: `js/gym3d.js` (Three.js r160 self-hosted in `vendor/`, MIT, lazy-loaded) builds the same layout as `zoneMap` (360×280 units). `mountMap` has a Plan / 3D toggle (`prefs.mapMode`); tap picks via raycast; idle camera sway; reduced motion = static. Rooms have no numbers (owner); the door is labeled Entrée.
 - **Dark mode**: near-black (`--bg #050708`), hairline borders, aqua glow on the primary button (`--cta-shadow`), inset top highlight on cards (`--edge`).
 

@@ -599,9 +599,9 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 .floor .zA .zm-tint { opacity: .18; }
 .floor .zm-edge { fill: none; stroke-width: 1.5; transition: stroke-width .2s, stroke .2s; }
 .floor .zA .zm-edge { stroke: var(--zA-strong); } .floor .zB .zm-edge { stroke: var(--zB-strong); } .floor .zC .zm-edge { stroke: var(--zC-strong); }
-.floor .zm.hot .zm-edge { stroke-width: 3.5; }
+.floor .hot .zm-edge { stroke-width: 3.5; }
 .floor .zm.hot .zm-tint { opacity: .45; }
-.floor .zm.sel .zm-edge, .floor .zm:focus-visible .zm-edge { stroke: var(--accent); stroke-width: 3; }
+.floor .sel .zm-edge, .floor .zm:focus-visible + .zm-edge { stroke: var(--accent); stroke-width: 3; }
 .floor .zm-gear { pointer-events: none; }
 .floor .eq { fill: var(--eq); stroke: var(--eq-ink); stroke-width: 1; }
 .floor .eq.frame { fill: none; stroke-width: 1.6; }
@@ -723,7 +723,7 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 .illus .a-glow { opacity: 0; }
 @keyframes il-glow { 50% { opacity: .9; } }
 /* La zone du jour respire sur le plan. */
-.floor .zm.hot .zm-edge { animation: zone-breathe 2.8s ease-in-out infinite; }
+.floor .zm-top.hot .zm-edge { animation: zone-breathe 2.8s ease-in-out infinite; }
 @keyframes zone-breathe { 50% { stroke-width: 5; } }
 
 /* Changement d'écran (View Transitions) : la page glisse, le fond reste. */
@@ -975,3 +975,9 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .gym3d canvas { display: block; animation: stage-in .6s var(--ease) both; }
 .map-stage.loading::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 12%, transparent) 50%, transparent 70%); background-size: 300% 100%; animation: shimmer 1.2s linear infinite; }
 .map-info.swap { animation: rise .3s var(--ease) both; }
+
+.floor .eq-carpet { fill: #9aa3a6; opacity: .55; stroke: #7d878a; stroke-width: 1; }
+.floor .eq-carpet-label { font-size: 9px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; fill: var(--ink); opacity: .7; }
+.floor .eq-mirror { fill: #bfe3ef; stroke: #7fb6c8; stroke-width: .8; }
+.floor .zm-top { pointer-events: none; }
+.floor .zm:focus-visible .zm-tint { opacity: .7; }

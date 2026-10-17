@@ -658,8 +658,8 @@ function mountPhotos(root, ids, onChange, pending = []) {
 
 // ---------- Plan du gym (interactif) ----------
 const MAP_LABELS = {
-  fr: { A: 'Cardio', B: 'Bas du corps', C: 'Haut du corps', 1: 'Entrée', 2: 'Évier', 3: 'Vestiaire femmes', 4: 'Studio de spinning', 5: 'Vestiaire hommes', r1: 'Entrée', r2: 'Évier', r3: 'Femmes', r4: 'Spinning', r5: 'Hommes' },
-  en: { A: 'Cardio', B: 'Lower body', C: 'Upper body', 1: 'Entrance', 2: 'Sink', 3: 'Women’s locker room', 4: 'Spin studio', 5: 'Men’s locker room', r1: 'Entrance', r2: 'Sink', r3: 'Women', r4: 'Spin studio', r5: 'Men' },
+  fr: { A: 'Cardio', B: 'Bas du corps', C: 'Haut du corps', 1: 'Entrée', 2: 'Évier', 3: 'Vestiaire femmes', 4: 'Studio de spinning', 5: 'Vestiaire hommes', r1: 'Entrée', stretch: 'Étirement', r2: 'Évier', r3: 'Femmes', r4: 'Spinning', r5: 'Hommes' },
+  en: { A: 'Cardio', B: 'Lower body', C: 'Upper body', 1: 'Entrance', 2: 'Sink', 3: 'Women’s locker room', 4: 'Spin studio', 5: 'Men’s locker room', r1: 'Entrance', stretch: 'Stretching', r2: 'Sink', r3: 'Women', r4: 'Spin studio', r5: 'Men' },
 };
 
 // Ce qui se passe aujourd'hui dans une zone ou une pièce (selon le plan du jour).
@@ -667,7 +667,7 @@ function todayIn(area, day) {
   const out = [];
   if (day.zones[1] === area) out.push(`${t('morning')} · ${t('deepClean')}`);
   if (day.zones[2] === area) out.push(`${t('evening')} · ${t('deepClean')}`);
-  if (day.surfaces === 'miroirs' && day.zones.third === area) out.push(`${t('evening')} · ${t('mirrorsOf')}`);
+  if (day.surfaces === 'miroirs' && day.zones.third === area) out.push(`${t('evening')} · ${t('mirrorsTask')}`);
   if (area === '3' || area === '5') out.push(t('roomTrash'));
   if (area === '4') out.push(`${t('morning')} · ${t('spinRoom')}`);
   if (area === '2') out.push(t('roomSink'));
@@ -685,7 +685,6 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
   const tag = (z, text, state) => (tags[z] ||= []).push({ text, state });
   tag(day.zones[1], t('morning'), states[1] || 'planned');
   tag(day.zones[2], t('evening'), states[2] || 'planned');
-  if (day.surfaces === 'miroirs') tag(day.zones.third, t('mirrorsOf'), 'planned');
   let selected = highlight || mirrors || null;
   let mode = prefs.mapMode === '3d' ? '3d' : 'plan';
   let view3d = null;

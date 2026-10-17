@@ -4,6 +4,7 @@
 // en pinçant (ou à la molette), on touche une zone pour la voir.
 
 import * as THREE from '../vendor/three.module.min.js';
+import { ZONES, ROOMS, DOORS, GEAR } from './floor-layout.js';
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -54,7 +55,8 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     metal: D ? '#56656a' : '#dfe5e6',
     dark: D ? '#0b0f10' : '#2b3434',
     accent: css('--accent'),
-    mat: D ? '#174443' : '#bfe8e6',
+    carpet: D ? '#3a4245' : '#a9b1b4',
+    glass: D ? '#6fb3c8' : '#cdeaf3',
     zA: css('--zA-strong'), zB: css('--zB-strong'), zC: css('--zC-strong'),
   };
 
@@ -104,14 +106,6 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     root.add(m);
     return m;
   };
-  const cyl = (x, z, r, h, color, { y = 0, axis = 'y' } = {}) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 20), mat(color, { metalness: 0.4, roughness: 0.4 }));
-    m.position.set(x, y + (axis === 'y' ? h / 2 : 0), z);
-    if (axis === 'x') m.rotation.z = Math.PI / 2;
-    m.castShadow = true;
-    root.add(m);
-    return m;
-  };
 
   // Sol du bâtiment et des pièces.
   box(4, 4, 352, 272, 0.5, C.base, { shadow: false });
@@ -119,13 +113,9 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
   // ---------- Zones ----------
   const pickables = [];
   const borders = {};
-  const ZONES = {
-    C: { x: 30, z: 12, w: 148, d: 110, floor: C.rubber },
-    B: { x: 186, z: 12, w: 162, d: 110, floor: C.rubber },
-    A: { x: 30, z: 130, w: 318, d: 90, floor: C.wood },
-  };
   for (const [id, z] of Object.entries(ZONES)) {
-    const floor = box(z.x, z.z, z.w, z.d, 1, new THREE.Color(z.floor).lerp(new THREE.Color(C[`z${id}`]), D ? 0.18 : 0.22).getStyle(), { y: 0.5, shadow: false });
+    const base = z.floor === 'wood' ? C.wood : C.rubber;
+    const floor = box(z.x, z.y, z.w, z.h, 1, new THREE.Color(base).lerp(new THREE.Color(C[`z${id}`]), D ? 0.18 : 0.22).getStyle(), { y: 0.5, shadow: false });
     floor.userData.area = id;
     pickables.push(floor);
     // Bordure lumineuse de la zone (plus haute si c'est la zone de la tâche).
@@ -134,121 +124,115 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     const h = id === highlight ? 3 : 1.6;
     const em = { emissive: color, emissiveIntensity: D ? 0.9 : 0.35 };
     borders[id] = [
-      box(z.x, z.z, z.w, t, h, color, { y: 1.5, shadow: false, extra: em }),
-      box(z.x, z.z + z.d - t, z.w, t, h, color, { y: 1.5, shadow: false, extra: em }),
-      box(z.x, z.z, t, z.d, h, color, { y: 1.5, shadow: false, extra: em }),
-      box(z.x + z.w - t, z.z, t, z.d, h, color, { y: 1.5, shadow: false, extra: em }),
+      box(z.x, z.y, z.w, t, h, color, { y: 1.5, shadow: false, extra: em }),
+      box(z.x, z.y + z.h - t, z.w, t, h, color, { y: 1.5, shadow: false, extra: em }),
+      box(z.x, z.y, t, z.h, h, color, { y: 1.5, shadow: false, extra: em }),
+      box(z.x + z.w - t, z.y, t, z.h, h, color, { y: 1.5, shadow: false, extra: em }),
     ];
   }
 
-  // ---------- Équipement (vu dans les photos) ----------
+  // ---------- Équipement : même liste que le plan ----------
+  // Chaque pièce est bâtie autour de son centre, l'avant vers +z, puis tournée.
   const y0 = 1.5;
-  const at = { y: y0 };
-  const platform = (x, z, w, d) => box(x, z, w, d, 1.4, C.wood, { y: y0, shadow: false });
-  const machine = (x, z, w = 14, d = 12, h = 16) => { box(x, z, w, d, 3, C.metal, at); box(x + w / 2 - 1.5, z + 1, 3, 3, h, C.dark, at); box(x + 2, z + d - 5, w - 4, 4, 6, C.dark, at); };
-  const bench = (x, z, w = 34) => { box(x, z, w, 6, 5, C.dark, at); box(x + 2, z + 1, 2, 4, 3, C.metal, at); box(x + w - 4, z + 1, 2, 4, 3, C.metal, at); };
-  const rack = (x, z, len, vertical) => {
-    const [w, d] = vertical ? [6, len] : [len, 6];
-    box(x, z, w, d, 7, C.metal, at);
-    for (let i = 0; i < Math.floor((len - 4) / 6); i++) {
-      const px = vertical ? x + 3 : x + 5 + i * 6;
-      const pz = vertical ? z + 5 + i * 6 : z + 3;
-      cyl(px, pz, 2, 4.5, C.dark, { y: y0 + 7.2, axis: vertical ? 'x' : 'y' });
-    }
+  const part = (g, cx, cz, w, d, h, color, { y = y0, extra, shadow = true } = {}) => {
+    const m = new THREE.Mesh(geo, mat(color, extra));
+    m.scale.set(w, h, d);
+    m.position.set(cx, y + h / 2, cz);
+    m.castShadow = shadow;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
   };
-  const squat = (x, z) => {
-    for (const [dx, dz] of [[0, 0], [16, 0], [0, 16], [16, 16]]) box(x + dx, z + dz, 2, 2, 26, C.dark, at);
-    box(x, z, 18, 2, 1.5, C.dark, { y: y0 + 26 });
-    box(x, z + 16, 18, 2, 1.5, C.dark, { y: y0 + 26 });
-    cyl(x + 9, z + 9, 0.8, 30, C.metal, { y: y0 + 16, axis: 'x' });
+  const rod = (g, cx, cz, r, len, color, { y = y0, axis = 'y' } = {}) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 18), mat(color, { metalness: 0.4, roughness: 0.4 }));
+    m.position.set(cx, y + (axis === 'y' ? len / 2 : 0), cz);
+    if (axis === 'x') m.rotation.z = Math.PI / 2;
+    if (axis === 'z') m.rotation.x = Math.PI / 2;
+    m.castShadow = true;
+    g.add(m);
   };
-  const treadmill = (x, z) => {
-    box(x, z, 12, 28, 3, C.metal, at);
-    box(x + 2.5, z + 3, 7, 18, 0.6, C.dark, { y: y0 + 3 });
-    box(x + 1, z + 25, 1.5, 2, 13, C.dark, at);
-    box(x + 9.5, z + 25, 1.5, 2, 13, C.dark, at);
-    box(x + 1, z + 24, 10, 3, 3, C.dark, { y: y0 + 13 });
-    box(x + 2.5, z + 24.5, 7, 0.6, 2.2, C.accent, { y: y0 + 13.4, shadow: false, extra: { emissive: C.accent, emissiveIntensity: D ? 1.2 : 0.5 } });
+  const screen = { emissive: C.accent, emissiveIntensity: D ? 1.2 : 0.5 };
+  const BUILD = {
+    treadmill: (g) => { part(g, 0, 0, 12, 28, 3, C.metal); part(g, 0, -1.5, 7, 18, 0.6, C.dark, { y: y0 + 3 }); part(g, -4.2, 12, 1.5, 2, 13, C.dark); part(g, 4.2, 12, 1.5, 2, 13, C.dark); part(g, 0, 11.5, 10, 3, 3, C.dark, { y: y0 + 13 }); part(g, 0, 13.1, 7, 0.6, 2.2, C.accent, { y: y0 + 13.4, shadow: false, extra: screen }); },
+    stair: (g) => { part(g, 0, 0, 10, 13, 18, C.metal); part(g, 0, 3, 8, 5, 1, C.dark, { y: y0 + 18 }); },
+    elliptical: (g) => { part(g, 0, 0, 9, 24, 4, C.metal); part(g, 0, 9.5, 3, 3, 16, C.dark); },
+    rower: (g) => { part(g, 0, 0, 6, 40, 3, C.metal); part(g, 0, 5, 5, 6, 3, C.dark, { y: y0 + 3 }); part(g, 0, 17, 8, 6, 7, C.dark); },
+    bike: (g) => { part(g, 0, 0, 6, 18, 3, C.metal); rod(g, 0, 5, 3.5, 1.5, C.dark, { y: y0 + 5, axis: 'x' }); part(g, 0, -4, 2, 2, 11, C.dark); part(g, 0, -4, 4, 6, 1.2, C.dark, { y: y0 + 11 }); part(g, 0, 6, 2, 2, 13, C.dark); part(g, 0, 6, 8, 2, 1, C.dark, { y: y0 + 13 }); },
+    machine: (g, it) => { part(g, 0, 0, it.w, it.h, 3, C.metal); part(g, 0, -it.h / 2 + 2, 3, 3, 16, C.dark); part(g, 0, it.h / 2 - 3, it.w - 4, 4, 6, C.dark); },
+    bench: (g, it) => { part(g, 0, 0, it.w, 6, 5, C.dark); part(g, -it.w / 2 + 3, 0, 2, 4, 3, C.metal); part(g, it.w / 2 - 3, 0, 2, 4, 3, C.metal); },
+    squat: (g) => { for (const [dx, dz] of [[-8, -8], [8, -8], [-8, 8], [8, 8]]) part(g, dx, dz, 2, 2, 26, C.dark); part(g, 0, -8, 18, 2, 1.5, C.dark, { y: y0 + 26 }); part(g, 0, 8, 18, 2, 1.5, C.dark, { y: y0 + 26 }); rod(g, 0, 0, 0.8, 30, C.metal, { y: y0 + 16, axis: 'x' }); },
+    press: (g) => { part(g, -8, -11, 3.5, 3.5, 20, C.dark); part(g, 8, -11, 3.5, 3.5, 20, C.dark); rod(g, 0, -11, 0.8, 30, C.metal, { y: y0 + 18, axis: 'x' }); part(g, 0, 3, 6.5, 20, 5, C.dark); },
+    plates: (g) => { rod(g, 0, 0, 7, 2, C.dark); rod(g, 0, 0, 1.4, 14, C.metal); },
+    pulley: (g, it) => { part(g, 0, 0, it.w, 6, 32, C.dark); rod(g, -5, 0, 2.5, 3, C.metal, { y: y0 + 30 }); rod(g, 5, 0, 2.5, 3, C.metal, { y: y0 + 30 }); },
+    rack: (g, it) => {
+      part(g, 0, 0, it.w, it.h, 7, C.metal);
+      const vertical = it.h > it.w;
+      const len = vertical ? it.h : it.w;
+      for (let i = 0; i < Math.floor((len - 4) / 6); i++) {
+        const p = -len / 2 + 5 + i * 6;
+        rod(g, vertical ? 0 : p, vertical ? p : 0, 2, 4.5, C.dark, { y: y0 + 7.2, axis: vertical ? 'x' : 'z' });
+      }
+    },
+    platform: (g, it) => part(g, 0, 0, it.w, it.h, 1.4, C.wood, { shadow: false }),
+    carpet: (g, it) => part(g, 0, 0, it.w, it.h, 0.8, C.carpet, { shadow: false }),
+    mirror: (g, it) => part(g, 0, 0, it.w, it.h, 22, C.glass, { y: 1, extra: { metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.75 } }),
+    tv: (g, it) => { part(g, 0.6, 0, it.w + 0.5, it.h + 4, 8, C.dark, { y: 16 }); part(g, 1.8, 0, 0.3, it.h + 3, 6.5, C.accent, { y: 16.7, shadow: false, extra: screen }); },
   };
-  const stair = (x, z) => { box(x, z, 10, 13, 18, C.metal, at); box(x + 1, z + 1, 8, 5, 1, C.dark, { y: y0 + 18 }); };
-  const elliptical = (x, z) => { box(x, z, 9, 24, 4, C.metal, at); box(x + 3, z + 19, 3, 3, 16, C.dark, at); };
-  const rower = (x, z) => { box(x, z, 6, 40, 3, C.metal, at); box(x + 0.5, z + 22, 5, 6, 3, C.dark, { y: y0 + 3 }); box(x - 1, z, 8, 6, 7, C.dark, at); };
+  for (const it of GEAR) {
+    const g = new THREE.Group();
+    BUILD[it.t](g, it);
+    g.position.set(it.x, 0, it.y);
+    g.rotation.y = -((it.rot || 0) * Math.PI) / 180;
+    root.add(g);
+  }
 
-  // C : haut du corps.
-  platform(36, 64, 108, 22);
-  for (let i = 0; i < 5; i++) machine(40 + i * 21, 69);
-  box(150, 18, 20, 6, 32, C.dark, at);
-  cyl(155, 21, 2.5, 3, C.metal, { y: y0 + 30 });
-  cyl(165, 21, 2.5, 3, C.metal, { y: y0 + 30 });
-  for (const x of [50, 100]) { box(x, 94, 3.5, 3.5, 20, C.dark, at); box(x + 16, 94, 3.5, 3.5, 20, C.dark, at); cyl(x + 9.7, 95.7, 0.8, 30, C.metal, { y: y0 + 18, axis: 'x' }); bench(x + 6.5, 100, 6.5); }
-  rack(160, 68, 48, true);
-  // B : bas du corps.
-  rack(296, 16, 46, false);
-  rack(338, 28, 88, true);
-  platform(192, 70, 76, 46);
-  squat(198, 76);
-  squat(224, 76);
-  machine(250, 74, 13, 30, 18);
-  box(198, 100, 44, 12, 6, C.metal, at);
-  box(232, 101, 8, 10, 14, C.dark, at);
-  for (const z of [40, 58, 76]) bench(280, z);
-  cyl(300, 102, 7, 2, C.dark, at);
-  cyl(300, 102, 1.4, 14, C.metal, at);
-  // A : cardio.
-  for (let i = 0; i < 6; i++) { treadmill(42 + i * 18, 158); stair(43 + i * 18, 194); }
-  rower(166, 160);
-  rower(180, 160);
-  elliptical(206, 178);
-  elliptical(220, 178);
-  for (let i = 0; i < 3; i++) box(250 + i * 30, 156, 24, 34, 0.8, C.mat, { y: y0, shadow: false });
-  for (let i = 0; i < 3; i++) stair(300 + i * 15, 198);
-
-  // ---------- Murs, pièces, télés ----------
+  // ---------- Murs, pièces, portes ----------
   const WALL = 16;
-  const wall = (x, z, w, d, h = WALL) => box(x, z, w, d, h, C.wall, { extra: { transparent: true, opacity: D ? 0.9 : 0.95 } });
-  wall(2, 2, 356, 3);
-  wall(2, 275, 356, 3);
-  wall(355, 2, 3, 276);
-  wall(2, 2, 3, 144);
-  wall(2, 190, 3, 88);
-  for (const [a, b] of [[4, 12], [24, 110], [160, 236], [248, 272], [284, 356]]) wall(a, 227, b - a, 2.5, 12);
-  for (const x of [96, 176, 262]) wall(x - 1, 228, 2.5, 48, 12);
-  // Lisière lumineuse sur le dessus du mur extérieur (le « tech » du mode sombre).
+  const wallMat = { transparent: true, opacity: D ? 0.9 : 0.95 };
+  const seg = (x1, y1, x2, y2, h = WALL, t = 3) => {
+    if (x1 === x2) box(x1 - t / 2, Math.min(y1, y2), t, Math.abs(y2 - y1), h, C.wall, { extra: wallMat });
+    else box(Math.min(x1, x2), y1 - t / 2, Math.abs(x2 - x1), t, h, C.wall, { extra: wallMat });
+  };
+  const { entrance: en, top: tp } = DOORS;
+  const outer = [[4, 4, tp.from, 4], [tp.to, 4, 356, 4], [356, 4, 356, 276], [4, 276, 356, 276], [4, 4, 4, en.from], [4, en.to, 4, 276]];
+  for (const s of outer) seg(...s);
   if (D) {
     const em = { emissive: C.accent, emissiveIntensity: 1.4 };
-    box(2, 2, 356, 3, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
-    box(2, 275, 356, 3, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
-    box(355, 2, 3, 276, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
-    box(2, 2, 3, 144, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
-    box(2, 190, 3, 88, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
+    for (const [x1, y1, x2, y2] of outer) {
+      if (x1 === x2) box(x1 - 1.5, Math.min(y1, y2), 3, Math.abs(y2 - y1), 0.6, C.accent, { y: WALL, shadow: false, extra: em });
+      else box(Math.min(x1, x2), y1 - 1.5, Math.abs(x2 - x1), 3, 0.6, C.accent, { y: WALL, shadow: false, extra: em });
+    }
   }
-  for (let i = 0; i < 4; i++) {
-    box(44 + i * 28, 224, 16, 1.5, 9, C.dark, { y: 12 });
-    box(45 + i * 28, 223.6, 14, 0.4, 7, C.accent, { y: 13, shadow: false, extra: { emissive: C.accent, emissiveIntensity: D ? 0.9 : 0.4 } });
-  }
-  const ROOMS = { 5: [4, 92], 2: [96, 80], 3: [176, 86], 4: [262, 94] };
-  for (const [id, [x, w]] of Object.entries(ROOMS)) {
-    const f = box(x + 1, 229, w - 2, 46, 0.8, C.room, { y: 0.5, shadow: false });
+  for (const [id, m] of Object.entries(ROOMS)) {
+    const sides = { top: [m.x, m.y, m.x + m.w, m.y], left: [m.x, m.y, m.x, m.y + m.h], right: [m.x + m.w, m.y, m.x + m.w, m.y + m.h] };
+    for (const [side, [x1, y1, x2, y2]] of Object.entries(sides)) {
+      if ((x1 === x2 && (x1 <= 4 || x1 >= 356))) continue;
+      const d = m.door;
+      if (d && d.side === side) {
+        if (x1 === x2) { seg(x1, y1, x1, d.from, 12, 2.5); seg(x1, d.to, x1, y2, 12, 2.5); } else { seg(x1, y1, d.from, y1, 12, 2.5); seg(d.to, y1, x2, y1, 12, 2.5); }
+      } else seg(x1, y1, x2, y2, 12, 2.5);
+    }
+    const f = box(m.x + 1, m.y + 1, m.w - 2, m.h - 2, 0.8, C.room, { y: 0.5, shadow: false });
     f.userData.area = id;
     pickables.push(f);
   }
-  const door = box(4, 146, 24, 44, 0.6, C.base, { y: 0.5, shadow: false, extra: { transparent: true, opacity: 0 } });
+  const door = box(4, en.from, 24, en.to - en.from, 0.6, C.base, { y: 0.5, shadow: false, extra: { transparent: true, opacity: 0 } });
   door.userData.area = '1';
   pickables.push(door);
-  // Quelques vélos dans le studio de spinning.
-  for (let i = 0; i < 4; i++) { box(272 + i * 20, 236, 6, 14, 10, C.metal, { y: 1.3 }); cyl(275 + i * 20, 248, 4, 1.5, C.dark, { y: 4, axis: 'x' }); }
 
   // ---------- Étiquettes ----------
   const sprites = [];
-  const flatLabel = (text, x, z, scale = 0.36, color = css('--ink')) => {
+  const flatLabel = (text, x, z, { scale = 0.36, color = css('--ink'), turn = 0 } = {}) => {
     const { tex, w, h } = labelTexture([{ text }], { fg: color, size: 40, pad: 6 });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w * scale, h * scale), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(x, 1.5, z);
+    m.rotation.set(-Math.PI / 2, 0, turn);
+    m.position.set(x, 1.6, z);
     root.add(m);
   };
-  for (const [id, [x, w]] of Object.entries(ROOMS)) flatLabel(labels[`r${id}`] || '', x + w / 2, 262);
-  flatLabel(labels.r1 || '', 16, 168, 0.28, C.accent);
+  for (const [id, m] of Object.entries(ROOMS)) flatLabel(labels[`r${id}`] || '', m.x + m.w / 2, m.y + m.h / 2 + (id === '4' ? 40 : 0), { turn: m.vertical ? Math.PI / 2 : 0, scale: m.vertical ? 0.3 : 0.36 });
+  flatLabel(labels.r1 || '', 18, (en.from + en.to) / 2, { scale: 0.26, color: C.accent, turn: Math.PI / 2 });
+  const carpet = GEAR.find((g) => g.t === 'carpet');
+  if (carpet && labels.stretch) flatLabel(labels.stretch, carpet.x, carpet.y, { scale: 0.3 });
 
   const TAGC = { done: css('--ok'), notdone: css('--bad'), unchecked: css('--sun'), planned: D ? '#d9e4e4' : '#5a6362' };
   for (const [id, z] of Object.entries(ZONES)) {
@@ -258,13 +242,13 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     const { tex, w, h } = labelTexture(lines, { bg: D ? 'rgba(7,10,11,.82)' : 'rgba(255,255,255,.92)', fg: D ? '#eef3f3' : '#1f2323', size: 44 });
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     s.scale.set(w * 0.3, h * 0.3, 1);
-    s.position.set(z.x + z.w / 2, 46, z.z + z.d / 2);
+    s.position.set(z.x + z.w / 2, 46, z.y + z.h / 2);
     s.renderOrder = 10;
     s.userData = { area: id, base: 46 };
     root.add(s);
     sprites.push(s);
     // Fil vertical : relie l'étiquette à sa zone.
-    box(z.x + z.w / 2 - 0.3, z.z + z.d / 2 - 0.3, 0.6, 0.6, 38, C[`z${id}`], { y: 2, shadow: false, extra: { emissive: C[`z${id}`], emissiveIntensity: 0.6 } });
+    box(z.x + z.w / 2 - 0.3, z.y + z.h / 2 - 0.3, 0.6, 0.6, 38, C[`z${id}`], { y: 2, shadow: false, extra: { emissive: C[`z${id}`], emissiveIntensity: 0.6 } });
   }
 
   // ---------- Caméra et gestes ----------
