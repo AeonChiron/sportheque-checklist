@@ -178,9 +178,54 @@ function paintStatic() {
   for (const el of document.querySelectorAll('[data-label]')) el.setAttribute('aria-label', t(el.dataset.label));
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
   for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(Boolean(prefs.large)));
+  paintThemeButtons();
   $('#manualVersion').textContent = [CONFIG.gymName && CONFIG.since ? `${CONFIG.gymName} · ${t('since', CONFIG.since)}` : '', t('manual', MANUAL_VERSION)].filter(Boolean).join(' · ');
   renderBrand();
 }
+
+// ---------- Thème : suit le téléphone, ou clair / sombre au choix ----------
+// Un toucher sur le soleil / la lune bascule; le Menu offre aussi « Auto ».
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+const themePref = () => (prefs.theme === 'light' || prefs.theme === 'dark' ? prefs.theme : 'auto');
+const resolvedTheme = () => (themePref() === 'auto' ? (darkMQ.matches ? 'dark' : 'light') : themePref());
+function paintThemeButtons() {
+  const dark = resolvedTheme() === 'dark';
+  for (const b of document.querySelectorAll('[data-theme-btn]')) {
+    b.setAttribute('aria-pressed', String(dark));
+    b.setAttribute('aria-label', t(dark ? 'toLight' : 'toDark'));
+  }
+}
+function applyTheme() {
+  const th = resolvedTheme();
+  document.documentElement.dataset.theme = th;
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = th === 'dark' ? '#050708' : '#f1f4f3';
+  paintThemeButtons();
+}
+// La nouvelle couleur s'ouvre en cercle depuis le bouton touché.
+function setTheme(next, from) {
+  const before = resolvedTheme();
+  prefs.theme = next;
+  savePrefs();
+  const run = () => {
+    applyTheme();
+    if (current === 'apercu') renderApercu({ animate: false }); // la 3D reprend ses couleurs
+  };
+  if (resolvedTheme() === before || !document.startViewTransition || reducedMotion() || document.hidden) { run(); return; }
+  const r = from?.getBoundingClientRect?.();
+  const x = r ? r.left + r.width / 2 : innerWidth / 2;
+  const y = r ? r.top + r.height / 2 : 0;
+  const root = document.documentElement.style;
+  root.setProperty('--vt-x', `${x}px`);
+  root.setProperty('--vt-y', `${y}px`);
+  root.setProperty('--vt-r', `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
+  document.documentElement.dataset.nav = 'theme';
+  document.startViewTransition(run).finished.finally(() => { delete document.documentElement.dataset.nav; });
+}
+darkMQ.addEventListener?.('change', () => { if (themePref() === 'auto') applyTheme(); });
+for (const b of document.querySelectorAll('[data-theme-btn]')) {
+  b.addEventListener('click', () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark', b));
+}
+applyTheme();
 
 function setLang(l) {
   prefs.lang = l;
@@ -453,7 +498,7 @@ function renderNow() {
   const cur = plan.items.find((it) => it.start <= now && now < it.end);
   if (!cur) { box.innerHTML = ''; return; }
   const nextIt = plan.items.find((it) => it.start >= cur.end && it.kind === 'task' && !state.tasks[it.id]?.done);
-  const next = nextIt ? `<div class="next">${t('next')} · <span class="num">${f(nextIt.start)}</span> <b>${esc(nextIt.title)}</b></div>` : '';
+  const next = nextIt ? `<div class="next"><span>${t('next')}</span><span class="num">${f(nextIt.start)}</span><b>${esc(nextIt.title)}</b></div>` : '';
   const pct = Math.round((100 * (now - cur.start)) / (cur.end - cur.start));
   const remain = `<span class="remain num">${t('left', cur.end - now)}</span>`;
   const bar = `<div class="now-bar" style="--p:${pct}%"></div>`;
@@ -485,6 +530,9 @@ function renderChecklist() {
   renderNow();
 
   $('#listCount').textContent = `${done}/${tasks.length}`;
+  const ready = tasks.length > 0 && done === tasks.length;
+  $('#finishBtn').classList.toggle('ready', ready);
+  $('#finishBtn').textContent = t(ready ? 'finishReady' : 'finish');
   const hint = $('#swipeHint');
   hint.hidden = prefs.swipeSeen || !matchMedia('(pointer: coarse)').matches;
   hint.textContent = t('swipeHint');
@@ -1115,6 +1163,11 @@ $('#menuBtn').addEventListener('click', () => {
           <button type="button" role="radio" data-mlang="en" aria-checked="${lang() === 'en'}">English</button>
         </div>
       </div>
+      <div class="inline-choice"><span>${t('theme')}</span>
+        <div class="segmented tiny" role="radiogroup">
+          ${['auto', 'light', 'dark'].map((k) => `<button type="button" role="radio" data-mtheme="${k}" aria-checked="${themePref() === k}">${t(`theme_${k}`)}</button>`).join('')}
+        </div>
+      </div>
       ${switchRow('mLarge', t('largeText'), Boolean(prefs.large))}
       <div class="inline-choice"><span>${t('listOrder')}</span>
         <div class="segmented tiny" role="radiogroup">
@@ -1133,6 +1186,12 @@ $('#menuBtn').addEventListener('click', () => {
       b.onclick = () => { closeSheet(); setLang(b.dataset.mlang); };
     }
     root.querySelector('#mLarge').onclick = (ev) => setLarge(!prefs.large, ev.currentTarget);
+    for (const b of root.querySelectorAll('[data-mtheme]')) {
+      b.onclick = () => {
+        for (const o of root.querySelectorAll('[data-mtheme]')) o.setAttribute('aria-checked', String(o === b));
+        setTheme(b.dataset.mtheme, b);
+      };
+    }
     for (const b of root.querySelectorAll('[data-mview]')) {
       b.onclick = () => {
         state.view = b.dataset.mview;
@@ -1177,9 +1236,9 @@ function openFinish() {
 
   $('#finishSummary').innerHTML = `
     <div class="stat-grid">
-      <div class="stat ok"><b class="num" data-count>${done}</b><span>${t('statDone')}</span></div>
-      <div class="stat bad"><b class="num" data-count>${skipped}</b><span>${t('statNot')}</span></div>
-      <div class="stat warn"><b class="num" data-count>${state.flags.length}</b><span>${t('statFlags')}</span></div>
+      <div class="stat ok"><b class="num" data-count>${done}</b><span>${t('statDone', done)}</span></div>
+      <div class="stat bad"><b class="num" data-count>${skipped}</b><span>${t('statNot', skipped)}</span></div>
+      <div class="stat warn"><b class="num" data-count>${state.flags.length}</b><span>${t('statFlags', state.flags.length)}</span></div>
     </div>
     ${open.length ? `<div class="panel">
       <div class="section-head" style="margin-top:0"><h3>${t('pending')}</h3><span class="num">${open.length}</span></div>
@@ -1326,7 +1385,7 @@ function openReview(r, opts = {}) {
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
     </li>`;
   const attention = [
-    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
+    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span>${fl.text ? `<span class="rv-quote">« ${esc(fl.text)} »</span>` : ''}${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
     ...unchecked.map(row),
   ];
@@ -1852,9 +1911,9 @@ function renderHistory({ animate = true } = {}) {
   const strip = span.length ? `
     ${isWeek ? '' : `<p class="block-label hi-span">${esc(t('last7'))}</p>`}
     <div class="ap-stats hi-stats">
-      <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts'))}</span></div>
+      <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts', span.length))}</span></div>
       <div class="${complete === span.length ? 'ok' : ''}"><b class="num">${complete}/${span.length}</b><span>${esc(t('statComplete'))}</span></div>
-      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags'))}</span></div>
+      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags', nFlags))}</span></div>
     </div>` : '';
 
   let k = 0;

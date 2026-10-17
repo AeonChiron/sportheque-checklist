@@ -124,7 +124,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wordmark::after { content: ""; display: block; height: 3px; width: 46px; margin-top: 5px; border-radius: 2px; background: var(--accent); }
 .brand-logo { height: 96px; width: auto; max-width: 60vw; object-fit: contain; object-position: left center; }
 .only-dark { display: none; }
-@media (prefers-color-scheme: dark) { .only-light { display: none; } .only-dark { display: block; } }
+:root[data-theme="dark"] .only-light { display: none; } :root[data-theme="dark"] .only-dark { display: block; }
 .mark { flex: none; display: grid; place-items: center; width: 40px; height: 40px; }
 .mark-img { width: 40px; height: auto; }
 .review-nav { display: flex; align-items: center; justify-content: space-between; }
@@ -917,12 +917,10 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 }
 .btn.primary { box-shadow: var(--cta-shadow); }
 .panel, .task-inner, .now-card, .ap-stats > div, .stat, .tipcard, .folder-body, .folder-tab, .wk-day, .rp-card, .preview, .map-info { box-shadow: var(--edge), var(--card-shadow); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .env::after { content: ""; position: absolute; right: -25vmax; bottom: -35vmax; width: 80vmax; height: 80vmax; border-radius: 50%; background: radial-gradient(closest-side, rgba(79, 216, 210, .07), transparent); animation: drift2 70s ease-in-out infinite alternate; }
-  :root:not([data-theme="light"]) .topbar, :root:not([data-theme="light"]) .bottombar { background: color-mix(in srgb, var(--bg) 72%, transparent); border-color: rgba(255, 255, 255, .06); }
-  :root:not([data-theme="light"]) .hero h1 { background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 50%, var(--ink) 70%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: title-sheen 9s ease-in-out infinite; }
-  :root:not([data-theme="light"]) .wk-day.today .wk-num, :root:not([data-theme="light"]) .live { text-shadow: 0 0 14px rgba(79, 216, 210, .55); }
-}
+:root[data-theme="dark"] .env::after { content: ""; position: absolute; right: -25vmax; bottom: -35vmax; width: 80vmax; height: 80vmax; border-radius: 50%; background: radial-gradient(closest-side, rgba(79, 216, 210, .07), transparent); animation: drift2 70s ease-in-out infinite alternate; }
+:root[data-theme="dark"] .topbar, :root[data-theme="dark"] .bottombar { background: color-mix(in srgb, var(--bg) 72%, transparent); border-color: rgba(255, 255, 255, .06); }
+:root[data-theme="dark"] .hero h1 { background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 50%, var(--ink) 70%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: title-sheen 9s ease-in-out infinite; }
+:root[data-theme="dark"] .wk-day.today .wk-num, :root[data-theme="dark"] .live { text-shadow: 0 0 14px rgba(79, 216, 210, .55); }
 @keyframes drift2 { to { transform: translate3d(-20vmax, -15vmax, 0); } }
 @keyframes title-sheen { 0%, 60% { background-position: 100% 0; } 100% { background-position: -50% 0; } }
 
@@ -1238,7 +1236,7 @@ html.large .cat-grid { grid-template-columns: 1fr; }
 .shift-pill:active { transform: translateX(-50%) scale(.95); }
 html.has-pill .screen { padding-bottom: 84px; }
 @keyframes pill-in { from { transform: translate(-50%, 30px); opacity: 0; } }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .shift-pill .sp-ring::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E"); } }
+:root[data-theme="dark"] .shift-pill .sp-ring::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E"); }
 
 /* Les tâches faites se font petites : on voit surtout ce qui reste. */
 .task.done .t-sum, .task.done .tags { display: none; }
@@ -1256,3 +1254,126 @@ html.has-pill .screen { padding-bottom: 84px; }
 .task.done .t-icon svg { width: 30px; height: 30px; }
 .task.done .t-time { font-size: 15px; }
 .task.done .check i { width: 28px; height: 28px; }
+
+/* =====================================================================
+   Lumière et matière : la lumière de la piscine au fond, du grain, des
+   bordures vivantes sur ce qui compte, et la bascule clair / sombre.
+   ===================================================================== */
+:root {
+  --caustic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='520'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='turbulence' baseFrequency='.009 .013' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .31 0 0 0 0 .85 0 0 0 0 .82 -2.6 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --caustic-o: .22; --grain-o: .045;
+  --edge-hot: color-mix(in srgb, var(--accent) 45%, #fff);
+}
+:root[data-theme="dark"] {
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --caustic-o: .11; --grain-o: .035;
+  --edge-hot: #e9fffe;
+}
+/* La lumière de la piscine qui ondule lentement sous la grille (en haut de l'écran). */
+.env::before { content: ""; position: absolute; left: -50%; top: -50%; width: 200%; height: 200%; background: var(--caustic) 0 0 / 520px 520px; opacity: var(--caustic-o); will-change: transform; animation: caustic 120s linear infinite; }
+@keyframes caustic { to { transform: translate3d(-520px, -260px, 0); } }
+/* Un grain très fin sur tout le fond : moins « écran », plus matière. */
+body::before { content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none; background: var(--grain); opacity: var(--grain-o); }
+
+/* ---------- Bordures vivantes : un trait de lumière fait le tour ---------- */
+@property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.panel.form, .rp-card, #finishBtn { position: relative; }
+.now-card:not(.quiet)::after,
+.task.current .task-inner::before,
+.shift-pill::after,
+#finishBtn.ready::after,
+.panel.form::after,
+.pb-card.bad::after,
+.hi-card.ok::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; padding: var(--edge-w, 1.5px); pointer-events: none;
+  background: conic-gradient(from var(--spin), transparent 0turn .56turn, color-mix(in srgb, var(--edge-c, var(--accent)) 30%, transparent) .76turn, var(--edge-c, var(--accent)) .925turn, var(--edge-hot) .962turn, transparent 1turn);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  animation: edge-spin var(--edge-speed, 4.8s) linear infinite;
+}
+@keyframes edge-spin { to { --spin: 360deg; } }
+.task.current .task-inner { --edge-w: 2px; }
+.panel.form::after { --edge-speed: 11s; opacity: .7; }
+.pb-card.bad::after { --edge-c: var(--bad); --edge-hot: color-mix(in srgb, var(--bad) 40%, #fff); --edge-speed: 3.6s; }
+/* Un quart « tout fait » : le trait passe une seule fois, comme un reflet. */
+.hi-card.ok::after { --edge-c: var(--ok); --edge-hot: color-mix(in srgb, var(--ok) 35%, #fff); opacity: 0; animation: edge-spin 1.8s var(--ease) .35s 1 both, edge-once 1.8s ease .35s 1 both; }
+@keyframes edge-once { 0% { opacity: 0; } 15%, 75% { opacity: 1; } 100% { opacity: 0; } }
+/* Tout est coché : le bouton de fin s'allume et respire. */
+#finishBtn.ready { --edge-c: var(--accent); --edge-w: 2px; animation: ready-glow 2.4s ease-in-out infinite; }
+@keyframes ready-glow { 50% { box-shadow: var(--cta-shadow), 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); } }
+.shift-pill::after { --edge-w: 2px; }
+
+/* Filets de lumière qui glissent le long des barres du haut et du bas. */
+.topbar::after, .bottombar::before {
+  content: ""; position: absolute; left: 0; right: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 80%, transparent), transparent) no-repeat;
+  background-size: 35% 100%; animation: edge-run 8s ease-in-out infinite;
+}
+.topbar::after { bottom: -1px; }
+.bottombar::before { top: -1px; animation-delay: -4s; }
+@keyframes edge-run { 0% { background-position: -60% 0; } 55%, 100% { background-position: 160% 0; } }
+/* La feuille du bas : un reflet traverse son bord quand elle s'ouvre. */
+.sheet::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 3; pointer-events: none; background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat; background-size: 40% 100%; background-position: -60% 0; }
+.sheet.open::before { animation: edge-run 1.6s var(--ease) .15s 1 both; }
+/* « Annuler » : une barre montre le temps qu'il reste pour changer d'idée. */
+.toast.in.has-undo { overflow: hidden; }
+.toast.in.has-undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); transform-origin: left; animation: undo-clock 4.5s linear both; }
+@keyframes undo-clock { to { transform: scaleX(0); } }
+/* Titres de section : un petit trait qui se trace à l'arrivée. */
+.list-head h3, .hi-dayhead h3 { position: relative; }
+.list-head h3::after, .hi-dayhead h3::after { content: ""; position: absolute; left: 0; bottom: -4px; height: 3px; width: 28px; border-radius: 2px; background: var(--accent); transform-origin: left; animation: draw-in .7s var(--ease) .2s both; }
+@keyframes draw-in { from { transform: scaleX(0); } }
+
+/* ---------- Clair / sombre : le soleil devient lune ---------- */
+.theme-btn { flex: none; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); background: var(--sunk); border-radius: 50%; color: var(--ink); transition: background .3s, border-color .3s, color .3s, transform .15s var(--ease); }
+.theme-btn:active { transform: scale(.9); }
+.theme-btn svg { width: 22px; height: 22px; overflow: visible; }
+.theme-btn .tm-core { fill: currentColor; transform-box: view-box; transform-origin: 12px 12px; transition: transform .6s var(--spring); }
+.theme-btn .tm-bite { transform-box: view-box; transition: transform .6s var(--ease); }
+.theme-btn .tm-rays { stroke: currentColor; stroke-width: 2; stroke-linecap: round; fill: none; transform-box: view-box; transform-origin: 12px 12px; transition: transform .6s var(--ease), opacity .35s; }
+.theme-btn[aria-pressed="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--sunk)); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--accent) 60%, transparent); }
+.theme-btn[aria-pressed="true"] .tm-core { transform: scale(1.7); }
+.theme-btn[aria-pressed="true"] .tm-bite { transform: translate(-12.5px, 3px); }
+.theme-btn[aria-pressed="true"] .tm-rays { opacity: 0; transform: rotate(-90deg) scale(.4); }
+/* La nouvelle couleur s'ouvre en cercle depuis le bouton touché. */
+html[data-nav="theme"] .env, html[data-nav="theme"] .bottombar { view-transition-name: none; }
+html[data-nav="theme"]::view-transition-old(root) { animation: none; }
+html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s cubic-bezier(.55, 0, .2, 1) both; }
+@keyframes theme-reveal { from { clip-path: circle(0 at var(--vt-x) var(--vt-y)); } to { clip-path: circle(var(--vt-r) at var(--vt-x) var(--vt-y)); } }
+
+/* Réduire les animations : la lumière reste, mais ne bouge plus. */
+@media (prefers-reduced-motion: reduce) {
+  .env::before, .now-card::after, .task-inner::before, .shift-pill::after, #finishBtn.ready, #finishBtn.ready::after, .panel.form::after, .pb-card.bad::after, .topbar::after, .bottombar::before, .list-head h3::after, .hi-dayhead h3::after { animation: none !important; }
+  .hi-card.ok::after, .sheet::before, .toast.in.has-undo::after { display: none; }
+}
+
+/* Retouches : le message tient sur une ligne, « Ensuite » ne se coupe plus. */
+.toast { width: max-content; }
+.now-card .next > span { flex: none; white-space: nowrap; }
+.now-card .next > span:first-child::after { content: " ·"; }
+/* Le quart choisi au départ : le trait de lumière en fait le tour. */
+.presets button { position: relative; }
+.presets button[aria-checked="true"]::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
+  background: conic-gradient(from var(--spin), transparent 0turn .55turn, color-mix(in srgb, var(--accent) 35%, transparent) .76turn, var(--accent) .925turn, var(--edge-hot) .962turn, transparent 1turn);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  animation: edge-spin 3.8s linear infinite;
+}
+:root:not([data-theme="dark"]) .now-card:not(.quiet)::after { --edge-w: 2px; }
+@media (prefers-reduced-motion: reduce) { .presets button[aria-checked="true"]::after { animation: none; } }
+/* Catégorie choisie (Signaler) : le trait de lumière, en couleur d'alerte. */
+.cat-grid button { position: relative; }
+.cat-grid button[aria-pressed="true"]::after {
+  content: ""; position: absolute; inset: -1.5px; border-radius: 13px; padding: 2px; pointer-events: none;
+  background: conic-gradient(from var(--spin), transparent 0turn .55turn, color-mix(in srgb, var(--bad) 35%, transparent) .76turn, var(--bad) .925turn, color-mix(in srgb, var(--bad) 30%, #fff) .962turn, transparent 1turn);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  animation: edge-spin 3.2s linear infinite;
+}
+/* L'image d'une tâche : un reflet de lumière passe sur la vitre, de temps en temps. */
+.visual.alive { position: relative; overflow: hidden; }
+.visual.alive::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, color-mix(in srgb, var(--accent) 16%, transparent) 48%, rgba(255, 255, 255, .22) 50%, transparent 60%) no-repeat; background-size: 250% 100%; background-position: 150% 0; animation: glass 7s ease-in-out 1s infinite; }
+@keyframes glass { 0%, 72% { background-position: 150% 0; } 100% { background-position: -60% 0; } }
+@media (prefers-reduced-motion: reduce) { .cat-grid button[aria-pressed="true"]::after, .visual.alive::after { animation: none; } .visual.alive::after { display: none; } }

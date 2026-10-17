@@ -57,3 +57,9 @@ test('L’historique garde remarques et notes, et liste les derniers quarts sans
   assert.deepEqual(list.map((x) => `${x.date} ${x.name}`), ['2026-10-21 Katiana', '2026-10-21 Oli', '2026-10-19 Katiana']);
   assert.equal(recentShifts({ '2026-10-19': [a] }, {}, 0).length, 1);
 });
+
+test('Un problème sans description reste dans le quart (la catégorie suffit)', () => {
+  const s = sanitizeShift({ ...good, flags: [{ id: '0abcdefgh12345', category: 'machine', location: '', text: '', urgent: true }] });
+  assert.equal(s.flags.length, 1);
+  assert.equal(s.flags[0].id, '0abcdefgh12345');
+});

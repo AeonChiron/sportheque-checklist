@@ -40,7 +40,7 @@ export function sanitizeShift(raw) {
       urgent: f?.urgent === true,
       emailed: f?.emailed === true,
       photos: Number.isInteger(f?.photos) && f.photos >= 0 && f.photos <= 8 ? f.photos : 0,
-    })).filter((f) => f.text),
+    })).filter((f) => f.category || f.text), // la description est facultative (sauf « Autre »)
   };
 }
 
