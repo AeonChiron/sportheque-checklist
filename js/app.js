@@ -92,10 +92,24 @@ function celebrate() {
 }
 
 // ---------- Identité et textes fixes ----------
+// Icônes dessinées (pas d'emoji dans l'interface).
+const ICON = {
+  flag: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  clock: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>',
+  info: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+  clip: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg>',
+};
+const logoImgs = (light, dark, cls, alt = '') =>
+  `<img class="${cls} only-light" src="${esc(light)}" alt="${esc(alt)}"><img class="${cls} only-dark" src="${esc(dark)}" alt="" aria-hidden="true">`;
+
 function renderBrand() {
   const floor = `<span class="brand-floor">${esc(t('floor'))}</span>`;
+  for (const el of document.querySelectorAll('[data-mark]')) {
+    el.innerHTML = CONFIG.logo ? logoImgs(CONFIG.logo.mark, CONFIG.logo.markDark, 'mark-img') : '';
+    el.hidden = !CONFIG.logo;
+  }
   if (CONFIG.logo) {
-    $('#brand').innerHTML = `<img class="brand-logo" src="${esc(CONFIG.logo)}" alt="${esc(CONFIG.gymName)}">${floor}`;
+    $('#brand').innerHTML = `${logoImgs(CONFIG.logo.full, CONFIG.logo.fullDark, 'brand-logo', CONFIG.gymName)}${floor}`;
   } else if (CONFIG.gymName) {
     $('#brand').innerHTML = `<span class="wordmark">${esc(CONFIG.gymName)}</span>${floor}`;
   } else {
@@ -109,7 +123,7 @@ function paintStatic() {
   for (const el of document.querySelectorAll('[data-ph]')) el.placeholder = t(el.dataset.ph);
   for (const el of document.querySelectorAll('[data-label]')) el.setAttribute('aria-label', t(el.dataset.label));
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
-  $('#manualVersion').textContent = t('manual', MANUAL_VERSION);
+  $('#manualVersion').textContent = [CONFIG.gymName && CONFIG.since ? `${CONFIG.gymName} · ${t('since', CONFIG.since)}` : '', t('manual', MANUAL_VERSION)].filter(Boolean).join(' · ');
   renderBrand();
 }
 
@@ -378,7 +392,7 @@ function renderChecklist() {
 
   $('#flagsBlock').innerHTML = state.flags.length
     ? `<div class="section-head"><h3>${t('flags')}</h3><span class="num">${state.flags.length}</span></div>
-       ${state.flags.map((fl, i) => `<div class="flag-item"><span aria-hidden="true">⚑</span><div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small></div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
+       ${state.flags.map((fl, i) => `<div class="flag-item">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small></div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
     : '';
 }
 
@@ -596,10 +610,10 @@ function openTask(id) {
     ? `<figure class="visual map-visual"><figcaption class="block-label">${t('channels')}</figcaption>${tvDiagram(TV_CHANNELS)}</figure>`
     : '';
   const clockBox = (it.reminders || []).length
-    ? `<div class="callout clock"><div class="c-head"><span class="c-ico">⏱</span>${t('atTime')}</div>${it.reminders.map((r) => `<p><b class="num">${f(r.at)}</b> · ${esc(r.label)}</p>`).join('')}</div>`
+    ? `<div class="callout clock"><div class="c-head">${ICON.clock}${t('atTime')}</div>${it.reminders.map((r) => `<p><b class="num">${f(r.at)}</b> · ${esc(r.label)}</p>`).join('')}</div>`
     : '';
   const tips = (it.tips || []).length
-    ? `<div class="callout tip"><div class="c-head"><span class="c-ico">i</span>${t('goodToKnow')}</div>${it.tips.map((x) => `<p>${md(x)}</p>`).join('')}</div>`
+    ? `<div class="callout tip"><div class="c-head">${ICON.info}${t('goodToKnow')}</div>${it.tips.map((x) => `<p>${md(x)}</p>`).join('')}</div>`
     : '';
   const skipped = e.skipped && !e.done;
 
@@ -658,7 +672,7 @@ function openFlag() {
   let category = null;
   openSheet(`
     <div class="sheet-head">
-      <p class="eyebrow danger">⚑ ${t('flag')}</p>
+      <p class="eyebrow danger">${ICON.flag}${t('flag')}</p>
       <h3>${t('flagTitle')}</h3>
       <p class="lede">${t('flagLede')}</p>
     </div>
@@ -709,7 +723,7 @@ $('#menuBtn').addEventListener('click', () => {
         <button type="button" role="radio" data-mlang="en" aria-checked="${lang() === 'en'}">English</button>
       </div>
     </div>
-    <div class="callout tip"><div class="c-head"><span class="c-ico">i</span>${t('priorities')}</div>${PRIORITY_ORDER[lang()].map((p, i) => `<p><b class="num">${i + 1}.</b> ${esc(p)}</p>`).join('')}</div>
+    <div class="callout tip"><div class="c-head">${ICON.info}${t('priorities')}</div>${PRIORITY_ORDER[lang()].map((p, i) => `<p><b class="num">${i + 1}.</b> ${esc(p)}</p>`).join('')}</div>
     <div class="menu-list">
       <button class="btn ghost" id="mEdit">${t('editHours')}</button>
       <button class="btn ghost danger" id="mReset">${t('abandon')}</button>
@@ -917,7 +931,7 @@ function openReview(r, { demo = false, sup = '' } = {}) {
   const detail = (i) => [
     i.reason ? `<span class="rv-reason">${esc(i.reason)}</span>` : '',
     i.remark ? `<span class="rv-quote">« ${esc(i.remark)} »</span>` : '',
-    i.photos?.length ? `<span class="rv-meta">📎 ${esc(i.photos.join(', '))}</span>` : '',
+    i.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(i.photos.join(', '))}</span>` : '',
   ].join('');
   const row = (i) => `<li class="rv-row ${i.status}">
       <span class="rv-mark">${STATUS_MARK[i.status]}</span>
@@ -925,7 +939,7 @@ function openReview(r, { demo = false, sup = '' } = {}) {
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
     </li>`;
   const attention = [
-    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">⚑</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">📎 ${esc(fl.photos.join(', '))}</span>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
+    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
     ...unchecked.map(row),
   ];
@@ -1087,7 +1101,7 @@ async function openApercu() {
       <div class="panel">
         <h3>${t('openIssues')}</h3>
         ${flags.length
-          ? flags.map((fl) => `<div class="flag-item"><span aria-hidden="true">⚑</span><div><b>${esc(FLAG_CATEGORIES[fl.category]?.[L] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${esc(fl.by)} · ${clock(fl.at)}</small></div></div>`).join('')
+          ? flags.map((fl) => `<div class="flag-item">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[L] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${esc(fl.by)} · ${clock(fl.at)}</small></div></div>`).join('')
           : `<p class="empty-line">${esc(t('noIssues'))}</p>`}
       </div>
       <div class="panel ap-tips">

@@ -20,7 +20,7 @@ test('Le rapport relie chaque photo à sa tâche ou à son signalement', () => {
   assert.deepEqual(r.items.find((i) => i.title.startsWith('Poubelles')).photos, ['photo-2.jpg']);
   assert.match(renderReportText(r), /Photos jointes : photo-2\.jpg/);
   const html = renderReportHtml(r);
-  assert.match(html, /📎 photo-1\.jpg/);
+  assert.match(html, />photo-1\.jpg</);
   assert.match(html, /Courroie &lt;b&gt;/); // texte échappé
 });
 

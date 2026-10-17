@@ -185,7 +185,7 @@ export function renderReportHtml(r, { photoSrc = {} } = {}) {
   const pics = (names = []) => (names.length
     ? `<div style="margin-top:6px">${names.map((n) => (photoSrc[n]
       ? `<img src="${esc(photoSrc[n])}" alt="${esc(n)}" style="width:96px;height:72px;object-fit:cover;border-radius:6px;margin:0 6px 6px 0">`
-      : `<span style="display:inline-block;font-size:12px;color:#475467;background:#f2f4f7;border-radius:6px;padding:2px 8px;margin:0 6px 4px 0">📎 ${esc(n)}</span>`)).join('')}</div>`
+      : `<span style="display:inline-block;font-size:12px;color:#475467;background:#f2f4f7;border-radius:6px;padding:2px 8px;margin:0 6px 4px 0">${esc(n)}</span>`)).join('')}</div>`
     : '');
   const row = (i) => {
     const extra = [
@@ -206,7 +206,7 @@ export function renderReportHtml(r, { photoSrc = {} } = {}) {
 
   const pct = r.completion.total ? Math.round((100 * r.completion.done) / r.completion.total) : 0;
   let html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;color:#101828">
-  <div style="background:#0f3d40;color:#fff;border-radius:14px;padding:20px 22px">
+  <div style="background:#2d3131;color:#fff;border-radius:14px;padding:20px 22px">
     <div style="font-size:11px;opacity:.75;letter-spacing:.1em;text-transform:uppercase">${r.gymName ? `${esc(r.gymName)} · ` : ''}${esc(t.report)} · ${esc(r.shiftName)}</div>
     ${r.supervisor ? `<div style="font-size:13px;opacity:.85;margin-top:8px">${esc(t.to)} ${esc(r.supervisor)}</div>` : ''}
     <div style="font-size:22px;font-weight:600;margin-top:2px">${esc(r.name)}</div>

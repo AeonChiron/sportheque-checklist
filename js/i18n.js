@@ -101,6 +101,7 @@ export const UI = {
     demoText: (s) => `Mode démo : rien n’a été envoyé. Voici ce que ${s || 'le superviseur'} verra en ouvrant le rapport.`,
     newShift: 'Nouveau quart',
     manual: (v) => `Basé sur le manuel ${v}`,
+    since: (y) => `depuis ${y}`,
     paidBreak: 'payée',
     unpaidMeal: 'non payé',
     // Aperçu
@@ -238,6 +239,7 @@ export const UI = {
     demoText: (s) => `Demo mode: nothing was sent. Here’s what ${s || 'your supervisor'} will see when opening the report.`,
     newShift: 'New shift',
     manual: (v) => `Based on manual ${v}`,
+    since: (y) => `since ${y}`,
     paidBreak: 'paid',
     unpaidMeal: 'unpaid',
     overview: 'Gym overview',

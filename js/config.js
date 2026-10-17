@@ -4,9 +4,15 @@ export const CONFIG = {
   // Nom du centre, affiché dans le site et dans le rapport.
   gymName: 'Sporthèque',
 
-  // Logo officiel : déposer le fichier (SVG ou PNG) dans icons/ et mettre
-  // son chemin ici, ex. 'icons/logo-sportheque.svg'. Vide = mot-symbole texte.
-  logo: '',
+  // Logo officiel (fond transparent; version claire pour le mode sombre).
+  // null = mot-symbole texte (utilisé par la démo publique).
+  logo: {
+    full: 'icons/logo-sportheque.png',
+    fullDark: 'icons/logo-sportheque-dark.png',
+    mark: 'icons/mark-sportheque.png',
+    markDark: 'icons/mark-sportheque-dark.png',
+  },
+  since: 1981,
 
   // Superviseurs proposés au début du quart. Ajouter un courriel pour qu'il
   // reçoive ses rapports directement; sans courriel, le rapport va à reportTo.
