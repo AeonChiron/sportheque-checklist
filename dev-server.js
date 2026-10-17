@@ -6,7 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import handler from './api/send-report.js';
 import { renderReportHtml, reportSubject } from './js/report.js';
-import { sanitizeShift, mergeShift } from './js/board-shape.js';
+import { sanitizeShift, mergeShift, parseDates } from './js/board-shape.js';
 
 // Tableau partagé simulé en mémoire (comme la fonction Netlify).
 const board = new Map();
@@ -19,6 +19,9 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/board') {
     res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && url.searchParams.has('dates')) {
+      return res.end(JSON.stringify({ days: Object.fromEntries(parseDates(url.searchParams.get('dates')).map((d) => [d, board.get(d) || []])) }));
+    }
     if (req.method === 'GET') return res.end(JSON.stringify({ shifts: board.get(url.searchParams.get('date')) || [] }));
     let body = '';
     for await (const chunk of req) body += chunk;

@@ -5,7 +5,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { buildReport, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS, encodeReport, decodeReport, reportGlance, REVIEW, reportLabels } from './report.js';
 import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink, blobToBase64 } from './photos.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
-import { publishShift, loadBoard } from './board.js';
+import { publishShift, loadWeek } from './board.js';
 
 const KEY = 'gym-shift-v2';
 const PREFS = 'gym-shift-prefs';
@@ -912,6 +912,9 @@ function boardSummary() {
     date: state.date,
     shift: state.shift,
     name: state.name,
+    supervisor: state.supervisor || '',
+    done: planTasks().filter((x) => state.tasks[x.id]?.done).length,
+    total: planTasks().length,
     start: state.start,
     end: state.end,
     submittedAt: new Date().toISOString(),
@@ -949,7 +952,7 @@ async function send() {
 
   const finish = () => {
     const { supervisor: sup, name } = state;
-    publishShift(summary);
+    publishShift(summary, code);
     state = null;
     save();
     clearPhotos();
@@ -1100,7 +1103,8 @@ async function openApercu() {
     show('apercu');
   }
 
-  const { live, shifts } = await loadBoard(date);
+  const { live, days } = await loadWeek([date]);
+  const shifts = days[date] || [];
   if ($('#apercu').hidden) return; // l'utilisateur est parti entre-temps
 
   const ref = {

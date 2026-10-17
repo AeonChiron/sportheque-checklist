@@ -83,6 +83,7 @@ const photoList = (ids = [], names) => ids.map((id) => names.get(id)).filter(Boo
 
 function line(it, e = {}, names, lang, withTime = true) {
   return {
+    id: it.id,
     time: withTime ? `${fmt(it.start, lang)}–${fmt(it.end, lang)}` : '',
     title: it.title,
     minutes: it.minutes,
@@ -106,6 +107,9 @@ export function buildReport(plan, state, photoNames = new Map()) {
     supervisor: state.supervisor || '',
     name: state.name,
     date: plan.date,
+    shift: plan.shift,
+    start: state.start || '',
+    end: state.end || '',
     weekday: plan.weekdayName,
     shiftName: plan.shiftName,
     hours: `${fmt(plan.start, lang)} – ${fmt(plan.end, lang)}`,

@@ -28,3 +28,18 @@ test('Un nouvel envoi de la même personne remplace l’ancien', () => {
   assert.equal(list.length, 2);
   assert.equal(list.find((s) => s.name.toLowerCase() === 'katiana').items.length, 0);
 });
+
+test('Le dossier d’un jour garde le rapport complet de ce téléphone', async () => {
+  const { combineDay, parseDates } = await import('../js/board-shape.js');
+  const remote = [sanitizeShift(good), sanitizeShift({ ...good, name: 'Oli', shift: 1 })];
+  const mine = { ...sanitizeShift(good), code: 'abc' };
+  const day = combineDay(remote, [mine]);
+  assert.equal(day.length, 2);
+  assert.equal(day[0].name, 'Oli'); // matin d'abord
+  assert.equal(day.find((s) => s.name === 'Katiana').code, 'abc');
+  // Un envoi plus récent ailleurs l'emporte sur une vieille copie locale.
+  const newer = sanitizeShift({ ...good, submittedAt: '2026-10-21T23:30:00Z' });
+  assert.equal(combineDay([newer], [mine])[0].code, undefined);
+  assert.deepEqual(parseDates('2026-10-19,bad,2026-10-20,2026-10-19'), ['2026-10-19', '2026-10-20']);
+  assert.equal(sanitizeShift({ ...good, done: 12, total: 400 }).total, null);
+});
