@@ -20,13 +20,13 @@ test('Quart 1 7:30–15:30 reproduit exactement la fiche 1', () => {
   assert.equal(p.totals.paid, 420); // 7 h payées
 });
 
-test('Quart 2 16:30–23:00 reproduit exactement la fiche 2', () => {
+test('Quart 2 16:30–23:00 : fiche 2, tuiles/miroirs en un seul bloc de 20 min', () => {
   const p = buildPlan({ shift: 2, date: '2026-10-19', start: '16:30', end: '23:00' });
   assert.deepEqual(rows(p), [
     '16 h 30–16 h 45 q2-inspection', '16 h 45–17 h 15 q2-guenilles-1', '17 h 15–17 h 45 q2-desinfection',
     '17 h 45–18 h q2-rangement', '18 h–19 h q2-souper', '19 h–19 h 20 q2-poubelles',
-    '19 h 20–20 h 20 q2-profondeur', '20 h 20–20 h 30 q2-surfaces-1', '20 h 30–20 h 45 q2-pause',
-    '20 h 45–21 h 35 q2-aspirateur', '21 h 35–21 h 45 q2-surfaces-2', '21 h 45–22 h 15 q2-guenilles-2',
+    '19 h 20–20 h 20 q2-profondeur', '20 h 20–20 h 40 q2-surfaces', '20 h 40–20 h 55 q2-pause',
+    '20 h 55–21 h 45 q2-aspirateur', '21 h 45–22 h 15 q2-guenilles-2',
     '22 h 15–22 h 45 q2-hebdo', '22 h 45–23 h q2-fermeture',
   ]);
   assert.equal(p.totals.paid, 330); // 5 h 30 payées
@@ -142,6 +142,19 @@ test('Toutes les tâches ont des étapes dans les deux langues', () => {
           assert.ok(it.title, `${it.id} ${lang}`);
           if (it.kind === 'task') assert.ok(it.steps.length && it.steps.every(Boolean), `${it.id} ${lang} ${date}`);
         }
+      }
+    }
+  }
+});
+
+test('Aucun titre en « passage » ou « tournée » : une tâche = un nom clair', () => {
+  for (const shift of [1, 2]) {
+    for (let d = 19; d < 26; d++) {
+      const date = new Date(Date.UTC(2026, 9, d)).toISOString().slice(0, 10);
+      for (const lang of ['fr', 'en']) {
+        const p = buildPlan({ shift, date, start: shift === 1 ? '07:30' : '16:30', end: shift === 1 ? '15:30' : '23:00', lang });
+        for (const it of p.items) assert.doesNotMatch(it.title || '', /passage|tournée|\bpass\b|round/i, `${date} ${it.id}`);
+        assert.equal(new Set(p.items.map((i) => i.title)).size, p.items.length, `${date} titres en double`);
       }
     }
   }

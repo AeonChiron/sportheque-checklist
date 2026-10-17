@@ -88,21 +88,17 @@ const P = {
     deepMirrors: (z) => `Aujourd’hui c’est jour de miroirs : fais aussi les **miroirs de la zone ${z}**.`,
     deepMirrorsSummary: (name) => `${name} + miroirs.`,
     sunday: 'Dimanche : tu peux choisir la zone selon les besoins. La rotation, elle, ne change pas.',
-    tilesTitle: (p) => (p === 1 ? 'Tuiles blanches — passage 1' : 'Tuiles blanches — passage 2 (moppe)'),
-    tilesSummary: (p) => (p === 1 ? 'Balayer ou passer la balayeuse.' : 'Balayeuse ou balai, puis moppe.'),
-    tilesSteps: (p) => (p === 1
-      ? ['Balaie ou passe la balayeuse pour enlever les saletés et préparer la moppe.']
-      : ['Ramasse les saletés (balayeuse ou balai).', 'Passe la **moppe sur les tuiles blanches**, coins et bordures compris.', 'Plancher mouillé? Mets l’affiche et laisse sécher.']),
-    mirrorsTitle: (z, p) => `Miroirs zone ${z} — passage ${p}`,
-    mirrorsSummary: (z, p) => (p === 1 ? `Commencer les miroirs de la zone ${z}.` : `Finir les miroirs de la zone ${z}.`),
-    mirrorsSteps: (z, p) => [
-      p === 1
-        ? `Commence les miroirs de la **zone ${z}** (celle qui n’a pas eu de nettoyage en profondeur aujourd’hui).`
-        : `Termine les miroirs de la **zone ${z}**.`,
+    tilesTitle: 'Tuiles blanches',
+    tilesSummary: 'Balayer, puis passer la moppe.',
+    tilesSteps: ['Ramasse les saletés : balayeuse ou balai.', 'Passe la **moppe sur les tuiles blanches**, coins et bordures compris.', 'Plancher mouillé? Mets l’affiche et laisse sécher.'],
+    mirrorsTitle: (z) => `Miroirs — zone ${z}`,
+    mirrorsSummary: (z) => `Tous les miroirs de la zone ${z}.`,
+    mirrorsSteps: (z) => [
+      `Fais tous les miroirs de la **zone ${z}** (celle qui n’a pas eu de nettoyage en profondeur aujourd’hui).`,
       'Couvre tout le miroir, méthodiquement, puis regarde sous plusieurs angles pour voir les traces.',
       'Ne laisse pas de produit couler sur les rebords.',
     ],
-    inspectTitle: (p) => `Tuiles et miroirs — vérification ${p}`,
+    inspectTitle: 'Tuiles et miroirs — vérification',
     inspectSummary: 'Retouches de ce qui paraît.',
     inspectSteps: ['Fais le tour des tuiles blanches et des miroirs; retouche ce qui paraît.'],
     weeklyTitle1: (day) => `Tâche hebdo du ${day}`,
@@ -129,21 +125,17 @@ const P = {
     deepMirrors: (z) => `Today is a mirror day: also do the **mirrors in zone ${z}**.`,
     deepMirrorsSummary: (name) => `${name} + mirrors.`,
     sunday: 'Sunday: you can pick the zone based on what’s needed. The rotation itself doesn’t change.',
-    tilesTitle: (p) => (p === 1 ? 'White tiles — pass 1' : 'White tiles — pass 2 (mop)'),
-    tilesSummary: (p) => (p === 1 ? 'Sweep or vacuum.' : 'Vacuum or broom, then mop.'),
-    tilesSteps: (p) => (p === 1
-      ? ['Sweep or vacuum to pick up dirt and get the floor ready for the mop.']
-      : ['Pick up the dirt (vacuum or broom).', '**Mop the white tiles**, corners and edges included.', 'Wet floor? Put the sign out and let it dry.']),
-    mirrorsTitle: (z, p) => `Mirrors zone ${z} — pass ${p}`,
-    mirrorsSummary: (z, p) => (p === 1 ? `Start the mirrors in zone ${z}.` : `Finish the mirrors in zone ${z}.`),
-    mirrorsSteps: (z, p) => [
-      p === 1
-        ? `Start the mirrors in **zone ${z}** (the zone that didn’t get a deep clean today).`
-        : `Finish the mirrors in **zone ${z}**.`,
+    tilesTitle: 'White tiles',
+    tilesSummary: 'Sweep, then mop.',
+    tilesSteps: ['Pick up the dirt (vacuum or broom).', '**Mop the white tiles**, corners and edges included.', 'Wet floor? Put the sign out and let it dry.'],
+    mirrorsTitle: (z) => `Mirrors — zone ${z}`,
+    mirrorsSummary: (z) => `All the mirrors in zone ${z}.`,
+    mirrorsSteps: (z) => [
+      `Do all the mirrors in **zone ${z}** (the zone that didn’t get a deep clean today).`,
       'Cover the whole mirror methodically, then check from several angles for streaks.',
       'Don’t let product drip onto the ledges.',
     ],
-    inspectTitle: (p) => `Tiles & mirrors — check ${p}`,
+    inspectTitle: 'Tiles & mirrors — check',
     inspectSummary: 'Touch up what shows.',
     inspectSteps: ['Walk past the white tiles and mirrors; touch up anything that shows.'],
     weeklyTitle1: (day) => `Weekly task (${day})`,
@@ -185,22 +177,21 @@ function resolveBlock(block, shiftId, day, lang, compostCovered) {
   }
 
   if (block.surfaces) {
-    const p = block.surfaces;
     const z = day.zones.third;
     if (day.surfaces === 'tuiles') {
       b.photo = 'tuiles';
-      b.title = L.tilesTitle(p);
-      b.summary = L.tilesSummary(p);
-      b.steps = L.tilesSteps(p);
+      b.title = L.tilesTitle;
+      b.summary = L.tilesSummary;
+      b.steps = [...L.tilesSteps];
     } else if (day.surfaces === 'miroirs') {
       b.photo = 'miroirs';
       b.zone = z;
-      b.title = L.mirrorsTitle(z, p);
-      b.summary = L.mirrorsSummary(z, p);
-      b.steps = L.mirrorsSteps(z, p);
+      b.title = L.mirrorsTitle(z);
+      b.summary = L.mirrorsSummary(z);
+      b.steps = L.mirrorsSteps(z);
     } else {
       b.photo = 'miroirs';
-      b.title = L.inspectTitle(p);
+      b.title = L.inspectTitle;
       b.summary = L.inspectSummary;
       b.steps = [...L.inspectSteps];
     }

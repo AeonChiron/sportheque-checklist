@@ -14,7 +14,7 @@
   --sunk: #e9edec;
   --ink: #1f2323;
   --muted: #5a6362;
-  --faint: #929b9a;
+  --faint: #7b8584;
   --line: #dde3e2;
   --brand: #2d3131;
   --brand-ink: #ffffff;
@@ -39,7 +39,7 @@
   --il-ink: #0f2a2e; --il-aqua: #2bb3b1; --il-coral: #ff7a59; --il-sun: #ffc94d; --il-steel: #b8c7ca;
   --il-paper: #ffffff; --il-wall: #e3eded; --il-screen: #d4f0ef; --il-glass: #cde7f1; --il-tile: #eef3f3;
   --il-mat: #2b3a3d; --il-floor: #cfdcdc; --il-night: #1d3a52; --il-ok: #6fcf9f; --il-bad: #f2978b;
-  --zA: #fbecc8; --zA-strong: #ffc94d; --zB: #fddcd1; --zB-strong: #ff8a6b; --zC: #cdeeed; --zC-strong: #3cc0bb;
+  --zA: #fbecc8; --zA-strong: #ffc94d; --zB: #e3e1fb; --zB-strong: #8f88f0; --zC: #cdeeed; --zC-strong: #3cc0bb;
   --il-fill: #ffffff; --il-fill2: #e3e9e8; --il-mid: #b4bfbe; --il-accent: #14a5a0; --il-accent-soft: #c6ebe9; --il-shadow: rgba(31, 35, 35, .10);
 
   --radius: 16px;
@@ -63,7 +63,7 @@
     --env-a: rgba(79, 216, 210, .10);
     --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
     --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
-    --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #3d2620; --zB-strong: #c95e45; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
+    --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #24233f; --zB-strong: #7f78e6; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
 }
@@ -76,7 +76,7 @@
   --env-a: rgba(79, 216, 210, .10);
   --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
   --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
-  --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #3d2620; --zB-strong: #c95e45; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
+  --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #24233f; --zB-strong: #7f78e6; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
   color-scheme: dark;
 }
 
@@ -210,7 +210,6 @@ textarea { resize: vertical; line-height: 1.4; }
 .overview-link svg, .icon-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .icon-btn { flex: none; border: 1px solid var(--line); background: var(--surface); width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; transition: transform .15s var(--ease); }
 .icon-btn:active { transform: scale(.92); }
-#menuBtn svg { fill: var(--ink); stroke: none; }
 
 /* ---------- Checklist ---------- */
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe-t); z-index: 10; background: var(--bg); }
@@ -302,7 +301,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .task.done .t-title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); text-decoration-thickness: 2px; }
 .task.done .t-sum, .task.done .t-time, .task.done .t-icon { opacity: .55; }
 .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
-.tag { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 2px 7px; background: var(--sunk); color: var(--muted); }
+.tag { font-size: 13px; font-weight: 600; border-radius: 6px; padding: 2px 7px; background: var(--sunk); color: var(--muted); }
 .tag.bad { background: var(--bad-soft); color: var(--bad); }
 .tag.time { background: var(--warn-soft); color: var(--warn); }
 .tag.note { background: var(--accent-soft); color: var(--accent); }
@@ -997,3 +996,117 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 
 .floor .eq-barre { stroke: #b88a4a; stroke-width: 1.2; stroke-linecap: round; }
 .floor .eq-roller { fill: #e07a3a; stroke: var(--eq-ink); stroke-width: .5; } .floor .eq-roller.b2 { fill: #2f2f2f; }
+
+
+/* =====================================================================
+   Revue d'ergonomie (équipe + superviseurs + designer) : des mots plutôt
+   que des icônes à deviner, des actions toujours visibles, moins de bruit.
+   ===================================================================== */
+
+/* Boutons du haut avec leur nom (Aperçu, Menu). */
+.pill-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 0 13px 0 11px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px;
+  font-weight: 650; font-size: 14.5px; box-shadow: var(--edge); transition: transform .15s var(--ease), background .2s;
+}
+.pill-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pill-btn:active { transform: scale(.95); }
+.topbar-row .topbar-id { min-width: 0; }
+.topbar h2 { font-size: 26px; }
+@media (max-width: 370px) { .pill-btn span { display: none; } .pill-btn { padding: 0 11px; } }
+
+/* Accueil : texte plus grand (Aa) à côté de la langue; heures et date simplifiées. */
+.setup-tools { display: flex; align-items: center; gap: 8px; }
+.aa-btn { display: inline-flex; align-items: baseline; gap: 1px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); background: var(--sunk); border-radius: 999px; color: var(--muted); font-family: var(--display); font-weight: 700; }
+.aa-btn .aa-s { font-size: 14px; } .aa-btn .aa-l { font-size: 20px; }
+.aa-btn[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.link { border: 0; background: none; padding: 6px 0; color: var(--accent); font-weight: 650; font-size: 14.5px; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+.more-hours { align-self: flex-start; margin-top: -6px; }
+#timeRow:not([hidden]) { animation: rise .3s var(--ease) both; }
+.date-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-height: 48px; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; }
+.date-line b { font-weight: 650; font-size: 16.5px; }
+.date-line .link { padding: 0; }
+#fDate:not([hidden]) { margin-top: 8px; }
+.preview .link { align-self: flex-start; }
+.home-links { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.home-links .btn { min-height: 54px; font-size: 16px; }
+
+/* Checklist : un seul titre au-dessus de la liste. */
+.list-head { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 2px 10px; }
+.list-head h3 { font-size: 22px; }
+.list-head .num { font-size: 16px; color: var(--muted); }
+
+/* Feuille : un X toujours visible, et les actions fixées en bas. */
+.sheet { overflow: hidden; }
+.sheet-x {
+  position: absolute; top: 12px; right: 12px; z-index: 3; width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); display: grid; place-items: center; color: var(--ink);
+}
+.sheet-x svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.sheet-x:active { transform: scale(.92); }
+.sheet-head { padding-right: 46px; }
+.sheet-foot {
+  flex: none; padding: 12px max(18px, env(safe-area-inset-right, 0px)) calc(12px + var(--safe-b)) max(18px, env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.sheet.has-foot .sheet-body { padding-bottom: 18px; }
+.sheet-foot .status-row, .sheet-foot .sheet-actions { margin: 0; }
+.status-row .btn.primary { box-shadow: var(--cta-shadow); }
+/* L'illustration de la tâche prend moins de place sur téléphone : les étapes passent avant. */
+@media (max-width: 899px) {
+  .sheet-hero .visual:not(.map-visual) { padding: 6px; }
+  .sheet-hero .visual:not(.map-visual) .illus { max-height: 118px; }
+}
+
+/* Menu : réglages en lignes claires, interrupteurs, actions avec icône + texte. */
+.menu-group { display: flex; flex-direction: column; gap: 14px; padding: 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 14px; }
+.menu-group .inline-choice > span { font-size: 15px; color: var(--ink); font-weight: 600; }
+.menu-item { display: flex; align-items: center; gap: 12px; font-size: 16px; }
+.menu-item svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.switch { position: relative; flex: none; width: 52px; height: 32px; border-radius: 999px; border: 0; background: var(--line); transition: background .25s; }
+.switch i { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .3s var(--spring); }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"] i { transform: translateX(20px); }
+
+/* Message avec « Annuler ». */
+.toast.has-undo { padding-right: 6px; }
+.toast button { border: 0; margin-left: 4px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--toast-ink) 16%, transparent); color: var(--toast-ink); font-weight: 700; font-size: 14px; }
+
+/* Plan : « Non coché » en neutre (le jaune restait confondu avec la zone A). */
+.floor .zm-tag.unchecked rect { fill: var(--surface); stroke: var(--il-ink); stroke-dasharray: 3 2; stroke-opacity: .6; }
+.floor .zm-tag.unchecked text { fill: var(--ink); }
+.sw.unchecked { background: var(--surface); border-style: dashed; border-color: var(--muted); }
+
+/* Protocole : la journée entière, matin et soir. */
+.proto-glance h3 { margin-bottom: 8px; }
+.proto-glance .facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.proto-glance .fact { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+.proto-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.proto-list > li { border-top: 1px solid var(--line); }
+.proto-list > li:first-child { border-top: 0; }
+.proto-row { display: grid; grid-template-columns: 50px 34px 1fr auto; align-items: center; gap: 9px; width: 100%; border: 0; background: none; text-align: left; padding: 8px 2px; color: var(--ink); border-radius: 10px; }
+.proto-row:active { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.proto-t { font-size: 16px; }
+.proto-row .t-icon { width: 34px; height: 34px; border-radius: 9px; }
+.proto-what { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.proto-what b { font-weight: 650; font-size: 15px; line-height: 1.25; }
+.proto-what small { color: var(--muted); font-size: 13px; line-height: 1.3; }
+.proto-m { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.proto-break { display: grid; grid-template-columns: 50px 1fr; gap: 9px; padding: 7px 2px; font-size: 14px; color: var(--muted); background: color-mix(in srgb, var(--break) 60%, transparent); }
+.proto-rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.45; }
+.ap-tabs button { font-size: 14.5px; padding-left: 4px; padding-right: 4px; }
+
+/* Texte plus grand : tout le site grossit d'un cran (iPhone, iPad, ordinateur). */
+html.large { zoom: 1.15; }
+
+.topbar .eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-tabs button { position: relative; white-space: nowrap; }
+.ap-tabs .count { position: absolute; top: 3px; right: 3px; margin: 0; min-width: 17px; height: 17px; font-size: 11px; padding: 0 4px; border-radius: 9px; }
+.aa-btn .aa-s { font-size: 12px; } .aa-btn .aa-l { font-size: 21px; }
+/* Texte plus grand : les cartes de quart passent l'une sous l'autre. */
+html.large .presets { grid-template-columns: 1fr; }
+html.large .presets button { flex-direction: row; align-items: center; justify-content: space-between; min-height: 56px; padding-bottom: 10px; }
+html.large .presets .dayline { display: none; }
+html.large .home-links { grid-template-columns: 1fr; }

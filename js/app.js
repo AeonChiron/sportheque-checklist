@@ -44,6 +44,8 @@ const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const dayMonth = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 
 // ---------- Écrans ----------
 // Changement d'écran : glissement doux (View Transitions quand Safari les
@@ -71,16 +73,20 @@ function show(id) {
 }
 if (document.startViewTransition) document.documentElement.classList.add('vt');
 
-function toast(msg, tone = 'ok') {
+// Message bref en bas de l'écran; avec onUndo, un bouton « Annuler » reste
+// quelques secondes de plus (un toucher de trop se répare tout de suite).
+function toast(msg, tone = 'ok', onUndo = null) {
   const el = $('#toast');
-  el.textContent = msg;
+  el.innerHTML = `<span>${esc(msg)}</span>${onUndo ? `<button type="button">${esc(t('undo'))}</button>` : ''}`;
   el.dataset.tone = tone;
+  el.classList.toggle('has-undo', Boolean(onUndo));
   el.hidden = false;
   el.classList.remove('in');
   void el.offsetWidth;
   el.classList.add('in');
+  if (onUndo) el.querySelector('button').onclick = () => { el.hidden = true; onUndo(); };
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { el.hidden = true; }, 1900);
+  toast.timer = setTimeout(() => { el.hidden = true; }, onUndo ? 4500 : 1900);
 }
 
 // Petite fête quand tout est coché (rien si « réduire les animations »).
@@ -148,6 +154,7 @@ function paintStatic() {
   for (const el of document.querySelectorAll('[data-ph]')) el.placeholder = t(el.dataset.ph);
   for (const el of document.querySelectorAll('[data-label]')) el.setAttribute('aria-label', t(el.dataset.label));
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
+  for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(Boolean(prefs.large)));
   $('#manualVersion').textContent = [CONFIG.gymName && CONFIG.since ? `${CONFIG.gymName} · ${t('since', CONFIG.since)}` : '', t('manual', MANUAL_VERSION)].filter(Boolean).join(' · ');
   renderBrand();
 }
@@ -171,16 +178,40 @@ let editing = false;
 let supervisor = '';
 let reportLang = 'fr';
 
+// La langue du rapport suit le superviseur (réglage de l'équipe, ou le choix
+// fait dans le Menu de ce téléphone) : l'employé n'a pas à y penser.
+const supLang = (name) => prefs.supervisorLang[name] || CONFIG.supervisors.find((s) => s.name === name)?.lang || 'fr';
 function setSupervisor(name) {
   supervisor = name;
   for (const b of document.querySelectorAll('[data-sup]')) b.setAttribute('aria-checked', String(b.dataset.sup === name));
-  setReportLang(prefs.supervisorLang[name] || reportLang || lang());
+  setReportLang(supLang(name));
 }
 function setReportLang(l) {
   reportLang = l === 'en' ? 'en' : 'fr';
-  for (const b of document.querySelectorAll('[data-rlang]')) b.setAttribute('aria-checked', String(b.dataset.rlang === reportLang));
 }
-for (const b of document.querySelectorAll('[data-rlang]')) b.addEventListener('click', () => setReportLang(b.dataset.rlang));
+
+// Date du quart : « Aujourd'hui » en clair; le champ date n'apparaît que si on veut la changer.
+function paintDate() {
+  const v = $('#fDate').value;
+  const label = v ? cap(dateOf(v).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })) : '';
+  $('#dateText').textContent = v === todayISO() ? `${t('today')} · ${label}` : label;
+}
+$('#dateChange').addEventListener('click', () => {
+  const input = $('#fDate');
+  input.hidden = false;
+  $('#dateChange').hidden = true;
+  input.focus();
+  try { input.showPicker?.(); } catch { /* Safari : le champ suffit */ }
+});
+$('#fDate').addEventListener('change', paintDate);
+
+// Les heures exactes restent à portée de main, mais cachées tant qu'un quart habituel convient.
+function showHours(on) {
+  $('#timeRow').hidden = !on;
+  $('#moreHours').textContent = t(on ? 'lessHours' : 'moreHours');
+  $('#moreHours').setAttribute('aria-expanded', String(on));
+}
+$('#moreHours').addEventListener('click', () => showHours($('#timeRow').hidden));
 
 // Quarts habituels : un toucher remplit les heures (toujours modifiables).
 const PRESETS = CONFIG.shiftPresets || [];
@@ -200,10 +231,15 @@ function renderPresets() {
 function syncPresets() {
   const s = $('#fStart').value;
   const e = $('#fEnd').value;
+  let match = false;
   for (const b of document.querySelectorAll('[data-preset]')) {
     const p = PRESETS.find((x) => x.id === b.dataset.preset);
-    b.setAttribute('aria-checked', String(p.start === s && p.end === e));
+    const on = p.start === s && p.end === e;
+    match ||= on;
+    b.setAttribute('aria-checked', String(on));
   }
+  if (!match && $('#timeRow').hidden) showHours(true); // heures personnalisées : on les montre
+  return match;
 }
 function pickPreset(id) {
   const p = PRESETS.find((x) => x.id === id);
@@ -225,9 +261,13 @@ function setupScreen() {
   const last = prefs.lastTimes?.[defShift];
   $('#fName').value = prefs.name;
   $('#fDate').value = todayISO();
+  $('#fDate').hidden = true;
+  $('#dateChange').hidden = false;
   $('#fStart').value = last?.start || SHIFTS[defShift].start;
   $('#fEnd').value = last?.end || SHIFTS[defShift].end;
+  showHours(false);
   renderPresets();
+  paintDate();
   $('#supervisorPick').innerHTML = CONFIG.supervisors
     .map((s) => `<button type="button" role="radio" data-sup="${esc(s.name)}">${esc(s.name)}</button>`).join('');
   for (const b of document.querySelectorAll('[data-sup]')) b.addEventListener('click', () => setSupervisor(b.dataset.sup));
@@ -251,7 +291,8 @@ function updatePreview() {
   const s = $('#fStart').value;
   const e = $('#fEnd').value;
   const date = $('#fDate').value;
-  syncPresets();
+  const preset = syncPresets();
+  paintDate();
   if (!s || !e || !date) { $('#preview').innerHTML = ''; return; }
   const shift = currentShift();
   const p = buildPlan({ shift, date, start: s, end: e, lang: lang() });
@@ -266,10 +307,14 @@ function updatePreview() {
     if (d.walls) facts.push(`<span class="fact">${t('walls')}</span>`);
   }
   facts.push(`<span class="fact"><b>${p.items.filter((i) => i.kind === 'task').length}</b> ${t('tasks')}</span>`);
+  // Le choix matin/soir n'est offert que pour des heures inhabituelles.
+  const other = SHIFTS[shift === 1 ? 2 : 1][lang()].name;
   $('#preview').innerHTML = `
-    <div class="top"><b>${esc(p.shiftName)}</b><button type="button" class="link" id="swapShift">${t('change')}</button></div>
-    <div class="facts">${facts.join('')}</div>`;
-  $('#swapShift').onclick = () => { manualShift = shift === 1 ? 2 : 1; updatePreview(); };
+    <div class="top"><b>${esc(p.shiftName)}</b></div>
+    <div class="facts">${facts.join('')}</div>
+    ${preset ? '' : `<button type="button" class="link" id="swapShift">${esc(t('switchTo', other))}</button>`}`;
+  const sw = $('#swapShift');
+  if (sw) sw.onclick = () => { manualShift = shift === 1 ? 2 : 1; updatePreview(); };
 }
 $('#setupForm').addEventListener('input', (ev) => {
   if (ev.target.id === 'fStart' || ev.target.id === 'fEnd') manualShift = null;
@@ -421,22 +466,14 @@ function renderChecklist() {
   const done = tasks.filter((x) => state.tasks[x.id]?.done).length;
   const d = plan.day;
 
-  $('#cEyebrow').textContent = [CONFIG.gymName, SHIFTS[plan.shift][lang()].short, `${plan.weekdayName.slice(0, 3)}. ${dayMonth(state.date)}`].filter(Boolean).join(' · ');
+  $('#cEyebrow').textContent = `${SHIFTS[plan.shift][lang()].short} · ${dayMonth(state.date)}`;
   $('#cTitle').textContent = state.name;
   $('#rangeLabel').textContent = `${f(plan.start)} → ${f(plan.end)}`;
   $('#progressLabel').textContent = done === tasks.length && tasks.length ? t('allDone') : t('doneOf', done, tasks.length);
   renderTimeline();
   renderNow();
 
-  const chips = [`<span class="chip">${t('zoneDeep')} <b>${d.zones[plan.shift]}</b></span>`];
-  if (plan.shift === 2) {
-    chips.push(`<span class="chip">${d.surfaces === 'miroirs' ? `${t('mirrorsZone')} <b>${d.zones.third}</b>` : esc(t(d.surfaces === 'tuiles' ? 'tiles' : 'inspection'))}</span>`);
-    if (d.walls) chips.push(`<span class="chip">${t('walls')}</span>`);
-  }
-  for (const r of plan.items.flatMap((it) => it.reminders || [])) chips.push(`<span class="chip"><b class="num">${f(r.at)}</b> ${esc(r.label)}</span>`);
-  $('#dayStrip').innerHTML = chips.join('');
-
-  for (const b of document.querySelectorAll('.view-toggle [data-view]')) b.setAttribute('aria-selected', String(b.dataset.view === state.view));
+  $('#listCount').textContent = `${done}/${tasks.length}`;
   const hint = $('#swipeHint');
   hint.hidden = prefs.swipeSeen || !matchMedia('(pointer: coarse)').matches;
   hint.textContent = t('swipeHint');
@@ -468,12 +505,14 @@ function renderChecklist() {
 function toggleDone(id) {
   const wasAll = allDone();
   const e = entry(id);
+  const before = JSON.stringify(e);
+  const undo = () => { state.tasks[id] = JSON.parse(before); save(); renderChecklist(); };
   e.done = !e.done;
   if (e.done) { e.skipped = false; delete e.reason; e.doneAt = new Date().toISOString(); } else delete e.doneAt;
   save();
   renderChecklist();
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
-  if (!wasAll && allDone()) { celebrate(); toast(t('allDone')); } else toast(t(e.done ? 'checked' : 'unchecked'), e.done ? 'ok' : 'muted');
+  if (!wasAll && allDone()) { celebrate(); toast(t('allDone'), 'ok', undo); } else toast(t(e.done ? 'checked' : 'unchecked'), e.done ? 'ok' : 'muted', undo);
 }
 
 // Glisser vers la droite pour cocher (le toucher simple marche toujours).
@@ -548,16 +587,13 @@ $('#flagsBlock').addEventListener('click', (ev) => {
   renderChecklist();
 });
 
-for (const b of document.querySelectorAll('.view-toggle [data-view]')) {
-  b.addEventListener('click', () => { state.view = b.dataset.view; save(); renderChecklist(); });
-}
-
 // « En cours » et le couloir avancent toutes les 30 secondes.
 setInterval(() => { if (current === 'checklist' && plan) { renderTimeline(); renderNow(); } }, 30_000);
 
 // ---------- Feuille du bas ----------
 let lastFocus = null;
-function openSheet(html, onMount) {
+// html : le contenu qui défile; foot : les boutons d'action, toujours visibles en bas.
+function openSheet(html, onMount, foot = '') {
   lastFocus = document.activeElement;
   if ($('#sheet').hidden) {
     // Première ouverture : le contenu arrive en cascade (pas aux mises à jour).
@@ -567,10 +603,13 @@ function openSheet(html, onMount) {
   }
   $('#sheetBody').innerHTML = html;
   $('#sheetBody').scrollTop = 0;
+  $('#sheetFoot').innerHTML = foot;
+  $('#sheetFoot').hidden = !foot;
+  $('#sheet').classList.toggle('has-foot', Boolean(foot));
   $('#backdrop').hidden = false;
   $('#sheet').hidden = false;
   requestAnimationFrame(() => { $('#backdrop').classList.add('open'); $('#sheet').classList.add('open'); });
-  onMount?.($('#sheetBody'));
+  onMount?.($('#sheet'));
   $('#sheet').focus({ preventScroll: true });
 }
 function closeSheet() {
@@ -581,6 +620,7 @@ function closeSheet() {
 }
 $('#sheet').tabIndex = -1;
 $('#backdrop').addEventListener('click', closeSheet);
+$('#sheetX').addEventListener('click', closeSheet);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 
 // Glisser la feuille vers le bas pour la fermer.
@@ -797,18 +837,12 @@ function openTask(id) {
     ${tv}
     ${clockBox}
     ${tips}
-    <div class="status-row">
-      <button class="btn ${e.done ? 'on-done' : 'ghost'}" data-status="done">✓ ${t('done')}</button>
-      <button class="btn ${skipped ? 'on-skip' : 'ghost'}" data-status="skip">✕ ${t('notDone')}</button>
-    </div>
     ${skipped ? `<div><p class="block-label">${t('why')}</p><div class="reasons">${Object.entries(SKIP_REASONS).map(([k, v]) => `<button type="button" data-reason="${k}" aria-pressed="${e.reason === k}">${esc(v[lang()])}</button>`).join('')}</div></div>` : ''}
     <label class="field"><span>${t('remark')}</span>
       <textarea id="remark" rows="2" placeholder="${esc(t(e.skipped ? 'remarkSkipPh' : 'remarkPh'))}">${esc(e.remark || '')}</textarea>
     </label>
     ${photoFieldHtml()}
-    <div class="sheet-actions"><button class="btn primary" data-close>${t('close')}</button></div>
   `, (root) => {
-    root.querySelector('[data-close]').onclick = closeSheet;
     const mapBox = root.querySelector('[data-map]');
     if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: state.date } : { mirrors: it.zone, date: state.date });
     // Étapes : chaque toucher coche une étape; toutes faites = tâche cochée.
@@ -846,7 +880,10 @@ function openTask(id) {
         save(); renderChecklist();
       };
     }
-  });
+  }, `<div class="status-row">
+      <button class="btn ${skipped ? 'on-skip' : 'ghost'}" data-status="skip">✕ ${t('notDone')}</button>
+      <button class="btn ${e.done ? 'on-done' : 'primary'}" data-status="done">✓ ${t(e.done ? 'done' : 'markDone')}</button>
+    </div>`);
 }
 
 // ---------- Signaler un problème ----------
@@ -870,10 +907,6 @@ function openFlag() {
     </label>
     ${photoFieldHtml()}
     <div class="callout clock"><p>${t('danger')}</p></div>
-    <div class="sheet-actions">
-      <button class="btn ghost" data-close>${t('cancel')}</button>
-      <button class="btn primary" id="flagSave" disabled>${t('add')}</button>
-    </div>
   `, (root) => {
     const saveBtn = root.querySelector('#flagSave');
     const text = root.querySelector('#flagText');
@@ -894,30 +927,68 @@ function openFlag() {
       save(); renderChecklist(); closeSheet();
       toast(t('flagged'));
     };
-  });
+  }, `<div class="sheet-actions">
+      <button class="btn ghost" data-close>${t('cancel')}</button>
+      <button class="btn primary" id="flagSave" disabled>${t('add')}</button>
+    </div>`);
 }
 
-// ---------- Options ----------
+// ---------- Menu ----------
+// Tout ce qui sert moins souvent, en mots clairs (pas d'icône à deviner).
+const switchRow = (id, label, on) => `<div class="inline-choice"><span>${esc(label)}</span>
+  <button type="button" class="switch" role="switch" id="${id}" aria-checked="${on}"><i></i></button></div>`;
 $('#menuBtn').addEventListener('click', () => {
+  const sup = state?.supervisor || '';
   openSheet(`
-    <div class="sheet-head"><h3>${t('options')}</h3></div>
-    <div class="inline-choice"><span>${t('language')}</span>
-      <div class="segmented tiny" role="radiogroup">
-        <button type="button" role="radio" data-mlang="fr" aria-checked="${lang() === 'fr'}">Français</button>
-        <button type="button" role="radio" data-mlang="en" aria-checked="${lang() === 'en'}">English</button>
+    <div class="sheet-head"><h3>${t('menu')}</h3></div>
+    <div class="menu-group">
+      <div class="inline-choice"><span>${t('language')}</span>
+        <div class="segmented tiny" role="radiogroup">
+          <button type="button" role="radio" data-mlang="fr" aria-checked="${lang() === 'fr'}">Français</button>
+          <button type="button" role="radio" data-mlang="en" aria-checked="${lang() === 'en'}">English</button>
+        </div>
       </div>
+      ${switchRow('mLarge', t('largeText'), Boolean(prefs.large))}
+      <div class="inline-choice"><span>${t('listOrder')}</span>
+        <div class="segmented tiny" role="radiogroup">
+          <button type="button" role="radio" data-mview="time" aria-checked="${state.view !== 'zone'}">${t('byTime')}</button>
+          <button type="button" role="radio" data-mview="zone" aria-checked="${state.view === 'zone'}">${t('byZone')}</button>
+        </div>
+      </div>
+      ${sup ? `<div class="inline-choice"><span>${esc(t('reportFor', sup))}</span>
+        <div class="segmented tiny" role="radiogroup">
+          <button type="button" role="radio" data-mrl="fr" aria-checked="${(state.reportLang || 'fr') === 'fr'}">Français</button>
+          <button type="button" role="radio" data-mrl="en" aria-checked="${state.reportLang === 'en'}">English</button>
+        </div>
+      </div>` : ''}
     </div>
-    <div class="callout tip"><div class="c-head">${ICON.info}${t('priorities')}</div>${PRIORITY_ORDER[lang()].map((p, i) => `<p><b class="num">${i + 1}.</b> ${esc(p)}</p>`).join('')}</div>
     <div class="menu-list">
-      <button class="btn ghost" id="mEdit">${t('editHours')}</button>
-      <button class="btn ghost danger" id="mReset">${t('abandon')}</button>
-      <button class="btn primary" data-close>${t('close')}</button>
+      <button class="btn ghost menu-item" id="mProto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg>${t('protocolMenu')}</button>
+      <button class="btn ghost menu-item" id="mEdit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>${t('editHours')}</button>
+      <button class="btn ghost menu-item danger" id="mReset"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>${t('abandon')}</button>
     </div>
   `, (root) => {
-    root.querySelector('[data-close]').onclick = closeSheet;
     for (const b of root.querySelectorAll('[data-mlang]')) {
       b.onclick = () => { closeSheet(); setLang(b.dataset.mlang); };
     }
+    root.querySelector('#mLarge').onclick = (ev) => setLarge(!prefs.large, ev.currentTarget);
+    for (const b of root.querySelectorAll('[data-mview]')) {
+      b.onclick = () => {
+        state.view = b.dataset.mview;
+        save();
+        for (const o of root.querySelectorAll('[data-mview]')) o.setAttribute('aria-checked', String(o === b));
+        renderChecklist();
+      };
+    }
+    for (const b of root.querySelectorAll('[data-mrl]')) {
+      b.onclick = () => {
+        state.reportLang = b.dataset.mrl;
+        prefs.supervisorLang[sup] = state.reportLang;
+        save(); savePrefs();
+        for (const o of root.querySelectorAll('[data-mrl]')) o.setAttribute('aria-checked', String(o === b));
+      };
+    }
+    root.querySelector('#mProto').onclick = () => { closeSheet(); goProtocol(); };
     root.querySelector('#mEdit').onclick = () => {
       closeSheet();
       setupScreen();
@@ -925,6 +996,7 @@ $('#menuBtn').addEventListener('click', () => {
       $('#fDate').value = state.date;
       $('#fStart').value = state.start;
       $('#fEnd').value = state.end;
+      showHours(true);
       if (state.supervisor) setSupervisor(state.supervisor);
       setReportLang(state.reportLang);
       manualShift = state.shift;
@@ -962,8 +1034,9 @@ function openFinish() {
     ${nPhotos ? `<p class="photo-count">${t('photosAttached', nPhotos)}</p>` : ''}
     ${open.length ? `<div class="panel">
       <div class="section-head" style="margin-top:0"><h3>${t('pending')}</h3><span class="num">${open.length}</span></div>
+      <p class="section-note">${t('finishHint')}</p>
       ${open.map((x) => `<div class="pending" data-id="${esc(x.id)}">${icon(x)}<div class="t">${esc(x.title)}<small class="num">${f(x.start)} – ${f(x.end)}</small></div>
-        <button class="btn small ghost" data-act="done">✓</button><button class="btn small flag" data-act="skip">✕</button></div>`).join('')}
+        <button class="btn small ghost" data-act="done" aria-label="${esc(t('done'))}">✓</button><button class="btn small flag" data-act="skip" aria-label="${esc(t('notDone'))}">✕</button></div>`).join('')}
     </div>` : `<div class="notice ok"><b>${t('allChecked')}</b></div>`}`;
   $('#fNotes').value = state.notes || '';
   $('#sendError').innerHTML = '';
@@ -1183,8 +1256,6 @@ async function openReviewFromHash() {
 // ---------- 6. Aperçu du gym : la semaine, le dossier des rapports, les trucs ----------
 const CHEV_L = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
 const CHEV_R = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const addDays = (iso, n) => { const d = dateOf(iso); d.setDate(d.getDate() + n); return isoOf(d); };
 const mondayOf = (iso) => addDays(iso, -((dateOf(iso).getDay() + 6) % 7));
@@ -1198,7 +1269,8 @@ function weekRange(mon) {
 }
 const hhmm = (s) => (s ? f(toMin(s)) : '');
 
-const ap = { week: '', day: '', tab: ['day', 'reports', 'tips'].includes(prefs.apTab) ? prefs.apTab : 'day', tipShift: 0, data: {}, live: false, sig: '', keepNext: false };
+const AP_TABS = ['day', 'protocol', 'reports', 'tips'];
+const ap = { week: '', day: '', tab: AP_TABS.includes(prefs.apTab) ? prefs.apTab : 'day', tipShift: 0, data: {}, live: false, sig: '', keepNext: false };
 
 // Plans de référence d'un jour (matin et soir), gardés en mémoire.
 const refCache = new Map();
@@ -1245,6 +1317,8 @@ function metrics(s) {
 const tone = (m) => (m.flags || m.notdone ? 'bad' : m.pct === 100 ? 'ok' : 'warn');
 
 async function openApercu({ keep = false } = {}) {
+  // Pendant un quart, « retour » ramène à la checklist : on le dit.
+  $('#apercu .back span').dataset.t = state ? 'myShift' : 'home';
   paintStatic();
   const today = todayISO();
   if (!(keep || ap.keepNext) || !ap.day) { ap.day = today; ap.week = mondayOf(today); }
@@ -1294,7 +1368,7 @@ function renderApercu({ animate = true, dir = 0 } = {}) {
     </div>
     <div class="week" role="tablist" style="--i:${dates.indexOf(ap.day)}">${dates.map(dayBtn).join('')}</div>
     <div class="segmented ap-tabs" role="tablist">
-      ${['day', 'reports', 'tips'].map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${ap.tab === k}">${esc(t(`tab_${k}`))}${k === 'reports' && nReports ? `<span class="count num">${nReports}</span>` : ''}</button>`).join('')}
+      ${AP_TABS.map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${ap.tab === k}">${esc(t(`tab_${k}`))}${k === 'reports' && nReports ? `<span class="count num">${nReports}</span>` : ''}</button>`).join('')}
     </div>
     <div class="ap-panel" id="apPanel"></div>
     <button class="btn primary big" type="button" data-go="${state ? 'shift' : 'home'}">${esc(state ? t('backToShift') : t('startShift'))}</button>`;
@@ -1303,7 +1377,7 @@ function renderApercu({ animate = true, dir = 0 } = {}) {
 
 function renderPanel({ animate = true, dir = 0 } = {}) {
   const box = $('#apPanel');
-  box.innerHTML = ap.tab === 'reports' ? reportsPanel() : ap.tab === 'tips' ? tipsPanel() : dayPanel();
+  box.innerHTML = { reports: reportsPanel, tips: tipsPanel, protocol: protocolPanel }[ap.tab]?.() ?? dayPanel();
   if (ap.tab === 'day') {
     const info = dayInfo(ap.day);
     const list = ap.data[ap.day] || [];
@@ -1338,7 +1412,7 @@ function dayPanel() {
     2: [
       ['q2-profondeur', `${t('deepClean')} · zone ${info.zones[2]}`],
       ['q2-hebdo', `${t('weekly')} · ${WEEKLY_Q2[info.weekday][L].short.replace(/\*\*/g, '')}${info.walls ? ` + ${t('walls')}` : ''}`],
-      ['q2-surfaces-1', surf],
+      ['q2-surfaces', surf],
       ['q2-poubelles', info.weekday === 2 ? t('compostWed') : t('compost')],
     ],
   };
@@ -1430,6 +1504,40 @@ function reportsPanel() {
     <p class="section-note">${esc(ap.live ? t('folderLive') : t('folderLocal'))}</p>`;
 }
 
+// Le protocole : toute la journée, matin et soir, tel que le manuel le prévoit
+// (horaires de référence), avec les règles du roulement et les priorités.
+function protocolPanel() {
+  const d = ap.day;
+  const info = dayInfo(d);
+  const L = lang();
+  const col = (shift) => {
+    const p = refPlan(d, shift);
+    return `<div class="panel proto-col">
+      <div class="ap-card-head"><b>${esc(SHIFTS[shift][L].name)}</b><span class="num">${f(p.start)} – ${f(p.end)}</span></div>
+      <ol class="proto-list">${p.items.map((it) => (it.kind === 'task'
+        ? `<li><button type="button" class="proto-row" data-info="${shift}|${it.id}">
+            <span class="num proto-t">${f(it.start)}</span>
+            <span class="t-icon" aria-hidden="true">${illustration(it.photo)}</span>
+            <span class="proto-what"><b>${esc(it.title)}</b>${it.summary ? `<small>${esc(it.summary)}</small>` : ''}</span>
+            <span class="num proto-m">${it.minutes} min</span></button></li>`
+        : `<li class="proto-break"><span class="num proto-t">${f(it.start)}</span><span>${esc(it.title)} · <span class="num">${it.minutes} min</span></span></li>`)).join('')}</ol>
+    </div>`;
+  };
+  const surf = info.surfaces === 'miroirs' ? `${t('mirrorsOf')} · zone ${info.zones.third}` : cap(t(info.surfaces === 'tuiles' ? 'tiles' : 'inspection'));
+  const glance = [
+    t('deepShort', t('morning'), info.zones[1]),
+    t('deepShort', t('evening'), info.zones[2]),
+    `${t('evening')} : ${surf}`,
+    ...(info.walls ? [`${t('evening')} : ${t('walls')}`] : []),
+    info.weekday === 2 ? t('compostWed') : t('compost'),
+  ];
+  return `<p class="section-note">${esc(t('protoLede'))}</p>
+    <div class="panel proto-glance"><h3>${esc(longDay(d))}</h3><div class="facts">${glance.map((g) => `<span class="fact">${esc(g)}</span>`).join('')}</div></div>
+    <div class="ap-cards">${col(1)}${col(2)}</div>
+    <div class="panel"><h3>${esc(t('protoRules'))}</h3><ul class="proto-rules">${t('protoRuleList').map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    <div class="callout tip"><div class="c-head">${ICON.info}${t('priorities')}</div>${PRIORITY_ORDER[L].map((x, i) => `<p><b class="num">${i + 1}.</b> ${esc(x)}</p>`).join('')}</div>`;
+}
+
 // Les trucs : par tâche du quart choisi, ou les bases du manuel.
 function tipsPanel() {
   const shift = ap.tipShift || state?.shift || (new Date().getHours() < 12 ? 1 : 2);
@@ -1479,9 +1587,7 @@ function openTaskInfo(shift, id) {
     <div><p class="block-label">${t('steps')}</p><ol class="steps static">${it.steps.map((s) => `<li><span class="step"><span class="step-text">${md(s)}</span></span></li>`).join('')}</ol></div>
     ${it.tvTable ? `<figure class="visual map-visual"><figcaption class="block-label">${t('channels')}</figcaption>${tvDiagram(TV_CHANNELS)}</figure>` : ''}
     ${tipsCallout(it)}
-    <div class="sheet-actions"><button class="btn primary" data-close>${t('close')}</button></div>
   `, (root) => {
-    root.querySelector('[data-close]').onclick = closeSheet;
     const mapBox = root.querySelector('[data-map]');
     if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: ap.day } : { mirrors: it.zone, date: ap.day });
   });
@@ -1554,8 +1660,7 @@ $('#apercuBody').addEventListener('click', (ev) => {
   else if (ds.day) selectDay(ds.day);
   else if (ds.tab) {
     if (ds.tab === ap.tab) return;
-    const order = ['day', 'reports', 'tips'];
-    const dir = order.indexOf(ds.tab) > order.indexOf(ap.tab) ? 1 : -1;
+    const dir = AP_TABS.indexOf(ds.tab) > AP_TABS.indexOf(ap.tab) ? 1 : -1;
     ap.tab = ds.tab;
     prefs.apTab = ap.tab;
     savePrefs();
@@ -1596,11 +1701,33 @@ $('#apercuBody').addEventListener('click', (ev) => {
   body.addEventListener('pointercancel', () => { g = null; });
 })();
 
+// ---------- Confort : texte plus grand ----------
+function setLarge(on, sw) {
+  prefs.large = on;
+  savePrefs();
+  document.documentElement.classList.toggle('large', on);
+  sw?.setAttribute('aria-checked', String(on));
+  for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(on));
+  if (current === 'apercu') renderApercu({ animate: false }); // la 3D se remet à la bonne taille
+}
+document.documentElement.classList.toggle('large', Boolean(prefs.large));
+for (const b of document.querySelectorAll('[data-large]')) b.addEventListener('click', () => setLarge(!prefs.large));
+
+// Le protocole : un onglet de l'Aperçu, ouvert sur aujourd'hui.
+function goProtocol() {
+  ap.tab = 'protocol';
+  ap.day = todayISO();
+  ap.week = mondayOf(ap.day);
+  ap.keepNext = true;
+  if (location.hash === '#apercu') openApercu({ keep: true }); else location.hash = 'apercu';
+}
+
 // ---------- Navigation ----------
 document.addEventListener('click', (ev) => {
   const go = ev.target.closest('[data-go]');
   if (!go) return;
   if (go.dataset.go === 'apercu-keep') { openApercu({ keep: true }); return; }
+  if (go.dataset.go === 'protocol') { goProtocol(); return; }
   if (go.dataset.go === 'folder') {
     ap.day = go.dataset.date || todayISO();
     ap.week = mondayOf(ap.day);

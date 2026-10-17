@@ -25,9 +25,12 @@
   <section id="setup" class="screen" hidden>
     <div class="setup-top">
       <div class="brand" id="brand"></div>
-      <div class="lang-switch" role="group" aria-label="Langue / Language">
-        <button type="button" data-lang="fr">FR</button>
-        <button type="button" data-lang="en">EN</button>
+      <div class="setup-tools">
+        <button type="button" class="aa-btn" data-large aria-pressed="false" data-label="largeText"><span class="aa-s">A</span><span class="aa-l">A</span></button>
+        <div class="lang-switch" role="group" aria-label="Langue / Language">
+          <button type="button" data-lang="fr">FR</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
       </div>
     </div>
 
@@ -45,7 +48,8 @@
         <span data-t="yourHours"></span>
         <div class="presets" role="radiogroup" id="presetPick"></div>
       </div>
-      <div class="row2" id="timeRow">
+      <button type="button" class="link more-hours" id="moreHours" data-t="moreHours"></button>
+      <div class="row2" id="timeRow" hidden>
         <label class="field">
           <span data-t="start"></span>
           <input id="fStart" name="start" type="time" required>
@@ -55,21 +59,15 @@
           <input id="fEnd" name="end" type="time" required>
         </label>
       </div>
-      <label class="field">
+      <div class="field">
         <span data-t="date"></span>
-        <input id="fDate" name="date" type="date" required>
-      </label>
+        <div class="date-line"><b id="dateText"></b><button type="button" class="link" id="dateChange" data-t="changeDate"></button></div>
+        <input id="fDate" name="date" type="date" required hidden aria-label="Date">
+      </div>
       <div class="field-group">
         <div class="field">
           <span data-t="supervisor"></span>
           <div class="segmented" role="radiogroup" id="supervisorPick"></div>
-        </div>
-        <div class="inline-choice">
-          <span data-t="reportLang"></span>
-          <div class="segmented tiny" role="radiogroup">
-            <button type="button" role="radio" data-rlang="fr">Français</button>
-            <button type="button" role="radio" data-rlang="en">English</button>
-          </div>
         </div>
       </div>
 
@@ -77,10 +75,16 @@
       <button class="btn primary big" type="submit" data-t="create"></button>
     </form>
 
-    <button class="btn ghost big overview-link" type="button" data-go="apercu">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
-      <span data-t="overview"></span>
-    </button>
+    <div class="home-links">
+      <button class="btn ghost overview-link" type="button" data-go="apercu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+        <span data-t="overviewShort"></span>
+      </button>
+      <button class="btn ghost overview-link" type="button" data-go="protocol">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg>
+        <span data-t="protocol"></span>
+      </button>
+    </div>
     <p class="fineprint" id="manualVersion"></p>
   </section>
 
@@ -94,11 +98,13 @@
           <h2 id="cTitle"></h2>
         </div>
         <div class="topbar-actions">
-          <button class="icon-btn" data-go="apercu" data-label="overviewShort">
-            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+          <button class="pill-btn" type="button" data-go="apercu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+            <span data-t="overviewShort"></span>
           </button>
-          <button class="icon-btn" id="menuBtn" aria-label="Options">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          <button class="pill-btn" type="button" id="menuBtn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            <span data-t="menu"></span>
           </button>
         </div>
       </div>
@@ -110,12 +116,7 @@
     </header>
 
     <div id="nowCard"></div>
-    <div class="daystrip" id="dayStrip"></div>
-
-    <div class="segmented view-toggle" role="tablist">
-      <button type="button" role="tab" data-view="time" data-t="byTime"></button>
-      <button type="button" role="tab" data-view="zone" data-t="byZone"></button>
-    </div>
+    <div class="list-head"><h3 data-t="yourTasks"></h3><span class="num" id="listCount"></span></div>
     <p class="hint" id="swipeHint" hidden></p>
 
     <ol class="tasks" id="taskList"></ol>
@@ -182,7 +183,9 @@
   <div class="sheet-backdrop" id="backdrop" hidden></div>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden>
     <div class="sheet-handle" aria-hidden="true"></div>
+    <button type="button" class="sheet-x" id="sheetX" data-label="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <div class="sheet-body" id="sheetBody"></div>
+    <div class="sheet-foot" id="sheetFoot" hidden></div>
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>

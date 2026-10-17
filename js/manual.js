@@ -192,7 +192,7 @@ export const SHIFTS = {
       {
         id: 'q1-guenilles-1', kind: 'task', minutes: 20, area: 'buanderie', photo: 'guenilles',
         fr: {
-          title: 'Guenilles — 1re tournée',
+          title: 'Guenilles : sécheuse et lavage',
           summary: 'Sécheuse de la veille, ramasser, laver, plier.',
           steps: [
             'Vide la sécheuse (les guenilles d’hier).',
@@ -202,7 +202,7 @@ export const SHIFTS = {
           tips: ['Laisse tourner la laveuse et la sécheuse pendant tes autres tâches; reviens à la fin du cycle.'],
         },
         en: {
-          title: 'Rags — 1st round',
+          title: 'Rags: dryer and washing',
           summary: 'Yesterday’s dryer load, collect, wash, fold.',
           steps: [
             'Empty the dryer (yesterday’s rags).',
@@ -316,7 +316,7 @@ export const SHIFTS = {
       {
         id: 'q1-guenilles-2', kind: 'task', minutes: 30, area: 'buanderie', photo: 'guenilles',
         fr: {
-          title: 'Guenilles — 2e tournée',
+          title: 'Guenilles : ramasser et redistribuer',
           summary: 'Ramasser, laver, plier, redistribuer.',
           steps: [
             'Ramasse les guenilles sales dans tous les studios.',
@@ -326,7 +326,7 @@ export const SHIFTS = {
           tips: [],
         },
         en: {
-          title: 'Rags — 2nd round',
+          title: 'Rags: collect and restock',
           summary: 'Collect, wash, fold, hand out.',
           steps: [
             'Collect dirty rags in all the studios.',
@@ -376,7 +376,7 @@ export const SHIFTS = {
       {
         id: 'q1-guenilles-3', kind: 'task', minutes: 30, area: 'buanderie', photo: 'guenilles',
         fr: {
-          title: 'Guenilles — 3e tournée',
+          title: 'Guenilles : plier et distribuer',
           summary: 'Ramasser, laver/sécher, plier, distribuer.',
           steps: [
             'Ramasse les guenilles sales dans les studios.',
@@ -386,7 +386,7 @@ export const SHIFTS = {
           tips: [],
         },
         en: {
-          title: 'Rags — 3rd round',
+          title: 'Rags: fold and hand out',
           summary: 'Collect, wash/dry, fold, hand out.',
           steps: [
             'Collect dirty rags in the studios.',
@@ -450,7 +450,7 @@ export const SHIFTS = {
       {
         id: 'q1-fin', kind: 'task', minutes: 25, area: 'fermeture', photo: 'fin-quart', closing: true,
         fr: {
-          title: 'Fin de quart',
+          title: 'Avant de partir',
           summary: 'Vidanges (clé 124), rangement, fournitures.',
           steps: [
             'Sors les vidanges à l’endroit prévu (**clé 124**).',
@@ -462,7 +462,7 @@ export const SHIFTS = {
           tips: ['Pas de compost le matin.'],
         },
         en: {
-          title: 'End of shift',
+          title: 'Before you leave',
           summary: 'Garbage out (key 124), tidy, supplies.',
           steps: [
             'Take the garbage out to the usual spot (**key 124**).',
@@ -515,7 +515,7 @@ export const SHIFTS = {
       {
         id: 'q2-guenilles-1', kind: 'task', minutes: 30, area: 'buanderie', photo: 'guenilles',
         fr: {
-          title: 'Guenilles — 1re tournée',
+          title: 'Guenilles : ramasser et laver',
           summary: 'Studios, spinning, réception : laver, sécher, plier.',
           steps: [
             'Ramasse les guenilles sales : studios (autres étages aussi), spinning et réception.',
@@ -528,7 +528,7 @@ export const SHIFTS = {
           ],
         },
         en: {
-          title: 'Rags — 1st round',
+          title: 'Rags: collect and wash',
           summary: 'Studios, spin room, front desk: wash, dry, fold.',
           steps: [
             'Collect dirty rags: studios (other floors too), spin room and front desk.',
@@ -633,9 +633,10 @@ export const SHIFTS = {
         en: { title: 'Deep clean', summary: '', steps: [], tips: ['60 minutes straight. Note anything you couldn’t finish.'] },
       },
       {
-        id: 'q2-surfaces-1', kind: 'task', minutes: 10, area: 'surfaces', surfaces: 1,
-        fr: { title: 'Tuiles blanches / miroirs — passage 1', summary: '', steps: [], tips: ['Le 2e passage se fait après la balayeuse.'] },
-        en: { title: 'White tiles / mirrors — pass 1', summary: '', steps: [], tips: ['The 2nd pass comes after vacuuming.'] },
+        // Un seul bloc de 20 min (avant : deux passages de 10 min, simplifié avec l'équipe).
+        id: 'q2-surfaces', kind: 'task', minutes: 20, area: 'surfaces', surfaces: true,
+        fr: { title: 'Tuiles blanches / miroirs', summary: '', steps: [], tips: [] },
+        en: { title: 'White tiles / mirrors', summary: '', steps: [], tips: [] },
       },
       { id: 'q2-pause', kind: 'pause', minutes: 15, fr: { title: 'Pause' }, en: { title: 'Break' } },
       {
@@ -664,25 +665,20 @@ export const SHIFTS = {
         },
       },
       {
-        id: 'q2-surfaces-2', kind: 'task', minutes: 10, area: 'surfaces', surfaces: 2,
-        fr: { title: 'Tuiles blanches / miroirs — passage 2', summary: '', steps: [], tips: [] },
-        en: { title: 'White tiles / mirrors — pass 2', summary: '', steps: [], tips: [] },
-      },
-      {
         id: 'q2-guenilles-2', kind: 'task', minutes: 30, area: 'buanderie', photo: 'guenilles',
         fr: {
-          title: 'Guenilles — 2e tournée',
-          summary: 'Dernière tournée; stock pour demain.',
+          title: 'Guenilles : finir et préparer demain',
+          summary: 'Ramasser, finir le lavage, plier; stock pour demain.',
           steps: [
-            'Dernière tournée : ramasse les guenilles sales (studios de tous les étages, spinning, réception).',
+            'Ramasse les guenilles sales (studios de tous les étages, spinning, réception).',
             'Finis le lavage et le séchage; plie et redistribue.',
             'Prépare le stock de guenilles propres pour demain.',
           ],
           tips: ['Essaie de laisser des guenilles sèches et pliées pour demain; note toute brassée pas finie.'],
         },
         en: {
-          title: 'Rags — 2nd round',
-          summary: 'Last round; stock for tomorrow.',
+          title: 'Rags: finish and stock for tomorrow',
+          summary: 'Collect, finish washing, fold; stock for tomorrow.',
           steps: [
             'Last round: collect dirty rags (studios on every floor, spin room, front desk).',
             'Finish washing and drying; fold and hand out.',

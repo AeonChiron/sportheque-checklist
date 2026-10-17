@@ -14,8 +14,11 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
    (`RÉFÉRENCE-IA-2026-10-17`) : tâches dans l'ordre, heures, zone A/B/C du jour,
    tâche hebdo, tuiles/miroirs, murs, compost. Des heures différentes de
    l'horaire standard? Le plan s'adapte sans rien expliquer à l'employé.
-3. **Le couloir** (ligne du temps du quart), la carte **« En cours »**, une
-   illustration par tâche. On coche d'un toucher **ou en glissant vers la droite**.
+3. **Le couloir** (ligne du temps du quart), la carte **« En cours »** avec
+   « C'est fait », une illustration animée par tâche. On coche d'un toucher **ou en
+   glissant vers la droite**; « Annuler » répare un toucher de trop. Les boutons du
+   haut disent ce qu'ils font : **Aperçu** et **Menu** (langue, texte plus grand,
+   ordre de la liste, langue du rapport, protocole, heures).
 4. Le détail d'une tâche : illustration ou schéma (plan du gym, postes des
    télés), étapes précises **à cocher une par une** (la dernière coche la tâche),
    « Bon à savoir », « Pas pu faire » + raison, remarque, photos.
@@ -26,7 +29,7 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
 6. **Terminer** → courriel au superviseur (résumé + bouton « Voir le rapport »,
    photos en pièces jointes), dans sa langue. Les remarques restent telles qu'écrites.
 
-**Pour toute l'équipe : l'Aperçu du gym** (bouton sur l'accueil et dans la checklist)
+**Pour toute l'équipe : l'Aperçu du gym** (bouton sur l'accueil et dans la checklist) — onglets Le jour · Protocole (la journée complète, matin et soir, et les règles du roulement) · Rapports · Trucs; plan du gym en 3D ou à plat
 - Zones du jour (plan interactif A/B/C + pièces), ce qui est au programme, les quarts envoyés,
   ce qui reste à faire, les problèmes ouverts et de bons trucs du manuel.
 - **Sur GitHub Pages** : mode « plan du jour » (+ les quarts envoyés depuis ce téléphone).
