@@ -76,6 +76,10 @@
     </form>
 
     <div class="home-links">
+      <button class="btn ghost overview-link hist-link" type="button" data-go="history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg>
+        <span data-t="history"></span>
+      </button>
       <button class="btn ghost overview-link" type="button" data-go="apercu">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
         <span data-t="overviewShort"></span>
@@ -143,23 +147,23 @@
         <textarea id="fNotes" rows="4" data-ph="notesPh"></textarea>
       </label>
     </div>
-    <div id="sendError"></div>
+    <p class="section-note save-note" data-t="saveNote"></p>
     <div class="bottom-spacer"></div>
     <nav class="bottombar">
       <button class="btn primary big" id="sendBtn"></button>
     </nav>
   </section>
 
-  <!-- 4. Envoyé -->
+  <!-- 4. Quart enregistré -->
   <section id="sent" class="screen center" hidden>
     <div class="done-badge" aria-hidden="true">✓</div>
-    <h2 data-t="sentTitle"></h2>
+    <h2 data-t="savedTitle"></h2>
     <p class="lede" id="sentText"></p>
     <button class="btn primary big" id="newShiftBtn" data-t="newShift"></button>
-    <button class="btn ghost big" type="button" data-go="apercu" data-t="overview"></button>
+    <button class="btn ghost big" type="button" data-go="history" data-t="seeHistory"></button>
   </section>
 
-  <!-- 5. Rapport (ouvert depuis le courriel) -->
+  <!-- 5. Un quart en détail (historique, Aperçu, ancien courriel) -->
   <section id="review" class="screen" hidden>
     <header class="review-top">
       <div class="review-nav"><button class="back" data-go="home">‹ <span data-t="home"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
@@ -176,6 +180,17 @@
       <h1 data-t="overview"></h1>
     </header>
     <div id="apercuBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <!-- 7. Historique des quarts (pour toute l'équipe) -->
+  <section id="history" class="screen" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="home">‹ <span data-t="home"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <p class="eyebrow" id="hiEyebrow"></p>
+      <h1 data-t="history"></h1>
+    </header>
+    <div id="historyBody"></div>
     <div class="bottom-spacer small"></div>
   </section>
 

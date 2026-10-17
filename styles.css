@@ -1110,3 +1110,43 @@ html.large .presets { grid-template-columns: 1fr; }
 html.large .presets button { flex-direction: row; align-items: center; justify-content: space-between; min-height: 56px; padding-bottom: 10px; }
 html.large .presets .dayline { display: none; }
 html.large .home-links { grid-template-columns: 1fr; }
+
+/* Historique : chaque quart enregistré, le plus récent en haut. */
+.home-links .hist-link { grid-column: 1 / -1; }
+.hi-mode { margin-bottom: 12px; }
+.hi-span { margin: 2px 2px 6px; }
+.hi-stats .ok b { color: var(--ok); }
+.hi-day { margin-bottom: 6px; }
+.hi-dayhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 16px 2px 8px; }
+.hi-dayhead h3 { font-size: 19px; }
+.hi-dayhead .num { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.hi-day .rp-card + .rp-card { margin-top: 8px; }
+.hi-card { background: var(--surface); }
+.hi-top { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
+.hi-meta { font-size: 13px; color: var(--muted); }
+.hi-result { font-size: 15px; font-weight: 650; }
+.hi-result.ok { color: var(--ok); }
+.hi-list .rp-card { animation: none; }
+.hi-list.cascade .rp-card { animation: rise .45s var(--ease) both; animation-delay: calc(var(--k, 0) * 45ms); }
+.hi-skel { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.hi-skel i { height: 78px; border-radius: 14px; background: linear-gradient(100deg, var(--sunk) 30%, var(--surface) 50%, var(--sunk) 70%); background-size: 300% 100%; animation: shimmer 1.4s linear infinite; }
+.hi-skel i:nth-child(2) { opacity: .75; } .hi-skel i:nth-child(3) { opacity: .5; }
+
+/* Signaler : urgent (courriel tout de suite) ou pas (noté dans le quart). */
+.urgency { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.urgency button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 12px; min-height: 64px; color: var(--ink); transition: border-color .2s, background .2s; }
+.urgency b { font-size: 16px; }
+.urgency small { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+.urgency [data-urg="1"][aria-checked="true"] { border-color: var(--bad); background: var(--bad-soft); }
+.urgency [data-urg="1"][aria-checked="true"] b { color: var(--bad); }
+.urgency [data-urg="0"][aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+html.large .urgency { grid-template-columns: 1fr; }
+.flag-link { display: inline-flex; align-items: center; gap: 7px; color: var(--bad); align-self: flex-start; }
+.flag-link .ico { width: 17px; height: 17px; }
+.mail-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.mail-line .ico { width: 15px; height: 15px; flex: none; }
+.mail-line.ok { color: var(--ok); }
+.mail-line.bad { color: var(--bad); }
+.flag-item .mail-line button { color: var(--accent); font-size: 13px; min-height: 0; padding: 0 2px; }
+.save-note { text-align: center; margin-top: 4px; }
+.icon-btn:disabled { opacity: .3; pointer-events: none; }

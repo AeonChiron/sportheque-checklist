@@ -2,10 +2,10 @@ import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR } from './manual.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
-import { buildReport, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS, encodeReport, decodeReport, reportGlance, REVIEW, reportLabels } from './report.js';
-import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink, blobToBase64 } from './photos.js';
+import { FLAG_CATEGORIES, SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
+import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
-import { publishShift, loadWeek, keepReport } from './board.js';
+import { publishShift, flushQueue, loadWeek, loadRecent, keepReport } from './board.js';
 
 const KEY = 'gym-shift-v2';
 const PREFS = 'gym-shift-prefs';
@@ -51,7 +51,7 @@ const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 // Changement d'écran : glissement doux (View Transitions quand Safari les
 // offre), vers la droite pour avancer, vers la gauche pour revenir.
 let current = null;
-const RANK = { setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, review: 5 };
+const RANK = { setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, review: 6 };
 function show(id) {
   const prev = current;
   current = id;
@@ -129,6 +129,7 @@ const ICON = {
   clock: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>',
   info: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
   clip: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg>',
+  mail: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg>',
 };
 const logoImgs = (light, dark, cls, alt = '') =>
   `<img class="${cls} only-light" src="${esc(light)}" alt="${esc(alt)}"><img class="${cls} only-dark" src="${esc(dark)}" alt="" aria-hidden="true">`;
@@ -168,6 +169,7 @@ function setLang(l) {
   if (current === 'checklist') renderChecklist();
   if (current === 'finish') openFinish();
   if (current === 'apercu') { refCache.clear(); renderApercu({ animate: false }); }
+  if (current === 'history') renderHistory({ animate: false });
   if (current === 'review' && lastReview) openReview(...lastReview);
 }
 for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
@@ -387,7 +389,6 @@ function taskRow(it, { extra = false } = {}) {
   if (e.skipped && !e.done) tags.push(`<span class="tag bad">${t('notDone')}${e.reason ? ` · ${esc(SKIP_REASONS[e.reason]?.[lang()] || e.reason)}` : ''}</span>`);
   if (!e.done && e.steps?.length) tags.push(`<span class="tag note num">${e.steps.length}/${it.steps.length} ${t('stepsShort')}</span>`);
   if (e.remark) tags.push(`<span class="tag note">${t('remark')}</span>`);
-  if (e.photos?.length) tags.push(`<span class="tag note">${t('photos')} · ${e.photos.length}</span>`);
   const time = extra
     ? `<span class="t-time num">+<small>${it.minutes} min</small></span>`
     : `<span class="t-time num">${f(it.start)}<small>${it.minutes} min</small></span>`;
@@ -498,7 +499,7 @@ function renderChecklist() {
 
   $('#flagsBlock').innerHTML = state.flags.length
     ? `<div class="section-head"><h3>${t('flags')}</h3><span class="num">${state.flags.length}</span></div>
-       ${state.flags.map((fl, i) => `<div class="flag-item">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small></div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
+       ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
     : '';
 }
 
@@ -573,6 +574,8 @@ for (const sel of ['#taskList', '#overflowBlock', '#nowCard']) {
 
 // Retirer un signalement : deux touchers (pas de confirm(), plus doux sur iPhone).
 $('#flagsBlock').addEventListener('click', (ev) => {
+  const retry = ev.target.closest('[data-retry-flag]');
+  if (retry) { const fl = state.flags[+retry.dataset.retryFlag]; if (fl) mailFlag(fl); return; }
   const b = ev.target.closest('[data-del-flag]');
   if (!b) return;
   if (!b.dataset.armed) {
@@ -643,14 +646,11 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#she
   });
 })();
 
-// ---------- Photos prises pendant le quart ----------
-const allPhotoIds = () => [
-  ...Object.values(state.tasks).flatMap((e) => e.photos || []),
-  ...state.flags.flatMap((fl) => fl.photos || []),
-];
+// ---------- Photos d'un problème (elles partent avec le courriel urgent) ----------
+const allPhotoIds = () => state.flags.flatMap((fl) => fl.photos || []);
 
 const CAMERA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-const photoFieldHtml = () => `<div><p class="block-label">${t('photos')}</p><div class="shots" data-shots></div></div>`;
+const photoFieldHtml = () => `<div data-photofield><p class="block-label">${t('photosMail')}</p><div class="shots" data-shots></div></div>`;
 
 // ids : tableau modifié sur place; pending : photos pas encore dans l'état
 // (feuille de signalement), comptées dans la limite.
@@ -841,7 +841,7 @@ function openTask(id) {
     <label class="field"><span>${t('remark')}</span>
       <textarea id="remark" rows="2" placeholder="${esc(t(e.skipped ? 'remarkSkipPh' : 'remarkPh'))}">${esc(e.remark || '')}</textarea>
     </label>
-    ${photoFieldHtml()}
+    <button type="button" class="link flag-link" data-flagtask>${ICON.flag}${t('flagThisTask')}</button>
   `, (root) => {
     const mapBox = root.querySelector('[data-map]');
     if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: state.date } : { mirrors: it.zone, date: state.date });
@@ -861,8 +861,7 @@ function openTask(id) {
       };
     }
     root.querySelector('#remark').addEventListener('input', (ev) => { e.remark = ev.target.value; save(); renderChecklist(); });
-    e.photos ||= [];
-    mountPhotos(root, e.photos, () => { save(); renderChecklist(); });
+    root.querySelector('[data-flagtask]').onclick = () => openFlag({ where: it.title });
     root.querySelector('[data-status="done"]').onclick = () => {
       closeSheet();
       toggleDone(id);
@@ -887,50 +886,134 @@ function openTask(id) {
 }
 
 // ---------- Signaler un problème ----------
-$('#flagBtn').addEventListener('click', openFlag);
+// Urgent : le superviseur reçoit tout de suite un courriel court, avec les
+// photos. Pas urgent : c'est noté dans le quart (et dans l'historique).
+// C'est le seul courriel que le site envoie.
+$('#flagBtn').addEventListener('click', () => openFlag());
 
-function openFlag() {
+const URGENT_BY_DEFAULT = new Set(['equipement', 'securite']);
+
+function openFlag({ where = '' } = {}) {
   let category = null;
+  let urgent = null; // tant que l'employé n'a pas choisi, suit la catégorie
+  const sup = state.supervisor || t('theSupervisor');
   openSheet(`
     <div class="sheet-head">
       <p class="eyebrow danger">${ICON.flag}${t('flag')}</p>
       <h3>${t('flagTitle')}</h3>
-      <p class="lede">${t('flagLede')}</p>
     </div>
     <div class="reasons cat">${Object.entries(FLAG_CATEGORIES).map(([k, v]) => `<button type="button" data-cat="${k}" aria-pressed="false">${esc(v[lang()])}</button>`).join('')}</div>
     <label class="field"><span>${t('where')}</span>
-      <input id="flagWhere" list="areaList" placeholder="${esc(t('wherePh'))}">
+      <input id="flagWhere" list="areaList" placeholder="${esc(t('wherePh'))}" value="${esc(where)}">
       <datalist id="areaList">${Object.values(AREAS).map((a) => `<option value="${esc(a[lang()])}">`).join('')}</datalist>
     </label>
     <label class="field"><span>${t('what')}</span>
       <textarea id="flagText" rows="3" placeholder="${esc(t('whatPh'))}"></textarea>
     </label>
+    <div class="field"><span>${esc(t('urgentQ', sup))}</span>
+      <div class="urgency" role="radiogroup">
+        <button type="button" role="radio" data-urg="1" aria-checked="false"><b>${t('urgentYes')}</b><small>${esc(t('urgentYesSub', sup))}</small></button>
+        <button type="button" role="radio" data-urg="0" aria-checked="false"><b>${t('urgentNo')}</b><small>${esc(t('urgentNoSub'))}</small></button>
+      </div>
+    </div>
     ${photoFieldHtml()}
     <div class="callout clock"><p>${t('danger')}</p></div>
   `, (root) => {
     const saveBtn = root.querySelector('#flagSave');
     const text = root.querySelector('#flagText');
     const photos = [];
-    const check = () => { saveBtn.disabled = !(category && text.value.trim()); };
+    const pick = () => urgent ?? (category ? URGENT_BY_DEFAULT.has(category) : null);
+    const paint = () => {
+      const u = pick();
+      for (const b of root.querySelectorAll('[data-urg]')) b.setAttribute('aria-checked', String(u !== null && (b.dataset.urg === '1') === u));
+      root.querySelector('[data-photofield]').hidden = !u;
+      saveBtn.textContent = u ? t('flagSend', sup) : t('add');
+      saveBtn.disabled = !(category && text.value.trim());
+    };
     mountPhotos(root, photos, () => {}, photos);
     for (const b of root.querySelectorAll('[data-cat]')) {
       b.onclick = () => {
         category = b.dataset.cat;
         for (const o of root.querySelectorAll('[data-cat]')) o.setAttribute('aria-pressed', String(o === b));
-        check();
+        paint();
       };
     }
-    text.addEventListener('input', check);
+    for (const b of root.querySelectorAll('[data-urg]')) b.onclick = () => { urgent = b.dataset.urg === '1'; paint(); };
+    text.addEventListener('input', paint);
     root.querySelector('[data-close]').onclick = () => { photos.forEach(deletePhoto); closeSheet(); };
     saveBtn.onclick = () => {
-      state.flags.push({ category, location: root.querySelector('#flagWhere').value.trim(), text: text.value.trim(), at: new Date().toISOString(), photos });
+      const u = Boolean(pick());
+      if (!u) photos.splice(0).forEach(deletePhoto); // pas de courriel : les photos n'iraient nulle part
+      const fl = { category, location: root.querySelector('#flagWhere').value.trim(), text: text.value.trim(), at: new Date().toISOString(), photos, urgent: u };
+      state.flags.push(fl);
       save(); renderChecklist(); closeSheet();
-      toast(t('flagged'));
+      if (u) mailFlag(fl); else toast(t('flagNoted'));
     };
+    paint();
   }, `<div class="sheet-actions">
       <button class="btn ghost" data-close>${t('cancel')}</button>
       <button class="btn primary" id="flagSave" disabled>${t('add')}</button>
     </div>`);
+}
+
+// Pendant l'envoi : le signalement le dit (et ne se renvoie pas en double).
+const mailing = new WeakSet();
+function flagMailLine(fl, i) {
+  if (!fl.urgent) return '';
+  const sup = state.supervisor || t('theSupervisor');
+  if (fl.emailed) return `<span class="mail-line ok">${ICON.mail}${esc(t('flagSent', sup))}</span>`;
+  if (mailing.has(fl)) return `<span class="mail-line">${ICON.mail}${esc(t('flagSending'))}</span>`;
+  if (CONFIG.demo) return `<span class="mail-line">${ICON.mail}${esc(t('flagDemo'))}</span>`;
+  return `<span class="mail-line bad">${ICON.mail}${esc(t('flagMailFail'))} <button type="button" class="link" data-retry-flag="${i}">${t('retryMail')}</button></span>`;
+}
+
+async function mailFlag(fl) {
+  const s = state;
+  const sup = s.supervisor || t('theSupervisor');
+  if (CONFIG.demo) { toast(t('flagDemo')); return; }
+  if (mailing.has(fl)) return;
+  mailing.add(fl);
+  renderChecklist();
+  try {
+    await sendFlagEmail(fl, s);
+    fl.emailed = true;
+    toast(t('flagSent', sup));
+  } catch {
+    toast(t('flagMailFail'), 'bad');
+  }
+  mailing.delete(fl);
+  if (state === s) { save(); if (current === 'checklist') renderChecklist(); }
+}
+
+// Le courriel : quatre lignes, dans la langue choisie pour ce superviseur.
+const recipientFor = (name) => CONFIG.supervisors.find((x) => x.name === name)?.email || CONFIG.reportTo;
+async function sendFlagEmail(fl, s) {
+  const L = s.reportLang === 'en' ? 'en' : 'fr';
+  const T = UI[L];
+  const cat = FLAG_CATEGORIES[fl.category]?.[L] || fl.category;
+  const when = new Date(fl.at).toLocaleString(L === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const fd = new FormData();
+  fd.append('_subject', T.mailSubject(cat, fl.location, s.name));
+  fd.append('_template', 'table');
+  fd.append('_captcha', 'false');
+  fd.append(T.mailProblem, cat);
+  if (fl.location) fd.append(T.mailWhere, fl.location);
+  fd.append(T.mailWhat, fl.text);
+  fd.append(T.mailBy, `${s.name} · ${SHIFTS[s.shift][L].short} · ${when}`);
+  let n = 0;
+  for (const pid of fl.photos || []) {
+    const blob = await getPhoto(pid);
+    if (blob) fd.append('attachment', new File([blob], `photo-${++n}.jpg`, { type: 'image/jpeg' }));
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30_000);
+  try {
+    const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipientFor(s.supervisor))}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' }, signal: ctrl.signal });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok || String(out.success) === 'false') throw new Error(out.message || `HTTP ${r.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ---------- Menu ----------
@@ -955,7 +1038,7 @@ $('#menuBtn').addEventListener('click', () => {
           <button type="button" role="radio" data-mview="zone" aria-checked="${state.view === 'zone'}">${t('byZone')}</button>
         </div>
       </div>
-      ${sup ? `<div class="inline-choice"><span>${esc(t('reportFor', sup))}</span>
+      ${sup ? `<div class="inline-choice"><span>${esc(t('emailsFor', sup))}</span>
         <div class="segmented tiny" role="radiogroup">
           <button type="button" role="radio" data-mrl="fr" aria-checked="${(state.reportLang || 'fr') === 'fr'}">Français</button>
           <button type="button" role="radio" data-mrl="en" aria-checked="${state.reportLang === 'en'}">English</button>
@@ -1023,7 +1106,6 @@ function openFinish() {
   const done = tasks.filter((x) => st(x).done).length;
   const skipped = tasks.filter((x) => st(x).skipped && !st(x).done).length;
   const open = tasks.filter((x) => !st(x).done && !st(x).skipped);
-  const nPhotos = allPhotoIds().length;
 
   $('#finishSummary').innerHTML = `
     <div class="stat-grid">
@@ -1031,7 +1113,6 @@ function openFinish() {
       <div class="stat bad"><b class="num" data-count>${skipped}</b><span>${t('statNot')}</span></div>
       <div class="stat warn"><b class="num" data-count>${state.flags.length}</b><span>${t('statFlags')}</span></div>
     </div>
-    ${nPhotos ? `<p class="photo-count">${t('photosAttached', nPhotos)}</p>` : ''}
     ${open.length ? `<div class="panel">
       <div class="section-head" style="margin-top:0"><h3>${t('pending')}</h3><span class="num">${open.length}</span></div>
       <p class="section-note">${t('finishHint')}</p>
@@ -1039,8 +1120,7 @@ function openFinish() {
         <button class="btn small ghost" data-act="done" aria-label="${esc(t('done'))}">✓</button><button class="btn small flag" data-act="skip" aria-label="${esc(t('notDone'))}">✕</button></div>`).join('')}
     </div>` : `<div class="notice ok"><b>${t('allChecked')}</b></div>`}`;
   $('#fNotes').value = state.notes || '';
-  $('#sendError').innerHTML = '';
-  $('#sendBtn').textContent = t('sendTo', state.supervisor);
+  $('#sendBtn').textContent = t('saveShift');
   $('#sendBtn').disabled = false;
   if (current !== 'finish') countUp($('#finishSummary'));
   show('finish');
@@ -1063,9 +1143,10 @@ $('#finishSummary').addEventListener('click', (ev) => {
   }
 });
 
-$('#sendBtn').addEventListener('click', send);
+$('#sendBtn').addEventListener('click', saveShift);
 
-// Résumé du quart pour l'Aperçu (statuts seulement, pas de remarques).
+// Le quart tel qu'il va dans l'historique : statuts, remarques, notes et
+// problèmes (les photos sont déjà parties avec les courriels urgents).
 function boardSummary() {
   return {
     date: state.date,
@@ -1077,118 +1158,47 @@ function boardSummary() {
     start: state.start,
     end: state.end,
     submittedAt: new Date().toISOString(),
+    notes: state.notes || '',
     items: [...planTasks(), ...plan.overflow].map((it) => {
       const e = state.tasks[it.id] || {};
-      return { id: it.id, status: e.done ? 'done' : e.skipped ? 'notdone' : 'unchecked', doneAt: e.doneAt || '', reason: e.skipped ? e.reason || '' : '' };
+      return { id: it.id, status: e.done ? 'done' : e.skipped ? 'notdone' : 'unchecked', doneAt: e.doneAt || '', reason: e.skipped ? e.reason || '' : '', remark: e.remark || '' };
     }),
-    flags: state.flags.map((fl) => ({ category: fl.category, location: fl.location, text: fl.text, at: fl.at })),
+    flags: state.flags.map((fl) => ({ category: fl.category, location: fl.location, text: fl.text, at: fl.at, urgent: Boolean(fl.urgent), emailed: Boolean(fl.emailed), photos: (fl.photos || []).length })),
   };
 }
 
-const recipientFor = (name) => CONFIG.supervisors.find((s) => s.name === name)?.email || CONFIG.reportTo;
-
-async function send() {
+// Fin du quart : il s'ajoute à l'historique. Pas de courriel.
+async function saveShift() {
   const btn = $('#sendBtn');
   btn.disabled = true;
-  btn.textContent = t('sending');
-
-  // Photos numérotées dans l'ordre du rapport : photo-1.jpg, photo-2.jpg…
-  const names = new Map();
-  const blobs = [];
-  const ordered = [...state.flags.flatMap((fl) => fl.photos || []), ...[...plan.items, ...plan.overflow].flatMap((it) => state.tasks[it.id]?.photos || [])];
-  for (const pid of ordered) {
-    const blob = await getPhoto(pid);
-    if (!blob || names.has(pid)) continue;
-    names.set(pid, `photo-${names.size + 1}.jpg`);
-    blobs.push([names.get(pid), blob]);
-  }
-  // Rapport dans la langue du superviseur; les remarques restent telles quelles.
-  const reportPlan = buildPlan({ ...state, lang: state.reportLang || 'fr' });
-  const report = buildReport(reportPlan, state, names);
-  const code = await encodeReport(report);
-  const link = `${location.origin}${location.pathname}#r=${code}`;
-  const summary = boardSummary();
-
-  const finish = () => {
-    const { supervisor: sup, name } = state;
-    publishShift(summary, code);
-    state = null;
-    save();
-    clearPhotos();
-    return { sup, name };
-  };
-
-  if (CONFIG.demo) {
-    const { sup } = finish();
-    window.history.replaceState(null, '', `#r=${code}`);
-    openReview(report, { demo: true, sup });
-    return;
-  }
-  try {
-    if (CONFIG.sendVia === 'formsubmit') {
-      const R = REVIEW[report.lang];
-      const fd = new FormData();
-      fd.append('_subject', reportSubject(report));
-      fd.append('_template', 'box');
-      fd.append('_captcha', 'false');
-      fd.append(R.title, reportGlance(report));
-      fd.append(R.open, link);
-      if (report.notes) fd.append(reportLabels(report).notes, report.notes);
-      for (const [filename, b] of blobs) fd.append('attachment', new File([b], filename, { type: 'image/jpeg' }));
-      const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipientFor(state.supervisor))}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
-      const out = await r.json().catch(() => ({}));
-      if (!r.ok || String(out.success) === 'false') throw new Error(out.message || `HTTP ${r.status}`);
-    } else {
-      const r = await fetch(CONFIG.reportEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...report,
-          link,
-          attachments: await Promise.all(blobs.map(async ([filename, b]) => ({ filename, content: await blobToBase64(b) }))),
-        }),
-      });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-    }
-    const { sup, name } = finish();
-    $('#sentText').textContent = t('sentText', sup, name);
-    paintStatic();
-    show('sent');
-    celebrate();
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = t('retry');
-    showFallback(report, err.message, blobs.length > 0, link);
-  }
-}
-
-function showFallback(report, msg, hasPhotos, link) {
-  const subject = reportSubject(report);
-  const body = `${renderReportText(report)}\n\n${REVIEW[report.lang].open} : ${link}`;
-  const mailto = `mailto:${encodeURIComponent(recipientFor(state.supervisor))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  $('#sendError').innerHTML = `
-    <div class="notice bad"><b>${t('sendFail')}</b>${esc(msg)}. ${t('sendFailMore')}${hasPhotos ? t('photosByHand') : ''}</div>
-    <div class="menu-list">
-      <a class="btn ghost" href="${esc(mailto)}" style="text-decoration:none;text-align:center">${t('viaMail')}</a>
-      <button class="btn ghost" id="copyReport">${t('copy')}</button>
-    </div>`;
-  $('#copyReport').onclick = async () => {
-    try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); toast(t('copied')); } catch { toast(t('copyFail'), 'bad'); }
-  };
+  btn.textContent = t('saving');
+  const { name } = state;
+  const where = await publishShift(boardSummary());
+  state = null;
+  save();
+  clearPhotos();
+  hist.loaded = false; // l'historique se recharge avec ce quart
+  hist.weekLoaded = '';
+  $('#sentText').textContent = t(where === 'queued' ? 'savedQueued' : 'savedText', name);
+  paintStatic();
+  show('sent');
+  celebrate();
 }
 
 $('#newShiftBtn').addEventListener('click', setupScreen);
 
-// ---------- 5. Rapport ouvert depuis le courriel ----------
+// ---------- 5. Un quart en détail (depuis l'historique, l'Aperçu ou un ancien courriel) ----------
 const STATUS_MARK = { done: '✓', notdone: '✕', unchecked: '○' };
+const REVIEW_BACK = { apercu: ['apercu-keep', 'overviewShort'], history: ['history-keep', 'history'] };
 
 let lastReview = null;
 function openReview(r, opts = {}) {
-  const { demo = false, sup = '', from = '', partial = false } = opts;
+  const { from = '' } = opts;
   lastReview = [r, opts];
   const back = $('#review .back');
-  back.dataset.go = from === 'apercu' ? 'apercu-keep' : 'home';
-  back.querySelector('span').dataset.t = from === 'apercu' ? 'overviewShort' : 'home';
+  const [go, label] = REVIEW_BACK[from] || ['home', state ? 'myShift' : 'home'];
+  back.dataset.go = go;
+  back.querySelector('span').dataset.t = label;
   const R = REVIEW[r.lang] || REVIEW.fr;
   const T = reportLabels(r);
   const notDone = r.items.filter((i) => i.status === 'notdone');
@@ -1206,20 +1216,18 @@ function openReview(r, opts = {}) {
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
     </li>`;
   const attention = [
-    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
+    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('emailedTo', r.supervisor || t('theSupervisor'), fl.nPhotos || 0))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
     ...unchecked.map(row),
   ];
   const nPhotos = [...r.items, ...r.flags, ...r.overflow].reduce((n, x) => n + (x.photos?.length || 0), 0);
 
   $('#reviewBody').innerHTML = `
-    ${demo ? `<div class="notice ok"><b>${esc(t('demoText', sup || r.supervisor))}</b></div>` : ''}
-    ${partial ? `<div class="notice ok">${esc(t('partialNote'))}</div>` : ''}
     <div class="rv-head">
       <p class="eyebrow">${[r.gymName, R.title].filter(Boolean).map(esc).join(' · ')}</p>
       <h1>${esc(r.name)}</h1>
       <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(dayMonth(r.date))} · <span class="num">${esc(r.hours)}</span></p>
-      ${r.supervisor ? `<p class="rv-sub">${esc(T.to)} ${esc(r.supervisor)}</p>` : ''}
+      ${r.supervisor ? `<p class="rv-sub">${esc(t('supShort'))} : ${esc(r.supervisor)}${r.submittedAt ? ` · ${esc(t('savedAt', clock(r.submittedAt)))}` : ''}</p>` : ''}
     </div>
     <div class="rv-verdict ${nAttention ? 'warn' : 'ok'}">
       <div class="rv-ring" style="--p:${pct}"><span class="num">${pct}%</span></div>
@@ -1234,8 +1242,8 @@ function openReview(r, opts = {}) {
     <ul class="rv-list">${r.items.map(row).join('')}</ul>
     ${r.overflow.length ? `<div class="section-head"><h3>${esc(T.overflow)}</h3></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
     ${r.outOfRange.length ? `<p class="section-note">${esc(T.fixed)} : ${esc(r.outOfRange.join(', '))}</p>` : ''}
-    ${nPhotos && !demo ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}
-    ${from ? '' : `<button class="btn ghost big overview-link" type="button" data-go="folder" data-date="${esc(r.date)}">${esc(t('seeFolder'))}</button>`}`;
+    ${nPhotos ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}
+    ${from ? '' : `<button class="btn ghost big overview-link" type="button" data-go="history">${esc(t('seeHistory'))}</button>`}`;
   paintStatic();
   show('review');
 }
@@ -1253,7 +1261,7 @@ async function openReviewFromHash() {
   }
 }
 
-// ---------- 6. Aperçu du gym : la semaine, le dossier des rapports, les trucs ----------
+// ---------- 6. Aperçu du gym : la semaine, le protocole, les trucs ----------
 const CHEV_L = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
 const CHEV_R = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 const isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -1269,7 +1277,7 @@ function weekRange(mon) {
 }
 const hhmm = (s) => (s ? f(toMin(s)) : '');
 
-const AP_TABS = ['day', 'protocol', 'reports', 'tips'];
+const AP_TABS = ['day', 'protocol', 'tips'];
 const ap = { week: '', day: '', tab: AP_TABS.includes(prefs.apTab) ? prefs.apTab : 'day', tipShift: 0, data: {}, live: false, sig: '', keepNext: false };
 
 // Plans de référence d'un jour (matin et soir), gardés en mémoire.
@@ -1312,9 +1320,10 @@ function stateLine(st) {
 function metrics(s) {
   const done = s.done ?? s.items.filter((i) => i.status === 'done').length;
   const total = s.total ?? s.items.length;
-  return { done, total, pct: total ? Math.round((100 * done) / total) : 0, notdone: s.items.filter((i) => i.status === 'notdone').length, flags: s.flags.length };
+  return { done, total, pct: total ? Math.round((100 * done) / total) : 0, notdone: s.items.filter((i) => i.status === 'notdone').length, flags: s.flags.length, urgent: s.flags.filter((fl) => fl.urgent).length };
 }
-const tone = (m) => (m.flags || m.notdone ? 'bad' : m.pct === 100 ? 'ok' : 'warn');
+// Rouge : urgent ou pas fait. Ambre : il reste quelque chose à voir. Vert : tout fait, rien à signaler.
+const tone = (m) => (m.urgent || m.notdone ? 'bad' : m.flags || m.pct < 100 ? 'warn' : 'ok');
 
 async function openApercu({ keep = false } = {}) {
   // Pendant un quart, « retour » ramène à la checklist : on le dit.
@@ -1343,7 +1352,6 @@ async function refreshWeek() {
 function renderApercu({ animate = true, dir = 0 } = {}) {
   const today = todayISO();
   const dates = weekDates(ap.week);
-  const nReports = dates.reduce((n, d) => n + (ap.data[d]?.length || 0), 0);
   $('#apEyebrow').textContent = [CONFIG.gymName, ap.week === mondayOf(today) ? t('thisWeek') : weekRange(ap.week)].filter(Boolean).join(' · ');
   const dayBtn = (d) => {
     const info = dayInfo(d);
@@ -1368,7 +1376,7 @@ function renderApercu({ animate = true, dir = 0 } = {}) {
     </div>
     <div class="week" role="tablist" style="--i:${dates.indexOf(ap.day)}">${dates.map(dayBtn).join('')}</div>
     <div class="segmented ap-tabs" role="tablist">
-      ${AP_TABS.map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${ap.tab === k}">${esc(t(`tab_${k}`))}${k === 'reports' && nReports ? `<span class="count num">${nReports}</span>` : ''}</button>`).join('')}
+      ${AP_TABS.map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${ap.tab === k}">${esc(t(`tab_${k}`))}</button>`).join('')}
     </div>
     <div class="ap-panel" id="apPanel"></div>
     <button class="btn primary big" type="button" data-go="${state ? 'shift' : 'home'}">${esc(state ? t('backToShift') : t('startShift'))}</button>`;
@@ -1377,7 +1385,7 @@ function renderApercu({ animate = true, dir = 0 } = {}) {
 
 function renderPanel({ animate = true, dir = 0 } = {}) {
   const box = $('#apPanel');
-  box.innerHTML = { reports: reportsPanel, tips: tipsPanel, protocol: protocolPanel }[ap.tab]?.() ?? dayPanel();
+  box.innerHTML = { tips: tipsPanel, protocol: protocolPanel }[ap.tab]?.() ?? dayPanel();
   if (ap.tab === 'day') {
     const info = dayInfo(ap.day);
     const list = ap.data[ap.day] || [];
@@ -1464,44 +1472,6 @@ function dayPanel() {
       ${left.some((l) => l.kind === 'notdone') ? `<ul class="ap-list">${left.filter((l) => l.kind === 'notdone').map((l) => `<li class="ap-row"><span class="ap-who">${esc(SHIFTS[l.shift][L].short)}</span><span class="ap-what">${esc(l.title)}</span><span class="st bad">✕ ${esc(SKIP_REASONS[l.reason]?.[L] || t('notDone'))}</span></li>`).join('')}</ul>` : ''}
       ${left.some((l) => l.kind !== 'notdone') ? `<p class="block-label left-label">○ ${esc(t('notChecked'))}</p><div class="left-chips">${left.filter((l) => l.kind !== 'notdone').map((l) => `<span>${esc(l.title)}</span>`).join('')}</div>` : ''}</div>` : ''}
     ${flags.length ? `<div class="panel"><h3>${t('flags')}</h3>${flags.map((fl) => `<div class="flag-item">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[L] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${esc(fl.by)}${fl.at ? ` · ${clock(fl.at)}` : ''}</small></div></div>`).join('')}</div>` : ''}`;
-}
-
-// Le dossier : un rapport par quart envoyé, classé par jour.
-function reportsPanel() {
-  const today = todayISO();
-  const all = weekDates(ap.week).flatMap((d) => ap.data[d] || []);
-  const ms = all.map(metrics);
-  const avg = ms.length ? Math.round(ms.reduce((a, m) => a + m.pct, 0) / ms.length) : 0;
-  const nFlags = ms.reduce((a, m) => a + m.flags, 0);
-  const list = ap.data[ap.day] || [];
-  const card = (s, i) => {
-    const m = metrics(s);
-    const tags = [
-      m.flags ? `<span class="tag bad">⚑ ${m.flags}</span>` : '',
-      m.notdone ? `<span class="tag bad">${m.notdone} × ${esc(t('notDone'))}</span>` : '',
-      s.code ? '' : `<span class="tag">${esc(t('summaryOnly'))}</span>`,
-    ].join('');
-    return `<button type="button" class="rp-card ${tone(m)}" data-rp="${i}">
-      <span class="rv-ring small" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>
-      <span class="rp-main">
-        <b>${esc(s.name)}</b>
-        <span class="rp-meta"><span class="num">${esc(SHIFTS[s.shift][lang()].short)}${s.start ? ` · ${hhmm(s.start)} – ${hhmm(s.end)}` : ''}</span>${s.submittedAt ? ` · ${esc(t('sentAt', clock(s.submittedAt)))}` : ''}${s.supervisor ? ` · ${esc(t('toSup', s.supervisor))}` : ''}</span>
-        ${tags ? `<span class="tags">${tags}</span>` : ''}
-      </span>${CHEV_R}</button>`;
-  };
-  return `
-    <div class="ap-stats">
-      <div><b class="num" data-count>${all.length}</b><span>${esc(t('statReports'))}</span></div>
-      <div><b class="num" data-count>${avg}%</b><span>${esc(t('statAvg'))}</span></div>
-      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags'))}</span></div>
-    </div>
-    <div class="folder">
-      <div class="folder-tab">${esc(longDay(ap.day))}</div>
-      <div class="folder-body">${list.length
-        ? list.map(card).join('')
-        : `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(ap.day > today ? t('noReportsYet') : t('noReportsDay'))}</p></div>`}</div>
-    </div>
-    <p class="section-note">${esc(ap.live ? t('folderLive') : t('folderLocal'))}</p>`;
 }
 
 // Le protocole : toute la journée, matin et soir, tel que le manuel le prévoit
@@ -1612,30 +1582,27 @@ function selectDay(d) {
   renderPanel({ dir });
 }
 
-async function openFolderReport(i) {
+function openDayReport(i) {
   const s = (ap.data[ap.day] || [])[Number(i)];
-  if (!s) return;
-  if (s.code) {
-    try { openReview(await decodeReport(s.code), { from: 'apercu' }); return; } catch { /* résumé plus bas */ }
-  }
-  openReview(summaryReport(s), { from: 'apercu', partial: true });
+  if (s) openReview(summaryReport(s), { from: 'apercu' });
 }
 
-// Un résumé du tableau partagé, présenté comme un rapport (sans remarques ni photos).
+// Un quart de l'historique, présenté en détail dans la langue de celui qui regarde
+// (les remarques restent telles qu'écrites).
 function summaryReport(s) {
   const L = lang();
   const p = buildPlan({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, lang: L });
   const st = new Map(s.items.map((i) => [i.id, i]));
   const line = (it, withTime = true) => {
     const x = st.get(it.id) || {};
-    return { id: it.id, time: withTime ? `${f(it.start)}–${f(it.end)}` : '', title: it.title, minutes: it.minutes, status: x.status || 'unchecked', doneAt: clock(x.doneAt), reason: x.reason ? SKIP_REASONS[x.reason]?.[L] || '' : '', remark: '', photos: [] };
+    return { id: it.id, time: withTime ? `${f(it.start)}–${f(it.end)}` : '', title: it.title, minutes: it.minutes, status: x.status || 'unchecked', doneAt: clock(x.doneAt), reason: x.reason ? SKIP_REASONS[x.reason]?.[L] || '' : '', remark: x.remark || '', photos: [] };
   };
   const items = p.items.filter((x) => x.kind === 'task').map((it) => line(it));
   return {
-    lang: L, gymName: CONFIG.gymName, supervisor: s.supervisor || '', name: s.name, date: s.date, weekday: p.weekdayName, shiftName: p.shiftName,
-    hours: `${f(p.start)} – ${f(p.end)}`, items, overflow: p.overflow.map((it) => line(it, false)), deficit: fmtDuration(p.deficit, L), outOfRange: [],
-    flags: s.flags.map((fl) => ({ category: FLAG_CATEGORIES[fl.category]?.[L] || fl.category, location: fl.location, text: fl.text, at: clock(fl.at), photos: [] })),
-    notes: '', completion: { done: items.filter((i) => i.status === 'done').length, total: items.length },
+    lang: L, gymName: CONFIG.gymName, supervisor: s.supervisor || '', name: s.name, date: s.date, weekday: p.weekdayName, shiftName: p.shiftName, submittedAt: s.submittedAt || '',
+    hours: `${f(p.start)} – ${f(p.end)}`, items, overflow: p.overflow.map((it) => line(it, false)).filter((i) => i.status !== 'unchecked'), deficit: fmtDuration(p.deficit, L), outOfRange: [],
+    flags: s.flags.map((fl) => ({ category: FLAG_CATEGORIES[fl.category]?.[L] || fl.category, location: fl.location, text: fl.text, at: clock(fl.at), photos: [], urgent: fl.urgent, emailed: fl.emailed, nPhotos: fl.photos || 0 })),
+    notes: s.notes || '', completion: { done: items.filter((i) => i.status === 'done').length, total: items.length },
   };
 }
 
@@ -1672,7 +1639,7 @@ $('#apercuBody').addEventListener('click', (ev) => {
     const list = $('#tipList');
     list.innerHTML = tipList(ap.tipShift);
     list.classList.remove('swap'); void list.offsetWidth; list.classList.add('swap');
-  } else if (ds.rp !== undefined) openFolderReport(ds.rp);
+  } else if (ds.rp !== undefined) openDayReport(ds.rp);
   else if (ds.info) { const [s, id] = ds.info.split('|'); openTaskInfo(Number(s), id); }
   else if (el.classList.contains('tc-head')) {
     const card = el.closest('.tipcard');
@@ -1701,6 +1668,134 @@ $('#apercuBody').addEventListener('click', (ev) => {
   body.addEventListener('pointercancel', () => { g = null; });
 })();
 
+// ---------- 7. Historique : chaque quart enregistré, le plus récent en haut ----------
+// Pas de journées vides ni de « manqué » : seulement ce qui a été enregistré.
+// Le superviseur ouvre la page et voit d'un coup d'œil si tout a été fait.
+const hist = { mode: prefs.histMode === 'week' ? 'week' : 'recent', week: '', recent: [], days: {}, weekLoaded: '', loaded: false, live: false, sig: '', view: [] };
+
+function openHistory({ keep = false } = {}) {
+  $('#history .back span').dataset.t = state ? 'myShift' : 'home';
+  paintStatic();
+  if (!keep || !hist.week) hist.week = mondayOf(todayISO());
+  renderHistory({ animate: !keep });
+  show('history');
+  refreshHistory();
+}
+
+async function refreshHistory() {
+  const { mode, week } = hist;
+  const res = mode === 'week' ? await loadWeek(weekDates(week)) : await loadRecent(60);
+  if (current !== 'history' || hist.mode !== mode || hist.week !== week) return; // parti entre-temps
+  const fresh = mode === 'week' ? hist.weekLoaded !== week : !hist.loaded;
+  if (mode === 'week') { hist.days = res.days; hist.weekLoaded = week; } else { hist.recent = res.shifts; hist.loaded = true; }
+  hist.live = res.live;
+  const sig = JSON.stringify([mode, week, res.live, mode === 'week' ? res.days : res.shifts]);
+  if (sig === hist.sig && !fresh) return; // rien de neuf : on ne redessine pas
+  hist.sig = sig;
+  renderHistory({ animate: fresh });
+}
+
+const dayTitle = (d) => {
+  const today = todayISO();
+  return d === today ? `${t('today')} · ${dayMonth(d)}` : d === addDays(today, -1) ? `${t('yesterday')} · ${dayMonth(d)}` : longDay(d);
+};
+
+function histCard(s, i) {
+  const m = metrics(s);
+  const L = lang();
+  const { urgent } = m;
+  const unchecked = Math.max(0, m.total - m.done - m.notdone);
+  const all = m.total && m.done === m.total;
+  const tags = [
+    m.flags ? `<span class="tag bad">⚑ ${esc(t('nFlags', m.flags))}${urgent ? ` · ${esc(t('nUrgent', urgent))}` : ''}</span>` : '',
+    m.notdone ? `<span class="tag bad">${esc(t('nNotDone', m.notdone))}</span>` : '',
+    !all && unchecked ? `<span class="tag time">${esc(t('nUnchecked', unchecked))}</span>` : '',
+    s.notes || s.items.some((x) => x.remark) ? `<span class="tag note">${esc(t('remarks'))}</span>` : '',
+  ].join('');
+  return `<button type="button" class="rp-card hi-card ${tone(m)}" data-hi="${i}" style="--k:${Math.min(i, 8)}">
+    <span class="rv-ring small" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>
+    <span class="rp-main">
+      <span class="hi-top"><b>${esc(s.name)}</b><span class="hi-meta num">${esc(SHIFTS[s.shift][L].short)}${s.start ? ` · ${hhmm(s.start)} – ${hhmm(s.end)}` : ''}</span></span>
+      <span class="hi-result ${all ? 'ok' : ''}">${all ? '✓ ' : ''}${esc(t('tasksDone', m.done, m.total))}</span>
+      ${tags ? `<span class="tags">${tags}</span>` : ''}
+    </span>${CHEV_R}</button>`;
+}
+
+function renderHistory({ animate = true } = {}) {
+  const isWeek = hist.mode === 'week';
+  const ready = isWeek ? hist.weekLoaded === hist.week : hist.loaded;
+  const today = todayISO();
+  const shifts = isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent;
+  $('#hiEyebrow').textContent = [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ');
+
+  // Par jour, le plus récent en haut; dans un jour, le dernier enregistré en haut.
+  const byDate = new Map();
+  for (const s of shifts) (byDate.get(s.date) || byDate.set(s.date, []).get(s.date)).push(s);
+  const dates = [...byDate.keys()].sort().reverse();
+  hist.view = dates.flatMap((d) => byDate.get(d).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')));
+
+  // Le coup d'œil : les 7 derniers jours (Récents) ou la semaine choisie.
+  const span = isWeek ? shifts : shifts.filter((s) => s.date >= addDays(today, -6));
+  const ms = span.map(metrics);
+  const complete = ms.filter((m) => m.total && m.done === m.total).length;
+  const nFlags = ms.reduce((a, m) => a + m.flags, 0);
+  const strip = span.length ? `
+    ${isWeek ? '' : `<p class="block-label hi-span">${esc(t('last7'))}</p>`}
+    <div class="ap-stats hi-stats">
+      <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts'))}</span></div>
+      <div class="${complete === span.length ? 'ok' : ''}"><b class="num">${complete}/${span.length}</b><span>${esc(t('statComplete'))}</span></div>
+      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags'))}</span></div>
+    </div>` : '';
+
+  let k = 0;
+  const groups = dates.map((d) => `<section class="hi-day">
+      <div class="hi-dayhead"><h3>${esc(dayTitle(d))}</h3><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
+      ${byDate.get(d).map((s) => histCard(s, k++)).join('')}
+    </section>`).join('');
+
+  $('#historyBody').innerHTML = `
+    <div class="segmented hi-mode" role="tablist">
+      <button type="button" role="tab" data-hmode="recent" aria-selected="${!isWeek}">${esc(t('recent'))}</button>
+      <button type="button" role="tab" data-hmode="week" aria-selected="${isWeek}">${esc(t('byWeek'))}</button>
+    </div>
+    ${isWeek ? `<div class="ap-weekbar">
+      <button type="button" class="icon-btn" data-hwk="-1" aria-label="${esc(t('prevWeek'))}">${CHEV_L}</button>
+      <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.week))}</b>${hist.week !== mondayOf(today) ? `<button type="button" class="link" data-hwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
+      <button type="button" class="icon-btn" data-hwk="1" aria-label="${esc(t('nextWeek'))}" ${hist.week >= mondayOf(today) ? 'disabled' : ''}>${CHEV_R}</button>
+    </div>` : ''}
+    <div class="hi-list${animate && ready ? ' cascade' : ''}">
+      ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
+        : `${strip}${groups || `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+    </div>
+    ${ready ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
+  if (animate && ready) countUp($('#historyBody'));
+}
+
+$('#historyBody').addEventListener('click', (ev) => {
+  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi]');
+  if (!el || el.disabled) return;
+  const ds = el.dataset;
+  if (ds.hmode) {
+    if (ds.hmode === hist.mode) return;
+    hist.mode = ds.hmode;
+    prefs.histMode = hist.mode;
+    savePrefs();
+    renderHistory();
+    refreshHistory();
+  } else if (ds.hwk !== undefined) {
+    const n = Number(ds.hwk);
+    hist.week = n ? addDays(hist.week, 7 * n) : mondayOf(todayISO());
+    renderHistory();
+    refreshHistory();
+  } else if (ds.hi !== undefined) {
+    const s = hist.view[Number(ds.hi)];
+    if (s) openReview(summaryReport(s), { from: 'history' });
+  }
+});
+
+// Retour sur la page (téléphone sorti de la poche) : l'historique se met à jour.
+document.addEventListener('visibilitychange', () => { if (!document.hidden && current === 'history') refreshHistory(); });
+
 // ---------- Confort : texte plus grand ----------
 function setLarge(on, sw) {
   prefs.large = on;
@@ -1728,12 +1823,9 @@ document.addEventListener('click', (ev) => {
   if (!go) return;
   if (go.dataset.go === 'apercu-keep') { openApercu({ keep: true }); return; }
   if (go.dataset.go === 'protocol') { goProtocol(); return; }
-  if (go.dataset.go === 'folder') {
-    ap.day = go.dataset.date || todayISO();
-    ap.week = mondayOf(ap.day);
-    ap.tab = 'reports';
-    ap.keepNext = true;
-    location.hash = 'apercu';
+  if (go.dataset.go === 'history-keep') { openHistory({ keep: true }); return; }
+  if (go.dataset.go === 'history') {
+    if (location.hash === '#historique') openHistory(); else location.hash = 'historique';
     return;
   }
   if (go.dataset.go === 'apercu') {
@@ -1747,6 +1839,7 @@ document.addEventListener('click', (ev) => {
 function route() {
   if (location.hash.startsWith('#r=')) return openReviewFromHash();
   if (location.hash === '#apercu') return openApercu();
+  if (location.hash === '#historique') return openHistory();
   if (state?.name && state?.date) return openChecklist();
   return setupScreen();
 }
@@ -1781,6 +1874,10 @@ document.addEventListener('visibilitychange', () => document.body.classList.togg
 
 paintStatic();
 route();
+
+// Un quart enregistré sans réseau part tout seul dès que le réseau revient.
+flushQueue();
+window.addEventListener('online', () => { flushQueue().then(() => { if (current === 'history') refreshHistory(); }); });
 
 // Hors ligne (si le service worker est disponible).
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

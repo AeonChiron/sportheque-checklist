@@ -15,7 +15,7 @@ export const CONFIG = {
   since: 1981,
 
   // Superviseurs proposés au début du quart. Ajouter un courriel pour qu'il
-  // reçoive ses rapports directement; sans courriel, le rapport va à reportTo.
+  // reçoive les problèmes urgents directement; sans courriel, ils vont à reportTo.
   supervisors: [
     { name: 'Daniel', email: '' },
     { name: 'Mathieu', email: '' },
@@ -57,23 +57,19 @@ export const CONFIG = {
     maxConsecutiveWork: 300,
   },
 
-  // Envoi du rapport. 'formsubmit' : service gratuit, sans compte ni clé
-  // (https://formsubmit.co). Le destinataire active l'adresse une seule fois
-  // en cliquant le lien du premier courriel. Ensuite, on peut remplacer
-  // l'adresse par l'alias secret que FormSubmit fournit.
-  // 'api' : fonction serveur api/send-report.js (Vercel + Resend).
-  sendVia: 'formsubmit',
-  // Période de test : les rapports vont à l'adresse de test, pas au superviseur.
+  // Courriels : seulement pour un problème URGENT signalé pendant le quart
+  // (jamais à la fin du quart : le quart va dans l'historique). Service
+  // gratuit FormSubmit, sans compte ni clé (https://formsubmit.co). Le
+  // destinataire active l'adresse une seule fois en cliquant le lien du
+  // premier courriel. Période de test : tout va à l'adresse de test.
   reportTo: 'thealchemicalseed@gmail.com',
-  reportEndpoint: '/api/send-report',
 
-  // Tableau partagé de l'Aperçu (fonction Netlify). Sur GitHub Pages, il
-  // n'existe pas : l'Aperçu passe tout seul en mode « plan du jour ».
+  // Historique des quarts et Aperçu partagés (fonction Netlify). Sur GitHub
+  // Pages, elle n'existe pas : chaque téléphone ne voit que ses propres quarts.
+  // Pour garder GitHub Pages, on peut mettre ici l'adresse complète du site
+  // Netlify : https://<site>.netlify.app/api/board
   boardEndpoint: '/api/board',
 
-  // Bouton de secours « Envoyer avec l'app Mail » (adresse facultative).
-  fallbackEmail: '',
-
-  // Démo : n'envoie rien, affiche l'aperçu du courriel à la fin.
+  // Démo : aucun courriel n'est envoyé.
   demo: false,
 };

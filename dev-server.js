@@ -19,6 +19,10 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/board') {
     res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && url.searchParams.has('recent')) {
+      const dates = [...board.keys()].sort().reverse().slice(0, 45);
+      return res.end(JSON.stringify({ days: Object.fromEntries(dates.map((d) => [d, board.get(d)])) }));
+    }
     if (req.method === 'GET' && url.searchParams.has('dates')) {
       return res.end(JSON.stringify({ days: Object.fromEntries(parseDates(url.searchParams.get('dates')).map((d) => [d, board.get(d) || []])) }));
     }

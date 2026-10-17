@@ -1,6 +1,6 @@
 ---
 name: sportheque-checklist
-description: Work on the Sporthèque gym cleaners' shift checklist website (this repository). Use for any change to its tasks, wording, translations, schedule logic, report email, design, demo artifact or deployment.
+description: Work on the Sporthèque gym cleaners' shift checklist website (this repository). Use for any change to its tasks, wording, translations, schedule logic, shift history, urgent-problem email, design, demo artifact or deployment.
 ---
 
 # Sporthèque shift checklist
@@ -8,8 +8,9 @@ description: Work on the Sporthèque gym cleaners' shift checklist website (this
 Mobile-first website (iPhone, Safari) for the cleaning staff of the Sporthèque gym
 (Gatineau, 2nd floor). A cleaner enters name, start/end time and the supervisor on
 duty; the site builds the shift plan from the training manual; they check tasks off,
-note what couldn't be done, flag issues with photos; on submit a report is emailed
-to the supervisor. Plain static site + one serverless function. No build step.
+note what couldn't be done, flag issues; at the end the shift is saved to the shared
+**History** (no email). Only an URGENT problem sends a short email to the supervisor.
+Plain static site + one serverless function. No build step.
 
 ## Map
 
@@ -17,11 +18,12 @@ to the supervisor. Plain static site + one serverless function. No build step.
 |---|---|
 | `js/manual.js` | Manual content, bilingual `{ fr, en }` per block: title, summary, steps, tips. Sequence + durations are the source of truth. |
 | `js/planner.js` | Pure planning engine, `buildPlan({ shift, date, start, end, lang })`. Bilingual composed text lives in its `P` table. |
-| `js/report.js` | `buildReport(planInReportLang, state, photoNames)` + HTML/text email renderers (labels in `R`). |
+| `js/report.js` | Labels for the shift detail view (`REVIEW`, `reportLabels`), `decodeReport` for old `#r=` email links. `buildReport`/renderers are only used by the unused `api/send-report.js`. |
+| `js/board.js`, `js/board-shape.js`, `netlify/functions/board.mjs` | Shift history: `publishShift` → `'shared' | 'queued' | 'local'` (404 = host has no board = local, network error = queued and re-sent by `flushQueue` on load/online), `loadRecent(n)`, `loadWeek(dates)`. `sanitizeShift` keeps statuses, remarks, notes, flags (urgent/emailed/photo count). |
 | `js/i18n.js` | All UI strings, `UI.fr` / `UI.en`. Every key must exist in both. |
-| `js/app.js` | UI: setup → checklist → finish → sent. State in localStorage, photos in IndexedDB (`photos.js`). |
+| `js/app.js` | UI: setup → checklist → finish → saved; History (`#historique`), Aperçu (`#apercu`), shift detail (`openReview`). State in localStorage, problem photos in IndexedDB (`photos.js`). |
 | `js/config.js` | Gym name, rotation anchor (Mon 2026-10-19 = week 1), break rules, demo flag. |
-| `api/send-report.js` | Vercel function → Resend. Recipient only from env `SUPERVISOR_EMAIL`. |
+| `api/send-report.js` | Old Vercel → Resend option for full reports. Not used. |
 | `tests/*.test.js` | `npm test` (node:test, no deps). |
 
 ## Rules from the manual (never break)
@@ -35,11 +37,13 @@ to the supervisor. Plain static site + one serverless function. No build step.
 ## Product decisions from the owner
 
 - **Seamless for workers**: never show rule talk (custom hours, CNESST, deficits) to the cleaner. Leftover blocks appear as "Si tu as du temps". Fixed times outside the shift disappear from the worker view; the supervisor report keeps them.
-- **Supervisors**: a fixed picker (Daniel, Mathieu) from `CONFIG.supervisors`; each may get an `email` later. During testing every report goes to `CONFIG.reportTo` (test address). Report language remembered per supervisor.
-- **Languages**: UI FR/EN per phone; report in the supervisor's language; employee-typed text never translated.
+- **Supervisors**: a fixed picker (Daniel, Mathieu) from `CONFIG.supervisors`; each may get an `email` later. During testing every urgent email goes to `CONFIG.reportTo` (test address, never Daniel's real one). Email language remembered per supervisor (Menu: "Courriels pour {sup}").
+- **Languages**: UI FR/EN per phone; urgent email in the supervisor's language; history detail in the viewer's language; employee-typed text never translated.
 - **Voice**: Quebec French, *tu*, short imperatives, local terms (balayeuse, vidanges, guenilles, moppe, brassée, poste de télé).
-- **Supervisor side**: email (FormSubmit, free) = summary + "Voir le rapport" link; the report is compressed in the hash (`#r=…`) and opens a glance view. The old per-phone "Espace superviseur" was removed by the owner.
-- **Aperçu du gym** (`#apercu`), public to the whole team: a week strip (Mon–Sun, zone letters, report dots, week arrows, swipe the panel to change day) and three tabs: **Le jour** (map + morning/evening cards with that day's special tasks and statuses, tap a task for its steps read-only), **Rapports** (the folder: week stats + one card per shift; full report if this phone has its code, else a summary built from the board), **Trucs** (tips per task = block tips + matching `TECHNIQUES` by area/key, plus Les bases). Last tab remembered in `prefs.apTab`. The sending phone keeps the full report code locally (6 weeks); opening an email link adds it to that phone's folder (`keepReport`). Remarks/notes never go to the shared board. Shared live through `/api/board` (Netlify function + Blobs) when hosted on Netlify; on GitHub Pages it silently degrades to "plan du jour" + this phone's shifts. Owner refused Google Sheets / external databases. Everything must stay free.
+- **No end-of-shift email (owner: "too complicated, too long")**. "Fin du quart" → "Enregistrer mon quart" → the shift goes into the History. Missed tasks are NOT carried over to the next worker ("accept the loss").
+- **Problems ("Signaler")**: category, where, description; **Urgent** (default for Équipement brisé / Danger) = short FormSubmit email right away (`_template: table`, subject `⚑ {cat} · {where} ({name})`, rows Problème / Où / Description / Signalé par, photos attached; photo field only shows when urgent); **Pas urgent** = noted in the shift only. Failed sends show "Réessayer" on the flag. The task sheet has "Signaler un problème ici" (prefills Où). Tasks no longer take photos. Demo mode never emails.
+- **History** (`#historique`, home button "Historique", public to whoever has the site): only logged shifts, no empty days, no "missed". Default **Récents** = latest first, grouped by day (Aujourd'hui / Hier / date), card = ring %, name, shift + hours, "✓ 14/14 tâches faites" or tags (problèmes · urgent, pas faites, non cochées, Remarques). Green = all done, nothing flagged; amber = something to look at; red = urgent or not done. "7 derniers jours" glance (quarts, x/y tout fait, problèmes). Secondary **Par semaine** (week arrows, only days with shifts). Tap → `openReview(summaryReport(s), { from: 'history' })`. Goal: Daniel opens it and sees at a glance that everything was validated.
+- **Aperçu du gym** (`#apercu`), public to the whole team: a week strip (Mon–Sun, zone letters, status dots, week arrows, swipe the panel to change day) and three tabs: **Le jour** (map + morning/evening cards with who did the shift and that day's special tasks and statuses), **Protocole**, **Trucs** (tips per task = block tips + matching `TECHNIQUES` by area/key, plus Les bases). The Rapports tab was replaced by the History. Shared live through `/api/board` (Netlify function + Blobs, CORS open so GitHub Pages can point `boardEndpoint` at the Netlify URL); on GitHub Pages without that, each phone only sees its own shifts. Owner refused Google Sheets / external databases. Everything must stay free. Owner asked about Google sign-in: possible later only with an identity layer in front (e.g. Cloudflare Access); for now the site stays public.
 - **Identity**: pool + gym floor world. Chlorine-white canvas, deep teal, aqua; coral/sun in small doses. Barlow Condensed (self-hosted, `fonts/`) for titles/times, system font for text. Signature: "le couloir" (timeline as a swim lane with lane ropes and a swimmer = now). Living background = slow pool-light blobs. ONE centered object per task in `js/illustrations.js` (96×96, same stroke, two neutrals + one aqua detail + soft ground shadow, theme-aware `--il-*` vars; owner rejected busy multi-object scenes) plus real diagrams (zone map, TV wall). Official logo (from the owner) in `icons/` (transparent PNG, light + dark versions, symbol-only `mark-*`), set in `CONFIG.logo`; never redraw or alter it. UI is monochrome charcoal (the logo's ink) with ONE accent (aqua `--accent`) reserved for live/current/tips. Background = faint pool-tile grid + one slow light. No emoji as UI icons (drawn SVG `ICON` set). Owner's direction: "premium tech feel, anti AI slop".
 - **Ergonomics**: swipe right to check (tap still works), check button on the right, toasts above the bottom bar, sheet = bottom sheet on phone / centered dialog ≥900px. Motion is short and purposeful; `prefers-reduced-motion` kills all of it.
 - **Floor plan (owner's sketch, confirmed)**: data in `FLOOR` (`js/manual.js`), drawing in `zoneMap()` (`js/illustrations.js`, 360×300). C = top-left = upper body. B = top-right = lower body: squat/leg machines sit in the LEFT CORNER OF THE RIGHT SIDE (toward the center), plus benches. A = bottom = cardio: a block of treadmills + StairMasters, 2 rowers, 2 more cardio machines, a few cardio machines in the box next to room 4, and the stretching area. Rooms: 1 gym door, 2 sink, 3 women's locker room, 4 spin studio, 5 men's locker room. One box in the upper-right of A on the sketch is still unidentified (drawn as plain equipment, no label).
@@ -57,13 +61,13 @@ to the supervisor. Plain static site + one serverless function. No build step.
 - **Dark mode**: near-black (`--bg #050708`), hairline borders, aqua glow on the primary button (`--cta-shadow`), inset top highlight on cards (`--edge`).
 
 - **Naming rule (owner)**: never "passage 1/2", "1re/2e tournée", "pass", "round" in task titles; one task = one clear name saying what you do (rags: "Guenilles : sécheuse et lavage", "… ramasser et redistribuer", "… plier et distribuer", "… ramasser et laver", "… finir et préparer demain"). Q1 last task is "Avant de partir" (so it never clashes with the "Fin du quart" button). A test enforces unique, round-free titles.
-- **Ergonomics review (simulated staff + supervisors + designer)**: labeled top buttons ("Aperçu", "Menu"), no icon-only actions; Now card "C'est fait", bottom bar "Signaler" / "Fin du quart"; no chip strip or Heure/Zone toggle on the checklist (list order lives in the Menu); toast "Annuler" after every check; task sheets have an X and a fixed footer ("Pas pu faire" / "C'est fait"); setup hides the hours behind "Autres heures" unless custom, shows the date as text with "Changer", and no longer asks the report language (per supervisor: `CONFIG.supervisors[].lang` or the Menu). Menu: language, "Texte plus grand" (html.large zoom 1.15; also the Aa button on setup), list order, report language for the supervisor, Protocole, edit hours, erase. Aperçu tabs: Le jour · Protocole · Rapports · Trucs; Protocole = both reference shifts for the selected day + rotation rules + priorities. Zone B is periwinkle (was coral, too close to "not done" red); "Non coché" on the map is neutral dashed (was amber, too close to zone A).
+- **Ergonomics review (simulated staff + supervisors + designer)**: labeled top buttons ("Aperçu", "Menu"), no icon-only actions; Now card "C'est fait", bottom bar "Signaler" / "Fin du quart"; no chip strip or Heure/Zone toggle on the checklist (list order lives in the Menu); toast "Annuler" after every check; task sheets have an X and a fixed footer ("Pas pu faire" / "C'est fait"); setup hides the hours behind "Autres heures" unless custom, shows the date as text with "Changer", and no longer asks the report language (per supervisor: `CONFIG.supervisors[].lang` or the Menu). Menu: language, "Texte plus grand" (html.large zoom 1.15; also the Aa button on setup), list order, email language for the supervisor, Protocole, edit hours, erase. Aperçu tabs: Le jour · Protocole · Trucs; Protocole = both reference shifts for the selected day + rotation rules + priorities. Zone B is periwinkle (was coral, too close to "not done" red); "Non coché" on the map is neutral dashed (was amber, too close to zone A).
 
 ## Workflow
 
 1. Edit; keep `fr` and `en` in sync (test "Toutes les tâches ont des étapes dans les deux langues" catches gaps).
 2. `npm test`.
-3. Visual check: `DEMO=1 PORT=3200 node dev-server.js` (simulated email + in-memory board), then Playwright with iPhone 14 at `/opt/node-tools/node_modules/playwright/index.mjs`; use `page.clock.setFixedTime` to land inside a shift so the "Now" card shows.
+3. Visual check: `PORT=3200 node dev-server.js` (in-memory board; mock `https://formsubmit.co/**` with `page.route`), then Playwright with iPhone 14 at `/opt/node-tools/node_modules/playwright/index.mjs`; use `page.clock.setFixedTime` to land inside a shift so the "Now" card shows.
 4. Demo artifact: copy `index.html` body (strip doctype/html/head/body, charset, viewport, manifest), `styles.css`, `js/*.js` to a scratch folder; in the copy set `demo: true` and `gymName: ''` (the public demo stays unbranded); publish with the Artifact tool, `files` mapping each js file.
 
 ## Gotchas

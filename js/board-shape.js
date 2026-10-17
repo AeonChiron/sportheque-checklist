@@ -1,6 +1,7 @@
-// Forme d'un quart envoyé au tableau partagé (Aperçu). Fonctions pures,
+// Forme d'un quart enregistré dans l'historique partagé. Fonctions pures,
 // partagées par le navigateur et la fonction serveur : on ne garde que les
-// champs attendus, avec des longueurs bornées.
+// champs attendus, avec des longueurs bornées. Pas de photos ici (elles
+// partent par courriel avec les problèmes urgents).
 
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const count = (v) => (Number.isInteger(v) && v >= 0 && v <= 99 ? v : null);
@@ -20,6 +21,7 @@ export function sanitizeShift(raw) {
     start: str(raw.start, 5),
     end: str(raw.end, 5),
     submittedAt: str(raw.submittedAt, 30),
+    notes: str(raw.notes, 1000),
     done: count(raw.done),
     total: count(raw.total),
     items: (Array.isArray(raw.items) ? raw.items : []).slice(0, 40).map((i) => ({
@@ -27,12 +29,16 @@ export function sanitizeShift(raw) {
       status: STATUSES.has(i?.status) ? i.status : 'unchecked',
       doneAt: str(i?.doneAt, 30),
       reason: str(i?.reason, 20),
+      remark: str(i?.remark, 300),
     })).filter((i) => i.id),
     flags: (Array.isArray(raw.flags) ? raw.flags : []).slice(0, 20).map((f) => ({
       category: str(f?.category, 20),
       location: str(f?.location, 80),
       text: str(f?.text, 400),
       at: str(f?.at, 30),
+      urgent: f?.urgent === true,
+      emailed: f?.emailed === true,
+      photos: Number.isInteger(f?.photos) && f.photos >= 0 && f.photos <= 8 ? f.photos : 0,
     })).filter((f) => f.text),
   };
 }
@@ -61,4 +67,15 @@ export function combineDay(remote, local) {
 export function parseDates(param) {
   const list = String(param || '').split(',').filter((d) => DATE.test(d));
   return [...new Set(list)].slice(0, 14);
+}
+
+// Les derniers quarts enregistrés, du plus récent au plus ancien, tous jours
+// confondus (l'historique ne montre que ce qui a été enregistré : pas de
+// journées vides). byDate : { date: [quarts] } (tableau partagé, puis ce téléphone).
+export function recentShifts(remoteByDate, localByDate, n = 40) {
+  const dates = [...new Set([...Object.keys(remoteByDate || {}), ...Object.keys(localByDate || {})])].filter((d) => DATE.test(d));
+  const all = dates.flatMap((d) => combineDay(remoteByDate?.[d] || [], localByDate?.[d] || []));
+  return all
+    .sort((a, b) => (b.submittedAt || b.date).localeCompare(a.submittedAt || a.date) || b.date.localeCompare(a.date))
+    .slice(0, Math.max(1, Math.min(n, 200)));
 }

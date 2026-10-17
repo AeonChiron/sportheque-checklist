@@ -43,3 +43,17 @@ test('Le dossier d’un jour garde le rapport complet de ce téléphone', async 
   assert.deepEqual(parseDates('2026-10-19,bad,2026-10-20,2026-10-19'), ['2026-10-19', '2026-10-20']);
   assert.equal(sanitizeShift({ ...good, done: 12, total: 400 }).total, null);
 });
+
+test('L’historique garde remarques et notes, et liste les derniers quarts sans jours vides', async () => {
+  const { recentShifts } = await import('../js/board-shape.js');
+  const s = sanitizeShift({ ...good, notes: 'Tapis 3 bruyant', items: [{ id: 'q2-hebdo', status: 'notdone', reason: 'temps', remark: 'Pas eu le temps des murs' }], flags: [{ category: 'equipement', text: 'Courroie', urgent: true, emailed: true, photos: 2 }] });
+  assert.equal(s.notes, 'Tapis 3 bruyant');
+  assert.equal(s.items[0].remark, 'Pas eu le temps des murs');
+  assert.deepEqual([s.flags[0].urgent, s.flags[0].emailed, s.flags[0].photos], [true, true, 2]);
+  const a = sanitizeShift({ ...good, date: '2026-10-19', submittedAt: '2026-10-19T23:00:00Z' });
+  const b = sanitizeShift({ ...good, date: '2026-10-21', submittedAt: '2026-10-21T15:30:00Z', shift: 1, name: 'Oli' });
+  const c = sanitizeShift({ ...good, date: '2026-10-21', submittedAt: '2026-10-21T23:00:00Z' });
+  const list = recentShifts({ '2026-10-19': [a], '2026-10-21': [b] }, { '2026-10-21': [c] }, 10);
+  assert.deepEqual(list.map((x) => `${x.date} ${x.name}`), ['2026-10-21 Katiana', '2026-10-21 Oli', '2026-10-19 Katiana']);
+  assert.equal(recentShifts({ '2026-10-19': [a] }, {}, 0).length, 1);
+});
