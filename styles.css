@@ -994,3 +994,6 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .floor .eq-rail { stroke: var(--eq-dark); stroke-width: 1; stroke-dasharray: 2 2; }
 .floor .zm-label-group { pointer-events: none; }
 .floor .zC .zm-badge rect, .floor .zB .zm-badge rect, .floor .zA .zm-badge rect { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.25)); }
+
+.floor .eq-barre { stroke: #b88a4a; stroke-width: 1.2; stroke-linecap: round; }
+.floor .eq-roller { fill: #e07a3a; stroke: var(--eq-ink); stroke-width: .5; } .floor .eq-roller.b2 { fill: #2f2f2f; }

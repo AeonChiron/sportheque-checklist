@@ -25,12 +25,12 @@ export const ROOMS = {
 // Ouvertures dans le mur extérieur.
 export const DOORS = {
   entrance: { side: 'left', from: 146, to: 190 },
-  top: { side: 'top', from: 176, to: 188 },
 };
 
-// Cloison entre les poids (en haut) et le cardio (en bas), avec une ouverture
-// au centre; les télés du cardio y sont accrochées.
-export const PARTITIONS = [[26, 134, 160, 134], [200, 134, 352, 134]];
+// Cloison entre les poids (en haut) et le cardio (en bas). Le passage entre
+// les deux est un peu à droite du centre, du côté de B. Au-dessus du tapis
+// d'étirement, la cloison devient le mur de fenêtres en baie (voir GEAR).
+export const PARTITIONS = [[26, 134, 200, 134], [226, 134, 237, 134], [330, 134, 352, 134]];
 
 // Équipement : centre (x, y), taille (w, h) au sol, rotation en degrés.
 // rot 0 : l'avant (console) vers le bas; rot 180 : vers le haut (le cardio).
@@ -56,27 +56,32 @@ export const GEAR = [
   { t: 'machine', x: 86, y: 113, w: 14, h: 12 },
   { t: 'machine', x: 108, y: 113, w: 14, h: 12 },
   { t: 'plates', x: 134, y: 113, w: 14, h: 14 },
-  // B : bas du corps. Caoutchouc noir en L (en haut et à droite) : haltères
-  // contre le mur du haut, bancs de développé couché, cages et Smith à droite;
-  // au centre (bois) : bancs et machines à jambes variées; miroirs en haut et à droite.
+  // B : bas du corps (d'après la photo). Mur du haut en miroirs avec la
+  // longue rangée double d'haltères; juste dessous, l'allée de caoutchouc noir
+  // (bancs, développé couché); le caoutchouc continue sur le côté droit (cages
+  // et Smith); en bas, la plateforme de bois avec les machines à jambes et le
+  // support de barres fixes dans son coin.
   { t: 'mirror', x: 270, y: 11.5, w: 160, h: 3 },
   { t: 'mirror', x: 350.5, y: 69, w: 3, h: 114 },
-  { t: 'aisle', x: 270, y: 31, w: 160, h: 30 },
-  { t: 'aisle', x: 332, y: 86, w: 32, h: 80 },
-  { t: 'rack', x: 292, y: 21, w: 96, h: 6 },
-  { t: 'press', x: 208, y: 34, w: 22, h: 26, rot: 90 },
-  { t: 'press', x: 238, y: 34, w: 22, h: 26, rot: 90 },
-  { t: 'squat', x: 332, y: 57, w: 18, h: 18 },
-  { t: 'smith', x: 332, y: 81, w: 18, h: 22 },
-  { t: 'squat', x: 332, y: 105, w: 18, h: 18 },
-  ...[204, 226, 248, 270, 292].map((x) => ({ t: 'machine', x, y: 61, w: 16, h: 14 })),
-  ...[222, 252, 282].map((x) => ({ t: 'bench', x, y: 86, w: 22, h: 7 })),
-  { t: 'barbells', x: 304, y: 88, w: 12, h: 24 },
-  { t: 'legpress', x: 206, y: 110, w: 16, h: 28 },
-  { t: 'machine', x: 230, y: 112, w: 16, h: 22 },
-  { t: 'machine', x: 254, y: 114, w: 18, h: 14 },
-  { t: 'machine', x: 278, y: 114, w: 14, h: 14 },
-  { t: 'plates', x: 300, y: 114, w: 14, h: 14 },
+  { t: 'aisle', x: 270, y: 34, w: 160, h: 36 },
+  { t: 'aisle', x: 333, y: 89, w: 30, h: 74 },
+  { t: 'rack', x: 270, y: 22, w: 150, h: 10 },
+  { t: 'press', x: 210, y: 41, w: 22, h: 26, rot: 90 },
+  { t: 'press', x: 240, y: 41, w: 22, h: 26, rot: 90 },
+  ...[270, 290, 310].map((x) => ({ t: 'bench', x, y: 41, w: 7, h: 16 })),
+  { t: 'squat', x: 333, y: 62, w: 18, h: 18 },
+  { t: 'smith', x: 333, y: 86, w: 18, h: 22 },
+  { t: 'squat', x: 333, y: 110, w: 18, h: 18 },
+  { t: 'platform', x: 252, y: 90, w: 120, h: 72 },
+  ...[204, 226, 248, 270].map((x) => ({ t: 'machine', x, y: 66, w: 16, h: 14 })),
+  { t: 'barbells', x: 299, y: 70, w: 12, h: 24 },
+  ...[214, 240, 266].map((x) => ({ t: 'bench', x, y: 90, w: 20, h: 7 })),
+  { t: 'machine', x: 292, y: 94, w: 12, h: 12 },
+  { t: 'legpress', x: 206, y: 112, w: 16, h: 26 },
+  { t: 'machine', x: 230, y: 114, w: 16, h: 20 },
+  { t: 'machine', x: 254, y: 116, w: 18, h: 14 },
+  { t: 'machine', x: 278, y: 116, w: 14, h: 14 },
+  { t: 'plates', x: 300, y: 116, w: 14, h: 14 },
   // A, gauche : 3 rangées de cardio tournées vers le haut (vers la cloison et
   // ses 5 télés), 2 rameurs, miroir au mur de gauche.
   { t: 'mirror', x: 28.5, y: 212, w: 3, h: 88 },
@@ -86,17 +91,26 @@ export const GEAR = [
   ...[44, 62, 80, 98, 116, 134].map((x) => ({ t: 'stair', x, y: 248, w: 10, h: 13, rot: 180 })),
   { t: 'rower', x: 160, y: 216, w: 6, h: 40, rot: 180 },
   { t: 'rower', x: 174, y: 216, w: 6, h: 40, rot: 180 },
-  // A, droite : grand tapis d'étirement gris (5 télés au-dessus, sur la
-  // cloison), fenêtres, ballons; vélos et elliptiques dessous, tournés vers le
-  // tapis; grand miroir à droite.
-  { t: 'carpet', x: 269, y: 171, w: 138, h: 54 },
-  { t: 'window', x: 355, y: 172, w: 3, h: 72 },
-  ...[218, 246, 274, 302, 330].map((x) => ({ t: 'tv', x, y: 137, w: 14, h: 2.5 })),
-  { t: 'balls', x: 330, y: 151, w: 8, h: 8 },
-  ...[212, 234, 256, 278, 300, 322].map((x, i) => ({ t: i % 2 ? 'elliptical' : 'bike', x, y: 214, w: i % 2 ? 9 : 8, h: i % 2 ? 24 : 18, rot: 180 })),
-  ...[212, 234, 256, 278, 300, 322].map((x) => ({ t: 'bike', x, y: 244, w: 8, h: 18, rot: 180 })),
-  { t: 'mirror', x: 338, y: 236, w: 3, h: 48 },
+  // A, droite (d'après la photo) : mur de fenêtres en baie au-dessus du grand
+  // tapis gris, avec la barre, les 5 télés et l'horloge au-dessus; ballons et
+  // rouleaux le long des fenêtres, support de médecine-balls à droite; devant
+  // le tapis, la rangée de vélos et le rameur Concept2, puis les autres rangées.
+  { t: 'window', x: 233, y: 140, w: 14, h: 3, rot: -60 },
+  { t: 'window', x: 284, y: 135, w: 92, h: 3 },
+  { t: 'window', x: 335, y: 140, w: 14, h: 3, rot: 60 },
+  { t: 'barre', x: 284, y: 139, w: 92, h: 1.5 },
+  ...[248, 266, 290, 308, 326].map((x) => ({ t: 'tv', x, y: 136.5, w: 13, h: 2.5 })),
+  { t: 'clock', x: 279, y: 136.5, w: 4, h: 2 },
+  { t: 'carpet', x: 281, y: 170, w: 112, h: 52 },
+  { t: 'balls', x: 246, y: 150, w: 8, h: 8 },
+  { t: 'rollers', x: 268, y: 147, w: 8, h: 4 },
+  { t: 'balls', x: 312, y: 150, w: 8, h: 8 },
+  { t: 'ballrack', x: 333, y: 172, w: 6, h: 20 },
+  ...[236, 256, 276, 296, 316].map((x, i) => ({ t: i === 2 ? 'elliptical' : 'bike', x, y: 212, w: i === 2 ? 9 : 8, h: i === 2 ? 24 : 18, rot: 180 })),
+  { t: 'rower', x: 331, y: 216, w: 6, h: 36, rot: 180 },
+  ...[214, 236, 256, 276, 296, 316].map((x) => ({ t: 'bike', x, y: 244, w: 8, h: 18, rot: 180 })),
+  { t: 'mirror', x: 338, y: 232, w: 3, h: 56 },
 ];
 
-// Le trajet depuis l'entrée, par l'ouverture de la cloison, jusqu'à la porte du haut.
-export const WALK = 'M8 168H24V131H182V6';
+// Le trajet depuis l'entrée, par l'allée, jusqu'au passage vers le cardio.
+export const WALK = 'M8 168H24V131H213V150';

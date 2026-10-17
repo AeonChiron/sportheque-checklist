@@ -182,7 +182,18 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     legpress: (g, it) => { part(g, 0, 0, it.w, it.h, 3, C.metal); const sl = part(g, 0, -it.h / 4, it.w - 4, 10, 2, C.dark, { y: y0 + 8 }); sl.rotation.x = -0.6; part(g, 0, it.h / 2 - 6, it.w - 6, 6, 6, C.dark); part(g, -it.w / 2 + 1, -it.h / 2 + 3, 2, 2, 14, C.dark); part(g, it.w / 2 - 1, -it.h / 2 + 3, 2, 2, 14, C.dark); },
     pullup: (g, it) => { for (const dx of [-it.w / 2 + 1, it.w / 2 - 1]) part(g, dx, 0, 2, 2, 32, C.dark); part(g, 0, -it.h / 2 + 2, it.w + 4, 1.4, 1.4, C.metal, { y: y0 + 32 }); part(g, 0, 2, 6, 5, 12, C.metal); part(g, 0, 2, 7, 6, 1.5, C.dark, { y: y0 + 12 }); },
     aisle: (g, it) => part(g, 0, 0, it.w, it.h, 0.4, C.rubber, { y: 1.5, shadow: false }),
-    window: (g, it) => { part(g, 0, 0, it.w, it.h, 20, C.glass, { y: 2, extra: { metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.45, emissive: C.glass, emissiveIntensity: D ? 0.35 : 0.15 } }); for (let i = 1; i < Math.floor(it.h / 12); i++) part(g, 0, -it.h / 2 + i * 12, it.w + 0.6, 1, 20, C.dark, { y: 2 }); },
+    window: (g, it) => {
+      const along = it.w > it.h;
+      const len = along ? it.w : it.h;
+      part(g, 0, 0, it.w, it.h, 13, C.glass, { y: 2, extra: { metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.45, emissive: C.glass, emissiveIntensity: D ? 0.35 : 0.15 } });
+      part(g, 0, 0, it.w + 0.4, it.h + 0.4, 2, C.dark, { y: 0.5 });
+      part(g, 0, 0, it.w + 0.4, it.h + 0.4, 1, C.dark, { y: 15 });
+      for (let i = 1; i * 12 < len; i++) { const p = -len / 2 + i * 12; part(g, along ? p : 0, along ? 0 : p, along ? 1 : it.w + 0.6, along ? it.h + 0.6 : 1, 13, C.dark, { y: 2 }); }
+    },
+    barre: (g, it) => rod(g, 0, 0, 0.5, it.w, '#b88a4a', { y: 9, axis: 'x' }),
+    clock: (g) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.5, 20), mat('#f2f2f2')); c.rotation.x = Math.PI / 2; c.position.set(0, 21, 0); g.add(c); },
+    rollers: (g) => { part(g, -2.5, 0, 3, 3, 9, '#e07a3a'); part(g, 2.5, 0, 3, 3, 9, '#2f2f2f'); },
+    ballrack: (g, it) => { part(g, 0, 0, it.w, it.h, 2, C.dark); part(g, 0, it.h / 2 - 1, it.w, 1, 16, C.dark); [['#3b7fd0', 5], ['#e0b03a', 9.5], ['#c9533e', 14]].forEach(([col, yy], i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(2.4, 14, 10), mat(col)); b.position.set(0, y0 + yy, -it.h / 2 + 4 + i * 6); b.castShadow = true; g.add(b); }); },
     balls: (g) => { for (const [dx, dz, rr, col] of [[-2.5, -2, 2.6, '#3b7fd0'], [2.5, 1, 2.2, '#e0b03a'], [-1, 3.5, 1.8, '#c9533e']]) { const b = new THREE.Mesh(new THREE.SphereGeometry(rr, 16, 12), mat(col)); b.position.set(dx, y0 + rr, dz); b.castShadow = true; g.add(b); } },
     barbells: (g, it) => { part(g, -it.w / 2 + 1, 0, 2, it.h, 16, C.metal); part(g, it.w / 2 - 1, 0, 2, it.h, 16, C.metal); for (let i = 0; i < 4; i++) rod(g, 0, -it.h / 2 + 5 + i * 5.5, 0.7, it.w + 6, C.dark, { y: y0 + 4 + i * 3, axis: 'x' }); },
     tv: (g, it) => { part(g, 0, 0, it.w + 1, 2, 9, C.dark, { y: 16 }); part(g, 0, 1.1, it.w - 1, 0.3, 7, C.accent, { y: 17, shadow: false, extra: screen }); },
@@ -203,7 +214,7 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     else box(Math.min(x1, x2), y1 - t / 2, Math.abs(x2 - x1), t, h, C.wall, { extra: wallMat });
   };
   const { entrance: en, top: tp } = DOORS;
-  const outer = [[4, 4, tp.from, 4], [tp.to, 4, 356, 4], [356, 4, 356, 276], [4, 276, 356, 276], [4, 4, 4, en.from], [4, en.to, 4, 276]];
+  const outer = [...(tp ? [[4, 4, tp.from, 4], [tp.to, 4, 356, 4]] : [[4, 4, 356, 4]]), [356, 4, 356, 276], [4, 276, 356, 276], [4, 4, 4, en.from], [4, en.to, 4, 276]];
   for (const s of outer) seg(...s);
   if (D) {
     const em = { emissive: C.accent, emissiveIntensity: 1.4 };

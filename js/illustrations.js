@@ -293,7 +293,19 @@ const GEAR_SVG = {
   smith: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1.5, 'eq frame')}<path d="M${-g.w / 2 - 3} 0h${g.w + 6}" class="eq-bar"/><path d="M${-g.w / 2 + 3} ${-g.h / 2}v${g.h}M${g.w / 2 - 3} ${-g.h / 2}v${g.h}" class="eq-rail"/>`,
   legpress: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2.5, 'eq')}${r(-g.w / 2 + 2, -g.h / 2 + 3, g.w - 4, 8, 2, 'eq-dark')}${r(-g.w / 2 + 3, g.h / 2 - 9, g.w - 6, 6, 2, 'eq-seat')}`,
   pullup: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2, 'eq frame')}<path d="M${-g.w / 2 - 2} ${-g.h / 2 + 2}h${g.w + 4}" class="eq-bar"/>${r(-3, 0, 6, 5, 1.5, 'eq-seat')}`,
-  window: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-window')}${Array.from({ length: Math.floor(g.h / 12) }, (_, i) => `<path d="M${-g.w / 2} ${-g.h / 2 + 12 * (i + 1)}h${g.w}" class="eq-mullion"/>`).join('')}`,
+  window: (g) => {
+    const along = g.w > g.h;
+    const len = along ? g.w : g.h;
+    const lines = Array.from({ length: Math.max(0, Math.floor(len / 12) - (len % 12 ? 0 : 1)) }, (_, i) => {
+      const p = -len / 2 + 12 * (i + 1);
+      return along ? `<path d="M${p} ${-g.h / 2}v${g.h}" class="eq-mullion"/>` : `<path d="M${-g.w / 2} ${p}h${g.w}" class="eq-mullion"/>`;
+    }).join('');
+    return `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-window')}${lines}`;
+  },
+  barre: (g) => `<path d="M${-g.w / 2} 0h${g.w}" class="eq-barre"/>`,
+  clock: () => '<circle r="2" class="eq"/>',
+  rollers: () => `${r(-4, -2, 3, 4, 1.5, 'eq-roller')}${r(1, -2, 3, 4, 1.5, 'eq-roller b2')}`,
+  ballrack: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2, 'eq')}${[0, 1, 2].map((i) => `<circle cy="${-g.h / 2 + 4 + i * 6}" r="2.4" class="eq-ball ${['', 'b2', 'b3'][i]}"/>`).join('')}`,
   balls: () => `<circle cx="-2.5" cy="-2" r="2.6" class="eq-ball"/><circle cx="2.5" cy="1" r="2.2" class="eq-ball b2"/><circle cx="-1" cy="3.5" r="1.8" class="eq-ball b3"/>`,
   barbells: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2, 'eq frame')}${Array.from({ length: 4 }, (_, i) => `<path d="M${-g.w / 2 - 2} ${-g.h / 2 + 5 + i * 5.5}h${g.w + 4}" class="eq-bar"/>`).join('')}`,
 };
@@ -352,7 +364,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     return `M${m.x + m.w} ${d.from}A${d.to - d.from} ${d.to - d.from} 0 0 0 ${m.x + m.w - (d.to - d.from)} ${d.to}`;
   }).join('');
   const { entrance: en, top: tp } = DOORS;
-  const outer = `M4 ${en.from}V18A14 14 0 0 1 18 4H${tp.from}M${tp.to} 4H342A14 14 0 0 1 356 18V262A14 14 0 0 1 342 276H18A14 14 0 0 1 4 262V${en.to}`;
+  const outer = `M4 ${en.from}V18A14 14 0 0 1 18 4${tp ? `H${tp.from}M${tp.to} 4` : ''}H342A14 14 0 0 1 356 18V262A14 14 0 0 1 342 276H18A14 14 0 0 1 4 262V${en.to}`;
   const gear = GEAR.map((g) => `<g transform="translate(${g.x} ${g.y})${g.rot ? ` rotate(${g.rot})` : ''}">${GEAR_SVG[g.t](g).replace('{stretch}', labels.stretch || '')}</g>`).join('');
   return `<svg viewBox="0 0 360 280" class="illus map floor" aria-label="Plan du 2e étage">
     <defs>
@@ -369,7 +381,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     <path class="zm-wall" d="${outer}"/>
     <path class="zm-wall thin" d="${roomWalls}"/>
     <path class="zm-wall part" d="${PARTITIONS.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join('')}"/>
-    <path class="zm-swing" d="${swings}M4 ${en.from}h22M26 ${en.from}A22 22 0 0 1 4 ${en.from + 22}M${tp.from} 4v14M${tp.from} 18A14 14 0 0 0 ${tp.to} 4"/>
+    <path class="zm-swing" d="${swings}M4 ${en.from}h22M26 ${en.from}A22 22 0 0 1 4 ${en.from + 22}${tp ? `M${tp.from} 4v14M${tp.from} 18A14 14 0 0 0 ${tp.to} 4` : ''}"/>
     ${Object.entries(ZONES).map(([id, z]) => zoneLabel(id, z)).join('')}
     <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
       <rect x="0" y="${en.from - 6}" width="28" height="${en.to - en.from + 12}" fill="transparent"/>
