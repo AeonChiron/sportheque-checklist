@@ -45,11 +45,11 @@ export const FLOOR = {
        en: { name: 'Zone B · Lower body (right side)', what: ['Squat racks and leg machines (left corner of the zone, toward the center)', 'Benches', 'Dumbbell racks and plates'] } },
   C: { fr: { name: 'Zone C · Haut du corps (côté gauche)', what: ['Machines pour le haut du corps', 'Poulies', 'Bancs et supports'] },
        en: { name: 'Zone C · Upper body (left side)', what: ['Upper-body machines', 'Cable pulleys', 'Benches and racks'] } },
-  1: { fr: { name: '1 · Porte du gym', what: ['Entrée du 2e étage'] }, en: { name: '1 · Gym door', what: ['Entrance to the 2nd floor'] } },
-  2: { fr: { name: '2 · Évier', what: ['Évier et comptoir, près de la fontaine d’eau'] }, en: { name: '2 · Sink', what: ['Sink and counter, by the water fountain'] } },
-  3: { fr: { name: '3 · Vestiaire des femmes', what: ['Poubelles à vider à chaque tournée'] }, en: { name: '3 · Women’s locker room', what: ['Bins to empty on every round'] } },
-  4: { fr: { name: '4 · Studio de spinning', what: ['Vélos nettoyés le matin', 'Guenilles et vaporisateurs à vérifier'] }, en: { name: '4 · Spin studio', what: ['Bikes cleaned in the morning', 'Rags and spray bottles to check'] } },
-  5: { fr: { name: '5 · Vestiaire des hommes', what: ['Poubelles à vider à chaque tournée'] }, en: { name: '5 · Men’s locker room', what: ['Bins to empty on every round'] } },
+  1: { fr: { name: 'Entrée du gym', what: ['Entrée du 2e étage'] }, en: { name: 'Gym entrance', what: ['Entrance to the 2nd floor'] } },
+  2: { fr: { name: 'Évier', what: ['Évier et comptoir, près de la fontaine d’eau'] }, en: { name: 'Sink', what: ['Sink and counter, by the water fountain'] } },
+  3: { fr: { name: 'Vestiaire des femmes', what: ['Poubelles à vider à chaque tournée'] }, en: { name: 'Women’s locker room', what: ['Bins to empty on every round'] } },
+  4: { fr: { name: 'Studio de spinning', what: ['Vélos nettoyés le matin', 'Guenilles et vaporisateurs à vérifier'] }, en: { name: 'Spin studio', what: ['Bikes cleaned in the morning', 'Rags and spray bottles to check'] } },
+  5: { fr: { name: 'Vestiaire des hommes', what: ['Poubelles à vider à chaque tournée'] }, en: { name: 'Men’s locker room', what: ['Bins to empty on every round'] } },
 };
 
 export const TV_CHANNELS = [

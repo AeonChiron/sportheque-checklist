@@ -99,6 +99,23 @@ function celebrate() {
   setTimeout(() => { box.innerHTML = ''; box.classList.remove('go'); }, 1300);
 }
 
+// Les chiffres comptent jusqu'à leur valeur (rien si « réduire les animations »).
+function countUp(scope) {
+  if (reducedMotion()) return;
+  for (const el of scope.querySelectorAll('[data-count]')) {
+    const m = el.textContent.match(/^(\d+)(.*)$/);
+    if (!m || !+m[1]) continue;
+    const end = +m[1];
+    const t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / 700);
+      el.textContent = `${Math.round(end * (1 - (1 - p) ** 3))}${m[2]}`;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+}
+
 // ---------- Identité et textes fixes ----------
 // Icônes dessinées (pas d'emoji dans l'interface).
 const ICON = {
@@ -570,7 +587,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#she
 (() => {
   let y0 = null;
   const sheet = $('#sheet');
-  sheet.addEventListener('touchstart', (e) => { if ($('#sheetBody').scrollTop <= 0) y0 = e.touches[0].clientY; }, { passive: true });
+  sheet.addEventListener('touchstart', (e) => { if ($('#sheetBody').scrollTop <= 0 && !e.target.closest('.gym3d')) y0 = e.touches[0].clientY; }, { passive: true });
   sheet.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     const dy = e.touches[0].clientY - y0;
@@ -641,8 +658,8 @@ function mountPhotos(root, ids, onChange, pending = []) {
 
 // ---------- Plan du gym (interactif) ----------
 const MAP_LABELS = {
-  fr: { A: 'Cardio', B: 'Bas du corps', C: 'Haut du corps', 1: 'Porte du gym', 2: 'Évier', 3: 'Vestiaire femmes', 4: 'Studio de spinning', 5: 'Vestiaire hommes', r2: 'Évier', r3: 'Femmes', r4: 'Spin', r5: 'Hommes' },
-  en: { A: 'Cardio', B: 'Lower body', C: 'Upper body', 1: 'Gym door', 2: 'Sink', 3: 'Women’s locker room', 4: 'Spin studio', 5: 'Men’s locker room', r2: 'Sink', r3: 'Women', r4: 'Spin', r5: 'Men' },
+  fr: { A: 'Cardio', B: 'Bas du corps', C: 'Haut du corps', 1: 'Entrée', 2: 'Évier', 3: 'Vestiaire femmes', 4: 'Studio de spinning', 5: 'Vestiaire hommes', r1: 'Entrée', r2: 'Évier', r3: 'Femmes', r4: 'Spinning', r5: 'Hommes' },
+  en: { A: 'Cardio', B: 'Lower body', C: 'Upper body', 1: 'Entrance', 2: 'Sink', 3: 'Women’s locker room', 4: 'Spin studio', 5: 'Men’s locker room', r1: 'Entrance', r2: 'Sink', r3: 'Women', r4: 'Spin studio', r5: 'Men' },
 };
 
 // Ce qui se passe aujourd'hui dans une zone ou une pièce (selon le plan du jour).
@@ -670,24 +687,74 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
   tag(day.zones[2], t('evening'), states[2] || 'planned');
   if (day.surfaces === 'miroirs') tag(day.zones.third, t('mirrorsOf'), 'planned');
   let selected = highlight || mirrors || null;
-  const draw = () => {
+  let mode = prefs.mapMode === '3d' ? '3d' : 'plan';
+  let view3d = null;
+  const L = MAP_LABELS[lang()];
+  box.innerHTML = `<div class="map-bar"><div class="segmented tiny map-mode" role="tablist">
+      <button type="button" role="tab" data-mode="plan" aria-selected="${mode === 'plan'}">${t('mapPlan')}</button>
+      <button type="button" role="tab" data-mode="3d" aria-selected="${mode === '3d'}">3D</button></div>
+</div>
+    <div class="map-wrap"><div class="map-stage"></div><span class="map-tip" ${mode === '3d' ? '' : 'hidden'}>${esc(t('map3dHint'))}</span></div><div class="map-info" aria-live="polite"></div>`;
+  const stage = box.querySelector('.map-stage');
+  const infoBox = box.querySelector('.map-info');
+  const drawInfo = () => {
     const info = selected ? FLOOR[selected][lang()] : null;
     const today = selected ? todayIn(selected, day) : [];
-    box.innerHTML = `${zoneMap({ highlight, tags, selected, labels: MAP_LABELS[lang()] })}
-      <div class="map-info" aria-live="polite">${info
-        ? `<b>${esc(info.name)}</b><ul>${info.what.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>${today.length ? `<p class="map-today"><span>${esc(dayLabel)}</span>${today.map((x) => `<em>${esc(x)}</em>`).join('')}</p>` : ''}`
-        : `<p class="map-hint">${t('mapHint')}</p>`}</div>`;
+    infoBox.innerHTML = info
+      ? `<b>${esc(info.name)}</b><ul>${info.what.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>${today.length ? `<p class="map-today"><span>${esc(dayLabel)}</span>${today.map((x) => `<em>${esc(x)}</em>`).join('')}</p>` : ''}`
+      : `<p class="map-hint">${t('mapHint')}</p>`;
+    infoBox.classList.remove('swap');
+    void infoBox.offsetWidth;
+    infoBox.classList.add('swap');
   };
-  const pick = (el) => {
-    const area = el?.closest('[data-area]')?.dataset.area;
+  const drawStage = async () => {
+    if (mode === 'plan') {
+      view3d?.destroy();
+      view3d = null;
+      stage.className = 'map-stage';
+      stage.innerHTML = zoneMap({ highlight, tags, selected, labels: L });
+      return;
+    }
+    if (view3d) { view3d.setSelected(selected); return; }
+    stage.className = 'map-stage is-3d loading';
+    stage.innerHTML = '<div class="gym3d"></div>';
+    try {
+      const { mountGym3D } = await import('./gym3d.js');
+      if (mode !== '3d' || !stage.isConnected) return;
+      view3d = mountGym3D(stage.firstElementChild, { highlight, selected, tags, labels: L, onPick: (a) => pick(a) });
+      stage.classList.remove('loading');
+    } catch {
+      mode = 'plan';
+      toast(t('map3dFail'), 'bad');
+      drawStage();
+    }
+  };
+  const pick = (area) => {
     if (!area) return;
     selected = selected === area && !highlight ? null : area;
-    draw();
-    box.querySelector(`[data-area="${area}"]`)?.focus({ preventScroll: true });
+    if (mode === 'plan') {
+      stage.innerHTML = zoneMap({ highlight, tags, selected, labels: L });
+      stage.querySelector(`[data-area="${area}"]`)?.focus({ preventScroll: true });
+    } else view3d?.setSelected(selected);
+    drawInfo();
   };
-  box.addEventListener('click', (e) => pick(e.target));
-  box.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e.target); } });
-  draw();
+  box.addEventListener('click', (e) => {
+    const m = e.target.closest('[data-mode]');
+    if (m) {
+      if (m.dataset.mode === mode) return;
+      mode = m.dataset.mode;
+      prefs.mapMode = mode;
+      savePrefs();
+      for (const b of box.querySelectorAll('[data-mode]')) b.setAttribute('aria-selected', String(b === m));
+      box.querySelector('.map-tip').hidden = mode !== '3d';
+      drawStage();
+      return;
+    }
+    pick(e.target.closest('[data-area]')?.dataset.area);
+  });
+  box.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-area]')) { e.preventDefault(); pick(e.target.closest('[data-area]').dataset.area); } });
+  drawStage();
+  drawInfo();
 }
 
 // ---------- Détail d'une tâche ----------
@@ -889,9 +956,9 @@ function openFinish() {
 
   $('#finishSummary').innerHTML = `
     <div class="stat-grid">
-      <div class="stat ok"><b class="num">${done}</b><span>${t('statDone')}</span></div>
-      <div class="stat bad"><b class="num">${skipped}</b><span>${t('statNot')}</span></div>
-      <div class="stat warn"><b class="num">${state.flags.length}</b><span>${t('statFlags')}</span></div>
+      <div class="stat ok"><b class="num" data-count>${done}</b><span>${t('statDone')}</span></div>
+      <div class="stat bad"><b class="num" data-count>${skipped}</b><span>${t('statNot')}</span></div>
+      <div class="stat warn"><b class="num" data-count>${state.flags.length}</b><span>${t('statFlags')}</span></div>
     </div>
     ${nPhotos ? `<p class="photo-count">${t('photosAttached', nPhotos)}</p>` : ''}
     ${open.length ? `<div class="panel">
@@ -903,6 +970,7 @@ function openFinish() {
   $('#sendError').innerHTML = '';
   $('#sendBtn').textContent = t('sendTo', state.supervisor);
   $('#sendBtn').disabled = false;
+  if (current !== 'finish') countUp($('#finishSummary'));
   show('finish');
 }
 
@@ -1249,6 +1317,7 @@ function renderPanel({ animate = true, dir = 0 } = {}) {
     });
   }
   if (animate && !reducedMotion()) {
+    countUp(box);
     box.style.setProperty('--dir', dir);
     box.classList.remove('swap');
     void box.offsetWidth;
@@ -1349,9 +1418,9 @@ function reportsPanel() {
   };
   return `
     <div class="ap-stats">
-      <div><b class="num">${all.length}</b><span>${esc(t('statReports'))}</span></div>
-      <div><b class="num">${avg}%</b><span>${esc(t('statAvg'))}</span></div>
-      <div class="${nFlags ? 'bad' : ''}"><b class="num">${nFlags}</b><span>${esc(t('statFlags'))}</span></div>
+      <div><b class="num" data-count>${all.length}</b><span>${esc(t('statReports'))}</span></div>
+      <div><b class="num" data-count>${avg}%</b><span>${esc(t('statAvg'))}</span></div>
+      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags'))}</span></div>
     </div>
     <div class="folder">
       <div class="folder-tab">${esc(longDay(ap.day))}</div>
@@ -1515,7 +1584,7 @@ $('#apercuBody').addEventListener('click', (ev) => {
   let g = null;
   const body = $('#apercuBody');
   body.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse' || !e.target.closest('#apPanel') || e.target.closest('.floor')) return;
+    if (e.pointerType === 'mouse' || !e.target.closest('#apPanel') || e.target.closest('.floor, .gym3d')) return;
     g = { x: e.clientX, y: e.clientY, id: e.pointerId };
   });
   body.addEventListener('pointerup', (e) => {

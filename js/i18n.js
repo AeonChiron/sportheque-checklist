@@ -170,6 +170,9 @@ export const UI = {
     nTips: (n) => `${n} truc${n > 1 ? 's' : ''}`,
     seeSteps: 'Voir les étapes',
     seeFolder: 'Ouvrir le dossier des rapports',
+    mapPlan: 'Plan',
+    map3dHint: 'Glisse pour tourner, pince pour zoomer',
+    map3dFail: 'Vue 3D indisponible ici : retour au plan',
     reportBad: 'Ce lien de rapport est incomplet ou abîmé. Ouvre-le directement depuis le courriel.',
   },
   en: {
@@ -339,6 +342,9 @@ export const UI = {
     nTips: (n) => `${n} tip${n > 1 ? 's' : ''}`,
     seeSteps: 'See the steps',
     seeFolder: 'Open the reports folder',
+    mapPlan: 'Plan',
+    map3dHint: 'Drag to turn, pinch to zoom',
+    map3dFail: '3D view unavailable here: back to the plan',
     reportBad: 'This report link is incomplete or damaged. Open it straight from the email.',
   },
 };

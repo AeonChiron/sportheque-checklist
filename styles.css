@@ -55,12 +55,12 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0c1011; --surface: #141a1b; --sunk: #101516; --ink: #e9eeee; --muted: #9aa6a5; --faint: #5e6a69; --line: #242c2d;
-    --brand: #45c9c4; --brand-ink: #062322; --brand-soft: #1d2425; --accent: #45c9c4; --accent-soft: #123131; --grid: rgba(233, 238, 238, .04);
+    --bg: #050708; --surface: #0c1011; --sunk: #080b0c; --ink: #eef4f4; --muted: #8d9a9a; --faint: #4c5859; --line: #182022;
+    --brand: #4fd8d2; --brand-ink: #03201f; --brand-soft: #121a1b; --accent: #4fd8d2; --accent-soft: #0b2526; --grid: rgba(79, 216, 210, .045);
     --aqua: #3fc6c2; --coral: #ff8a6b; --sun: #ffd166;
     --ok: #5cc28e; --ok-soft: #12301f; --warn: #e3b552; --warn-soft: #2e250e; --bad: #f2867b; --bad-soft: #3a1a17; --break: #201d17;
     --toast: #e6f0f0; --toast-ink: #0a1416;
-    --env-a: rgba(69, 201, 196, .07);
+    --env-a: rgba(79, 216, 210, .10);
     --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
     --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
     --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #3d2620; --zB-strong: #c95e45; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
@@ -68,12 +68,12 @@
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0c1011; --surface: #141a1b; --sunk: #101516; --ink: #e9eeee; --muted: #9aa6a5; --faint: #5e6a69; --line: #242c2d;
-  --brand: #45c9c4; --brand-ink: #062322; --brand-soft: #1d2425; --accent: #45c9c4; --accent-soft: #123131; --grid: rgba(233, 238, 238, .04);
+  --bg: #050708; --surface: #0c1011; --sunk: #080b0c; --ink: #eef4f4; --muted: #8d9a9a; --faint: #4c5859; --line: #182022;
+  --brand: #4fd8d2; --brand-ink: #03201f; --brand-soft: #121a1b; --accent: #4fd8d2; --accent-soft: #0b2526; --grid: rgba(79, 216, 210, .045);
   --aqua: #3fc6c2; --coral: #ff8a6b; --sun: #ffd166;
   --ok: #5cc28e; --ok-soft: #12301f; --warn: #e3b552; --warn-soft: #2e250e; --bad: #f2867b; --bad-soft: #3a1a17; --break: #201d17;
   --toast: #e6f0f0; --toast-ink: #0a1416;
-  --env-a: rgba(69, 201, 196, .07);
+  --env-a: rgba(79, 216, 210, .10);
   --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
   --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
   --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #3d2620; --zB-strong: #c95e45; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
@@ -631,7 +631,8 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 .floor .zm-swing { fill: none; stroke: var(--il-ink); stroke-width: 1.1; stroke-dasharray: 2.5 2.5; opacity: .55; }
 .floor .zm-num-bg { fill: var(--il-ink); }
 .floor .zm-num { font-size: 10.5px; font-weight: 700; fill: var(--il-fill); pointer-events: none; }
-.floor .zm-room-label { font-size: 11px; font-weight: 600; fill: var(--ink); pointer-events: none; }
+.floor .zm-room-label { font-size: 12px; font-weight: 700; letter-spacing: .02em; fill: var(--ink); pointer-events: none; }
+.floor .zm-door-label { font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; fill: var(--accent); pointer-events: none; }
 .floor .door.sel .zm-num-bg, .floor .room.sel .zm-num-bg { fill: var(--accent); }
 .map-info { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; animation: rise .25s var(--ease) both; }
 .map-info b { font-family: var(--display); font-size: 18px; font-weight: 700; }
@@ -897,3 +898,80 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .left-label { margin: 10px 0 6px; color: var(--warn); }
 .left-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .left-chips span { font-size: 13px; background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 3px 9px; }
+
+
+/* =====================================================================
+   Mode sombre « tech » : noir profond, filets fins, lueur aqua mesurée.
+   ===================================================================== */
+:root { --edge: none; --cta-shadow: 0 1px 0 rgba(255, 255, 255, .08) inset, 0 8px 20px -12px rgba(0, 0, 0, .55); --card-shadow: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --edge: inset 0 1px 0 rgba(255, 255, 255, .045);
+    --cta-shadow: 0 0 0 1px rgba(79, 216, 210, .35), 0 10px 34px -10px rgba(79, 216, 210, .55), inset 0 1px 0 rgba(255, 255, 255, .35);
+    --card-shadow: 0 18px 40px -28px rgba(0, 0, 0, .9);
+  }
+}
+:root[data-theme="dark"] {
+  --edge: inset 0 1px 0 rgba(255, 255, 255, .045);
+  --cta-shadow: 0 0 0 1px rgba(79, 216, 210, .35), 0 10px 34px -10px rgba(79, 216, 210, .55), inset 0 1px 0 rgba(255, 255, 255, .35);
+  --card-shadow: 0 18px 40px -28px rgba(0, 0, 0, .9);
+}
+.btn.primary { box-shadow: var(--cta-shadow); }
+.panel, .task-inner, .now-card, .ap-stats > div, .stat, .tipcard, .folder-body, .folder-tab, .wk-day, .rp-card, .preview, .map-info { box-shadow: var(--edge), var(--card-shadow); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .env::after { content: ""; position: absolute; right: -25vmax; bottom: -35vmax; width: 80vmax; height: 80vmax; border-radius: 50%; background: radial-gradient(closest-side, rgba(79, 216, 210, .07), transparent); animation: drift2 70s ease-in-out infinite alternate; }
+  :root:not([data-theme="light"]) .topbar, :root:not([data-theme="light"]) .bottombar { background: color-mix(in srgb, var(--bg) 72%, transparent); border-color: rgba(255, 255, 255, .06); }
+  :root:not([data-theme="light"]) .hero h1 { background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 50%, var(--ink) 70%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: title-sheen 9s ease-in-out infinite; }
+  :root:not([data-theme="light"]) .wk-day.today .wk-num, :root:not([data-theme="light"]) .live { text-shadow: 0 0 14px rgba(79, 216, 210, .55); }
+}
+@keyframes drift2 { to { transform: translate3d(-20vmax, -15vmax, 0); } }
+@keyframes title-sheen { 0%, 60% { background-position: 100% 0; } 100% { background-position: -50% 0; } }
+
+/* ---------- Plus de mouvement, toujours utile ---------- */
+/* Entrée d'écran : les blocs arrivent en cascade. */
+.screen.enter > * { animation: rise .5s var(--ease) both; }
+.screen.enter > :nth-child(2) { animation-delay: 40ms; }
+.screen.enter > :nth-child(3) { animation-delay: 80ms; }
+.screen.enter > :nth-child(4) { animation-delay: 120ms; }
+.screen.enter > :nth-child(5) { animation-delay: 160ms; }
+.screen.enter > :nth-child(n+6) { animation-delay: 200ms; }
+.screen.enter > .bottombar, .screen.enter > .topbar { animation: none; }
+#apPanel.swap > * { animation: rise .45s var(--ease) both; }
+#apPanel.swap > :nth-child(2) { animation-delay: 60ms; }
+#apPanel.swap > :nth-child(n+3) { animation-delay: 110ms; }
+/* Le bouton principal : un reflet passe de temps en temps. */
+.btn.primary.big { position: relative; overflow: hidden; }
+.btn.primary.big::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, .28) 50%, transparent 65%); background-size: 250% 100%; background-position: 130% 0; animation: cta-sheen 6s ease-in-out 1.2s infinite; pointer-events: none; }
+@keyframes cta-sheen { 0%, 70% { background-position: 130% 0; } 100% { background-position: -40% 0; } }
+/* Ordinateur : les cartes se soulèvent sous la souris. */
+@media (hover: hover) and (pointer: fine) {
+  .task-inner, .rp-card, .tipcard, .wk-day, .ap-task, .btn { transition: transform .25s var(--ease), box-shadow .25s, background .2s, border-color .2s; }
+  .rp-card:hover, .tipcard:hover, .wk-day:not([aria-selected="true"]):hover { transform: translateY(-2px); }
+  .btn.primary:hover { transform: translateY(-1px); }
+}
+/* Les chiffres comptent jusqu'à leur valeur (voir countUp). */
+.counting { font-variant-numeric: tabular-nums; }
+/* Le nageur du couloir laisse une traînée. */
+.swimmer::before { content: ""; position: absolute; right: 50%; top: 50%; width: 26px; height: 3px; margin-top: -1.5px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--accent)); opacity: .6; }
+/* La carte « En cours » respire légèrement. */
+.now-card { position: relative; overflow: hidden; }
+.now-card:not(.quiet)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%); animation: now-glow 4s ease-in-out infinite; }
+@keyframes now-glow { 50% { opacity: .35; } }
+.now-bar::before { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #fff)); background-size: 200% 100%; animation: bar-flow 2.4s linear infinite; }
+@keyframes bar-flow { to { background-position: -200% 0; } }
+
+/* ---------- Plan / 3D ---------- */
+.map-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.map-mode { width: 150px; }
+.map-wrap { position: relative; }
+.map-tip { position: absolute; left: 10px; bottom: 10px; font-size: 12px; font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--surface) 80%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; pointer-events: none; animation: tip-fade 5s ease 1s both; }
+@keyframes tip-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.map-stage { position: relative; border-radius: 14px; overflow: hidden; }
+.map-stage .floor { animation: stage-in .45s var(--ease) both; }
+@keyframes stage-in { from { opacity: 0; transform: scale(.97); } }
+.map-stage.is-3d { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 10%, var(--sunk)), var(--sunk) 70%); border: 1px solid var(--line); }
+.gym3d { width: 100%; min-height: 240px; cursor: grab; }
+.gym3d:active { cursor: grabbing; }
+.gym3d canvas { display: block; animation: stage-in .6s var(--ease) both; }
+.map-stage.loading::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 12%, transparent) 50%, transparent 70%); background-size: 300% 100%; animation: shimmer 1.2s linear infinite; }
+.map-info.swap { animation: rise .3s var(--ease) both; }

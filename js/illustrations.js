@@ -302,9 +302,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     </g>`;
   const room = (id, x, w, gap) => `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
       <rect x="${x}" y="228" width="${w}" height="48" class="zm-room"/>
-      <circle cx="${x + w / 2 - 16}" cy="252" r="8" class="zm-num-bg"/>
-      <text x="${x + w / 2 - 16}" y="255.5" text-anchor="middle" class="zm-num">${id}</text>
-      <text x="${x + w / 2 - 5}" y="256" class="zm-room-label">${labels[`r${id}`] || ''}</text>
+      <text x="${x + w / 2}" y="256" text-anchor="middle" class="zm-room-label">${labels[`r${id}`] || ''}</text>
       ${gap ? `<path d="M${gap} 228A12 12 0 0 0 ${gap + 12} 240" class="zm-swing"/>` : ''}
     </g>`;
   const id = (k) => `fl-${k}`;
@@ -343,8 +341,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
       <rect x="0" y="140" width="28" height="56" fill="transparent"/>
       <path class="zm-swing" d="M4 146h22M26 146A22 22 0 0 1 4 168"/>
-      <circle cx="15" cy="180" r="8" class="zm-num-bg"/>
-      <text x="15" y="183.5" text-anchor="middle" class="zm-num">1</text>
+      <text x="13" y="186" text-anchor="middle" class="zm-door-label" transform="rotate(-90 13 186)">${labels.r1 || ''}</text>
     </g>
   </svg>`;
 }
