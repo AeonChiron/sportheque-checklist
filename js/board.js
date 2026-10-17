@@ -30,7 +30,8 @@ function keepLocal(shift, code) {
 }
 
 const post = (shift) => request('board', { method: 'POST', body: shift });
-const absent = (err) => err?.status === 404 || err?.status === 405 || err?.status === 400;
+// 404/405 : pas de serveur ici; 400/409 : refusé (invalide, ou modifié après minuit) — rien à renvoyer.
+const absent = (err) => [400, 404, 405, 409].includes(err?.status);
 
 // Renvoie les quarts restés en file (appelé au démarrage et au retour du réseau).
 export async function flushQueue() {

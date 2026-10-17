@@ -28,6 +28,8 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const SESSION_DAYS = 365;
 const MAX_PHOTO_BYTES = 900_000;
 
+const localDay = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+const PHOTO_DAYS = 90;
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 const hashPassword = (password, salt) => scryptSync(password, salt, 32).toString('hex');
 const sameText = (a, b) => {
@@ -178,8 +180,30 @@ export function createApi({ getStore, env }) {
     const shift = sanitizeShift(await body(req));
     if (!shift) return json({ error: 'invalid' }, 400);
     const list = (await store.get(shift.date, { type: 'json' })) || [];
-    await store.setJSON(shift.date, mergeShift(list, shift));
+    // Un quart déjà enregistré se modifie seulement le jour même (heure du Québec).
+    const old = list.find((x) => x.shift === shift.shift && x.name.toLowerCase() === shift.name.toLowerCase());
+    // (jour vu par le serveur, pas l'horloge du téléphone)
+    const today = localDay(new Date());
+    const oldDay = old && (old.savedOn || (old.submittedAt && localDay(old.submittedAt)));
+    if (oldDay && oldDay !== today) return json({ error: 'locked' }, 409);
+    await store.setJSON(shift.date, mergeShift(list, { ...shift, savedOn: today }));
     return json({ ok: true });
+  }
+
+  // Photos gardées 90 jours (le signalement, lui, reste). Une fois par jour au plus.
+  async function cleanPhotos() {
+    const meta = getStore('meta');
+    const today = localDay(new Date());
+    if ((await meta.get('photos-cleaned', { type: 'json' }))?.day === today) return;
+    await meta.setJSON('photos-cleaned', { day: today });
+    const limit = Date.now() - PHOTO_DAYS * 864e5;
+    const { blobs } = await photos().list();
+    const old = blobs.map((x) => x.key).filter((k) => parseInt(k.slice(0, 9), 36) < limit);
+    for (const key of old) await photos().delete(key);
+    for (const id of new Set(old.map((k) => k.split('-')[0]))) {
+      const p = await problems().get(id, { type: 'json' });
+      if (p?.photos) await problems().setJSON(id, { ...p, photos: 0, photosExpired: p.photos });
+    }
   }
 
   // ---------- Signalements ----------
@@ -204,6 +228,7 @@ export function createApi({ getStore, env }) {
         .filter((buf) => buf && buf.length > 3 && buf.length <= MAX_PHOTO_BYTES && buf[0] === 0xff && buf[1] === 0xd8);
       const id = problemId();
       await Promise.all(files.map((buf, i) => photos().set(`${id}-${i}`, buf)));
+      await cleanPhotos();
       const p = { ...clean, id, by: me.name, byEmail: me.email, photos: files.length, status: 'open', resolvedBy: '', resolvedAt: '' };
       await problems().setJSON(id, p);
       return json({ id });

@@ -180,20 +180,9 @@ for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('cl
 // ---------- 1. Début de quart ----------
 let manualShift = null;
 let editing = false;
-let supervisor = '';
-let reportLang = 'fr';
 
-// La langue du rapport suit le superviseur (réglage de l'équipe, ou le choix
-// fait dans le Menu de ce téléphone) : l'employé n'a pas à y penser.
-const supLang = (name) => prefs.supervisorLang[name] || CONFIG.supervisors.find((s) => s.name === name)?.lang || 'fr';
-function setSupervisor(name) {
-  supervisor = name;
-  for (const b of document.querySelectorAll('[data-sup]')) b.setAttribute('aria-checked', String(b.dataset.sup === name));
-  setReportLang(supLang(name));
-}
-function setReportLang(l) {
-  reportLang = l === 'en' ? 'en' : 'fr';
-}
+// La langue des courriels suit celui qui les reçoit (réglage de l'équipe).
+const supLang = (name) => CONFIG.supervisors.find((s) => s.name === name)?.lang || 'fr';
 
 // Date du quart : « Aujourd'hui » en clair; le champ date n'apparaît que si on veut la changer.
 function paintDate() {
@@ -275,11 +264,7 @@ function setupScreen() {
   showHours(false);
   renderPresets();
   paintDate();
-  $('#supervisorPick').innerHTML = CONFIG.supervisors
-    .map((s) => `<button type="button" role="radio" data-sup="${esc(s.name)}">${esc(s.name)}</button>`).join('');
-  for (const b of document.querySelectorAll('[data-sup]')) b.addEventListener('click', () => setSupervisor(b.dataset.sup));
-  const known = CONFIG.supervisors.some((s) => s.name === prefs.supervisor);
-  setSupervisor(known ? prefs.supervisor : CONFIG.supervisors[0]?.name || '');
+  paintEditToday();
   manualShift = null;
   editing = false;
   paintStatic();
@@ -334,15 +319,12 @@ $('#setupForm').addEventListener('submit', (ev) => {
   if (!name) { $('#fName').focus(); return; }
   if (!$('#fStart').value || !$('#fEnd').value || !$('#fDate').value) return;
   prefs.name = name;
-  prefs.supervisor = supervisor;
-  if (supervisor) prefs.supervisorLang[supervisor] = reportLang;
   prefs.lastTimes = { ...prefs.lastTimes, [currentShift()]: { start: $('#fStart').value, end: $('#fEnd').value } };
   savePrefs();
   const keep = editing && state ? { tasks: state.tasks, flags: state.flags, notes: state.notes, view: state.view } : {};
   state = {
     name,
-    supervisor,
-    reportLang,
+    supervisor: '',
     date: $('#fDate').value,
     start: $('#fStart').value,
     end: $('#fEnd').value,
@@ -920,7 +902,7 @@ async function refreshAlerts() {
 }
 
 // Hors quart (bouton de l'accueil) : le signalement part seul, sans quart.
-const looseCtx = () => ({ name: session.user?.name || prefs.name, date: todayISO(), shift: null, reportLang: supLang(alertTo[0]?.name), loose: true });
+const looseCtx = () => ({ name: session.user?.name || prefs.name, date: todayISO(), shift: null, loose: true });
 const LOOSE = 'gym-loose-flags';
 const readLoose = () => read(LOOSE, []);
 
@@ -1047,7 +1029,7 @@ const retryLoose = () => readLoose().forEach(({ fl, ctx }) => submitProblem(fl, 
 // qui dit à qui il serait allé.
 const problemLink = (id) => `${location.origin}${location.pathname}${id ? `#probleme=${id}` : ''}`;
 async function sendFlagEmail(fl, s) {
-  const L = s.reportLang === 'en' ? 'en' : 'fr';
+  const L = supLang(alertTo[0]?.name) === 'en' ? 'en' : 'fr';
   const T = UI[L];
   const cat = catName(fl.category, L);
   const when = new Date(fl.at).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' });
@@ -1079,7 +1061,6 @@ async function sendFlagEmail(fl, s) {
 const switchRow = (id, label, on) => `<div class="inline-choice"><span>${esc(label)}</span>
   <button type="button" class="switch" role="switch" id="${id}" aria-checked="${on}"><i></i></button></div>`;
 $('#menuBtn').addEventListener('click', () => {
-  const sup = state?.supervisor || '';
   openSheet(`
     <div class="sheet-head"><h3>${t('menu')}</h3></div>
     <div class="menu-group">
@@ -1096,12 +1077,6 @@ $('#menuBtn').addEventListener('click', () => {
           <button type="button" role="radio" data-mview="zone" aria-checked="${state.view === 'zone'}">${t('byZone')}</button>
         </div>
       </div>
-      ${sup ? `<div class="inline-choice"><span>${esc(t('emailsFor', sup))}</span>
-        <div class="segmented tiny" role="radiogroup">
-          <button type="button" role="radio" data-mrl="fr" aria-checked="${(state.reportLang || 'fr') === 'fr'}">Français</button>
-          <button type="button" role="radio" data-mrl="en" aria-checked="${state.reportLang === 'en'}">English</button>
-        </div>
-      </div>` : ''}
     </div>
     <div class="menu-list">
       <button class="btn ghost menu-item" id="mProto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg>${t('protocolMenu')}</button>
@@ -1121,14 +1096,6 @@ $('#menuBtn').addEventListener('click', () => {
         renderChecklist();
       };
     }
-    for (const b of root.querySelectorAll('[data-mrl]')) {
-      b.onclick = () => {
-        state.reportLang = b.dataset.mrl;
-        prefs.supervisorLang[sup] = state.reportLang;
-        save(); savePrefs();
-        for (const o of root.querySelectorAll('[data-mrl]')) o.setAttribute('aria-checked', String(o === b));
-      };
-    }
     root.querySelector('#mProto').onclick = () => { closeSheet(); goProtocol(); };
     root.querySelector('#mEdit').onclick = () => {
       closeSheet();
@@ -1138,8 +1105,6 @@ $('#menuBtn').addEventListener('click', () => {
       $('#fStart').value = state.start;
       $('#fEnd').value = state.end;
       showHours(true);
-      if (state.supervisor) setSupervisor(state.supervisor);
-      setReportLang(state.reportLang);
       manualShift = state.shift;
       editing = true; // les tâches cochées sont gardées (mêmes identifiants)
       updatePreview();
@@ -1232,18 +1197,47 @@ async function saveShift() {
   btn.textContent = t('saving');
   const { name } = state;
   const where = await publishShift(boardSummary());
+  write(LAST_SHIFT, { ...state, savedAt: new Date().toISOString() }); // pour le modifier jusqu'à minuit
   state = null;
   save();
   clearPhotos();
   hist.loaded = false; // l'historique se recharge avec ce quart
   hist.weekLoaded = '';
   $('#sentText').textContent = t(where === 'queued' ? 'savedQueued' : 'savedText', name);
+  $('#editShiftBtn').hidden = false;
   paintStatic();
   show('sent');
   celebrate();
 }
 
 $('#newShiftBtn').addEventListener('click', setupScreen);
+$('#editShiftBtn').addEventListener('click', reopenShift);
+
+// Le quart enregistré aujourd'hui sur ce téléphone se modifie jusqu'à minuit
+// (même quart, même personne : la nouvelle version remplace l'ancienne).
+const LAST_SHIFT = 'gym-last-shift';
+function editableShift() {
+  const last = read(LAST_SHIFT, null);
+  const mine = !session.user || last?.name === session.user.name;
+  return last && mine && last.savedAt && isoOf(new Date(last.savedAt)) === todayISO() ? last : null;
+}
+function paintEditToday() {
+  const last = editableShift();
+  const box = $('#editToday');
+  box.hidden = !last || Boolean(state);
+  if (last) box.querySelector('span').textContent = t('editToday', SHIFTS[last.shift][lang()].short.toLowerCase());
+}
+function reopenShift() {
+  const last = editableShift();
+  if (!last) { toast(t('editLocked'), 'bad'); setupScreen(); return; }
+  const { savedAt, ...rest } = last;
+  state = rest;
+  save();
+  window.history.replaceState(null, '', location.pathname);
+  openChecklist();
+  toast(t('editing'));
+}
+$('#editToday').addEventListener('click', reopenShift);
 
 // ---------- 5. Un quart en détail (depuis l'historique, l'Aperçu ou un ancien courriel) ----------
 const STATUS_MARK = { done: '✓', notdone: '✕', unchecked: '○' };
@@ -1274,7 +1268,7 @@ function openReview(r, opts = {}) {
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
     </li>`;
   const attention = [
-    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('emailedTo', r.supervisor || t('theSupervisor')))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
+    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
     ...unchecked.map(row),
   ];
@@ -1285,7 +1279,7 @@ function openReview(r, opts = {}) {
       <p class="eyebrow">${[r.gymName, R.title].filter(Boolean).map(esc).join(' · ')}</p>
       <h1>${esc(r.name)}</h1>
       <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(dayMonth(r.date))} · <span class="num">${esc(r.hours)}</span></p>
-      ${r.supervisor ? `<p class="rv-sub">${esc(t('supShort'))} : ${esc(r.supervisor)}${r.submittedAt ? ` · ${esc(t('savedAt', clock(r.submittedAt)))}` : ''}</p>` : ''}
+      ${r.submittedAt ? `<p class="rv-sub">${esc(cap(t('savedAt', clock(r.submittedAt))))}${r.supervisor ? ` · ${esc(t('supShort'))} : ${esc(r.supervisor)}` : ''}</p>` : ''}
     </div>
     <div class="rv-verdict ${nAttention ? 'warn' : 'ok'}">
       <div class="rv-ring" style="--p:${pct}"><span class="num">${pct}%</span></div>
@@ -2148,6 +2142,7 @@ function renderProblem(p) {
     <div class="panel pb-facts">${facts.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
     ${p.text ? `<div class="panel rv-notes pb-quote">« ${esc(p.text)} »</div>` : ''}
     ${p.photos ? `<div class="pb-photos">${Array.from({ length: p.photos }, (_, i) => `<button type="button" class="pb-photo loading" data-ph="${i}" aria-label="${esc(t('photos'))} ${i + 1}"></button>`).join('')}</div>` : ''}
+    ${p.photosExpired ? `<p class="section-note">${esc(t('photosExpired', p.photosExpired))}</p>` : ''}
     ${done ? `<div class="notice ok"><b>✓ ${esc(t('resolvedOn', p.resolvedBy, whenShort(p.resolvedAt)))}</b></div>
       <button class="btn ghost big" id="pbToggle">${esc(t('reopen'))}</button>`
       : `<button class="btn primary big" id="pbToggle">✓ ${esc(t('markResolved'))}</button>`}`;

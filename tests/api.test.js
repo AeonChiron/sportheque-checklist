@@ -87,3 +87,22 @@ test('Courriels urgents : Daniel d’office, les autres superviseurs s’abonnen
   await go('auth', { action: 'alerts', on: true }, mat.token);
   assert.deepEqual((await go('alerts', null, dan.token)).to.map((x) => x.name).sort(), ['Daniel', 'Mathieu']);
 });
+
+test('Un quart se modifie le jour même seulement; photos effacées après 90 jours', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
+  const go = (path, body, token) => a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined }));
+  const { token } = await (await go('auth', { action: 'signup', name: 'Léa', email: 'l@x.ca', password: 'secret1', code: 'e' })).json();
+  const shift = { date: '2026-10-20', shift: 1, name: 'Léa', items: [], flags: [] };
+  assert.equal((await go('board', { ...shift, submittedAt: new Date().toISOString() }, token)).status, 200);
+  assert.equal((await go('board', { ...shift, submittedAt: new Date().toISOString() }, token)).status, 200); // même jour : OK
+  await stores('board').setJSON('2026-10-20', [{ ...shift, submittedAt: '2026-10-20T20:00:00Z' }]);
+  assert.equal((await go('board', shift, token)).status, 409); // un autre jour : verrouillé
+
+  const oldId = `${(Date.now() - 91 * 864e5).toString(36).padStart(9, '0')}abcde`;
+  await stores('problems').setJSON(oldId, { id: oldId, category: 'machine', photos: 1 });
+  await stores('problem-photos').set(`${oldId}-0`, Buffer.from([0xff, 0xd8]));
+  assert.equal((await go('problems', { category: 'machine' }, token)).status, 200);
+  assert.equal(await stores('problem-photos').get(`${oldId}-0`), null);
+  assert.equal((await stores('problems').get(oldId, { type: 'json' })).photosExpired, 1);
+});

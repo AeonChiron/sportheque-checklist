@@ -11,10 +11,9 @@ passe) et le téléphone s'en souvient (« Rester connecté », un an). Rôle **
 Mot de passe oublié : un superviseur en donne un nouveau dans l'Espace superviseur.
 
 **Pour l'employé**
-1. Il touche son quart (son nom vient de son compte) (**Jour** 7 h 30–15 h 30, **Soir** 16 h 30–23 h,
-   **Soir court** 18 h–23 h) ou entre d'autres heures, la date, choisit le
-   **superviseur en service** (Daniel ou Mathieu).
-   Le téléphone retient ses dernières heures.
+1. Il touche son quart (**Jour** 7 h 30–15 h 30, **Soir** 16 h 30–23 h, **Soir court**
+   18 h–23 h) ou entre d'autres heures; la date est aujourd'hui (modifiable). Son nom
+   vient de son compte. Le téléphone retient ses dernières heures.
 2. Le plan du quart se bâtit tout seul à partir du **manuel de référence**
    (`RÉFÉRENCE-IA-2026-10-17`) : tâches dans l'ordre, heures, zone A/B/C du jour,
    tâche hebdo, tuiles/miroirs, murs, compost. Des heures différentes de
@@ -42,7 +41,9 @@ Mot de passe oublié : un superviseur en donne un nouveau dans l'Espace supervis
    ce qui est prévu aujourd'hui.
 6. **Fin du quart → Enregistrer mon quart** : le quart va dans l'**Historique**
    (statuts, remarques, notes, problèmes). Pas de courriel. Ce qui n'est pas fait
-   n'est pas reporté au prochain quart.
+   n'est pas reporté au prochain quart. Oubli? Le quart se **modifie le jour même**
+   (« Modifier mon quart d'aujourd'hui » sur l'accueil), puis il est verrouillé.
+   Les photos des signalements sont gardées 90 jours.
 
 **Pour le superviseur : l'Espace superviseur** (`#patron`, réservé au rôle Superviseur)
 - **Signalements** : « À régler » d'abord (ou Tous), avec catégorie, où, qui, quand, photos.
