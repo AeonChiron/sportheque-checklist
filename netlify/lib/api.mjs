@@ -1,7 +1,8 @@
 // Le serveur du site (Netlify Functions + Netlify Blobs, gratuits) : comptes,
 // historique des quarts, signalements. Aucune base de données externe.
 //
-//   /api/auth      GET → l'utilisateur connecté · POST { action: signup | login | logout }
+//   /api/auth      GET → l'utilisateur connecté · POST { action: signup | login | logout | alerts }
+//   /api/alerts    connecté : GET qui reçoit les courriels des problèmes urgents
 //   /api/users     superviseur : GET la liste · POST { action: reset | remove, email }
 //   /api/board     connecté : GET ?recent=N | ?dates=… · POST un quart
 //   /api/problems  connecté : POST un signalement (+ photos)
@@ -14,6 +15,7 @@
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { sanitizeShift, mergeShift, parseDates } from '../../js/board-shape.js';
 import { sanitizeProblem, problemId, PROBLEM_ID, MAX_PROBLEM_PHOTOS } from '../../js/problem-shape.js';
+import { CONFIG } from '../../js/config.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -33,7 +35,10 @@ const sameText = (a, b) => {
   const y = Buffer.from(String(b));
   return x.length === y.length && timingSafeEqual(x, y);
 };
-const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role });
+const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: u.role === 'boss' && u.alerts === true });
+// Courriels des problèmes urgents : par défaut, les superviseurs marqués
+// alerts dans la config (Daniel); les autres peuvent s'abonner eux-mêmes.
+const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
 
 // getStore(name) → magasin compatible Netlify Blobs; env() → { TEAM_CODE, BOSS_CODE }.
 export function createApi({ getStore, env }) {
@@ -90,7 +95,7 @@ export function createApi({ getStore, env }) {
       const old = await users().get(email, { type: 'json' });
       if (old && !old.removed) return json({ error: 'exists' }, 409);
       const salt = randomBytes(16).toString('hex');
-      const u = { email, name, role, salt, hash: hashPassword(password, salt), created: new Date().toISOString() };
+      const u = { email, name, role, alerts: role === 'boss' && alertsByDefault(name), salt, hash: hashPassword(password, salt), created: new Date().toISOString() };
       await users().setJSON(email, u);
       return json({ token: await newSession(email), user: publicUser(u) });
     }
@@ -100,7 +105,22 @@ export function createApi({ getStore, env }) {
       if (!ok) return json({ error: 'login' }, 401);
       return json({ token: await newSession(email), user: publicUser(u) });
     }
+    if (b.action === 'alerts') {
+      const u = await currentUser(req);
+      if (!u) return json({ error: 'auth' }, 401);
+      if (u.role !== 'boss') return json({ error: 'boss' }, 403);
+      u.alerts = b.on === true;
+      await users().setJSON(u.email, u);
+      return json({ user: publicUser(u) });
+    }
     return json({ error: 'action' }, 400);
+  }
+
+  // Qui reçoit les courriels urgents (nom + adresse) : pour l'envoi depuis le téléphone.
+  async function alertList() {
+    const { blobs } = await users().list();
+    const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
+    return json({ to: all.filter((u) => u && !u.removed && u.role === 'boss' && u.alerts).map((u) => ({ name: u.name, email: u.email })) });
   }
 
   // ---------- L'équipe (superviseurs) ----------
@@ -213,7 +233,7 @@ export function createApi({ getStore, env }) {
     const route = new URL(req.url).pathname.replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'auth') return await auth(req);
-      const routes = { users: team, board: shifts, problems: reports };
+      const routes = { users: team, board: shifts, problems: reports, alerts: alertList };
       if (!routes[route]) return json({ error: 'route' }, 404);
       const me = await currentUser(req);
       if (!me) return json({ error: 'auth' }, 401);

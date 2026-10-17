@@ -33,7 +33,10 @@ Mot de passe oublié : un superviseur en donne un nouveau dans l'Espace supervis
    signalement va dans l'**Espace superviseur**. **Urgent** → le superviseur reçoit
    aussi un courriel d'une ligne : « ⚑ Machine brisée — signalé par Marie » + le lien
    vers le signalement. Pas de photos ni de détails dans le courriel. C'est le **seul**
-   courriel que le site envoie.
+   courriel que le site envoie. Il va à Daniel d'office (`alerts: true` dans la config);
+   les autres superviseurs s'abonnent avec « Recevoir les courriels urgents » dans leur
+   Espace superviseur. Le bouton **Signaler un problème** existe aussi sur l'accueil,
+   hors quart (connecté). Période de test : tout va à `reportTo`, avec « Pour (test) : … ».
 5. **Le plan du gym** (d'après le croquis de l'équipe) : zones A/B/C en couleur et
    pièces 1 à 5. On touche une zone ou une pièce pour voir ce qu'il y a dedans et
    ce qui est prévu aujourd'hui.

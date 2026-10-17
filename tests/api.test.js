@@ -19,7 +19,7 @@ test('Inscription : il faut le bon code pour chaque rôle', async () => {
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'marie@x.ca', password: 'secret1', role: 'boss', code: 'equipe' } })).status, 403);
   const ok = await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'Marie@X.ca', password: 'secret1', role: 'employee', code: ' equipe ' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee' });
+  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false });
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'M', email: 'marie@x.ca', password: 'secret1', code: 'equipe' } })).status, 409);
   const me = await call('auth', { token: ok.data.token });
   assert.equal(me.data.user.name, 'Marie');
@@ -74,4 +74,16 @@ test('Sans codes configurés, pas d’inscription', async () => {
   const bare = createApi({ getStore: memoryStores(), env: () => ({}) });
   const res = await bare(new Request('http://x/api/auth', { method: 'POST', body: JSON.stringify({ action: 'signup', name: 'A', email: 'a@x.ca', password: 'secret1', code: '' }) }));
   assert.equal(res.status, 503);
+});
+
+test('Courriels urgents : Daniel d’office, les autres superviseurs s’abonnent', async () => {
+  const a = createApi({ getStore: memoryStores(), env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
+  const go = (path, body, token) => a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })).then((r) => r.json());
+  const dan = await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' });
+  const mat = await go('auth', { action: 'signup', name: 'Mathieu', email: 'm@x.ca', password: 'secret1', role: 'boss', code: 'p' });
+  assert.equal(dan.user.alerts, true);
+  assert.equal(mat.user.alerts, false);
+  assert.deepEqual((await go('alerts', null, mat.token)).to.map((x) => x.name), ['Daniel']);
+  await go('auth', { action: 'alerts', on: true }, mat.token);
+  assert.deepEqual((await go('alerts', null, dan.token)).to.map((x) => x.name).sort(), ['Daniel', 'Mathieu']);
 });

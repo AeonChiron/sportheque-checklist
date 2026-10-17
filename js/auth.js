@@ -98,7 +98,9 @@ export async function signIn(action, fields, remember = true) {
     const all = readJSON(localStorage, DEMO_USERS) || {};
     if (action === 'signup') {
       if (!fields.name?.trim()) throw Object.assign(new Error('name'), { status: 400 });
-      all[email] = { name: fields.name.trim(), email, role: fields.role === 'boss' ? 'boss' : 'employee' };
+      const role = fields.role === 'boss' ? 'boss' : 'employee';
+      const name = fields.name.trim();
+      all[email] = { name, email, role, alerts: role === 'boss' && configAlerts().some((x) => x.name.toLowerCase() === name.toLowerCase()) };
       try { localStorage.setItem(DEMO_USERS, JSON.stringify(all)); } catch { /* ignore */ }
     }
     const user = all[email];
@@ -139,4 +141,38 @@ export async function teamAction(action, email, extra = {}) {
     return;
   }
   await request('users', { method: 'POST', body: { action, email, ...extra } });
+}
+
+// Courriels des problèmes urgents : qui les reçoit (nom + adresse).
+// Par défaut : les superviseurs marqués alerts dans la config (Daniel).
+const configAlerts = () => (CONFIG.supervisors || []).filter((x) => x.alerts).map((x) => ({ name: x.name, email: x.email || '' }));
+export async function alertRecipients() {
+  if (session.mode === 'accounts') {
+    try {
+      const { to } = await request('alerts', { timeout: 5000 });
+      if (to.length) return to;
+    } catch { /* hors ligne : la config */ }
+  }
+  if (session.mode === 'demo') {
+    const all = Object.values(readJSON(localStorage, DEMO_USERS) || {}).filter((u) => u.role === 'boss' && u.alerts);
+    const names = new Set(all.map((u) => u.name.toLowerCase()));
+    return [...configAlerts().filter((x) => !names.has(x.name.toLowerCase())), ...all.map((u) => ({ name: u.name, email: '' }))];
+  }
+  return configAlerts();
+}
+
+// Un superviseur s'abonne (ou se désabonne) aux courriels urgents.
+export async function setAlerts(on) {
+  if (session.mode === 'demo') {
+    const all = readJSON(localStorage, DEMO_USERS) || {};
+    const me = all[session.user.email];
+    if (me) me.alerts = on;
+    try { localStorage.setItem(DEMO_USERS, JSON.stringify(all)); } catch { /* ignore */ }
+    session.user = { ...session.user, alerts: on };
+  } else {
+    session.user = (await request('auth', { method: 'POST', body: { action: 'alerts', on } })).user;
+  }
+  const saved = load();
+  if (saved) keep({ ...saved, user: session.user }, saved.remember !== false);
+  return session.user;
 }

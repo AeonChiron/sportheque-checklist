@@ -14,10 +14,11 @@ export const CONFIG = {
   },
   since: 1981,
 
-  // Superviseurs proposés au début du quart. Ajouter un courriel pour qu'il
-  // reçoive les problèmes urgents directement; sans courriel, ils vont à reportTo.
+  // Superviseurs proposés au début du quart. alerts : reçoit d'office les
+  // courriels des problèmes urgents (les autres superviseurs peuvent s'abonner
+  // dans leur Espace superviseur). Pendant la période de test, tout va à reportTo.
   supervisors: [
-    { name: 'Daniel', email: '' },
+    { name: 'Daniel', email: '', alerts: true },
     { name: 'Mathieu', email: '' },
   ],
 

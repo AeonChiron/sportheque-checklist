@@ -5,7 +5,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
-import { session, accounts, isBoss, initAuth, signIn, signOut, listTeam, teamAction } from './auth.js';
+import { session, accounts, isBoss, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport } from './board.js';
@@ -894,6 +894,7 @@ function openTask(id) {
 // superviseur reçoit aussi un courriel très court avec le lien. Pas urgent :
 // pas de courriel.
 $('#flagBtn').addEventListener('click', () => openFlag());
+$('#flagHome').addEventListener('click', () => openFlag());
 
 const CAT_ICON = {
   machine: '<path d="M15 3.5a4.5 4.5 0 0 0-4.3 5.9l-6.3 6.3a2 2 0 0 0 2.8 2.8l6.3-6.3A4.5 4.5 0 0 0 19.4 7l-2.7 2.7-2.4-.5-.5-2.4L16.5 4a4.5 4.5 0 0 0-1.5-.5z"/>',
@@ -909,10 +910,24 @@ const CAT_ICON = {
 const catIcon = (k) => `<svg class="ico cat-ico" viewBox="0 0 24 24" aria-hidden="true">${CAT_ICON[k] || CAT_ICON.autre}</svg>`;
 const catName = (k, L = lang()) => FLAG_CATEGORIES[k]?.[L] || k;
 
+// Qui reçoit les courriels urgents : Daniel d'office, plus les superviseurs
+// qui s'y abonnent (mis à jour depuis le serveur après la connexion).
+let alertTo = (CONFIG.supervisors || []).filter((x) => x.alerts).map((x) => ({ name: x.name, email: x.email || '' }));
+const listNames = (a) => (a.length < 2 ? a[0] || '' : `${a.slice(0, -1).join(', ')} ${t('and')} ${a.at(-1)}`);
+const alertNames = () => listNames(alertTo.map((x) => x.name)) || t('theSupervisor');
+async function refreshAlerts() {
+  try { alertTo = await alertRecipients(); } catch { /* on garde la liste connue */ }
+}
+
+// Hors quart (bouton de l'accueil) : le signalement part seul, sans quart.
+const looseCtx = () => ({ name: session.user?.name || prefs.name, date: todayISO(), shift: null, reportLang: supLang(alertTo[0]?.name), loose: true });
+const LOOSE = 'gym-loose-flags';
+const readLoose = () => read(LOOSE, []);
+
 function openFlag({ where = '' } = {}) {
   let category = null;
   let urgent = null; // tant que l'employé n'a pas choisi, suit la catégorie
-  const sup = state.supervisor || t('theSupervisor');
+  const sup = alertNames();
   openSheet(`
     <div class="sheet-head">
       <p class="eyebrow danger">${ICON.flag}${t('flag')}</p>
@@ -928,9 +943,9 @@ function openFlag({ where = '' } = {}) {
         <textarea id="flagText" rows="2" placeholder="${esc(t('whatPh'))}"></textarea>
       </label>
       ${photoFieldHtml()}
-      <div class="field"><span>${esc(t('urgentQ', sup))}</span>
+      <div class="field"><span id="flagUrgQ">${esc(t('urgentQ', sup))}</span>
         <div class="urgency" role="radiogroup">
-          <button type="button" role="radio" data-urg="1" aria-checked="false"><b>${t('urgentYes')}</b><small>${esc(t('urgentYesSub', sup))}</small></button>
+          <button type="button" role="radio" data-urg="1" aria-checked="false"><b>${t('urgentYes')}</b><small id="flagUrgSub">${esc(t('urgentYesSub', sup))}</small></button>
           <button type="button" role="radio" data-urg="0" aria-checked="false"><b>${t('urgentNo')}</b><small>${esc(t(accounts() ? 'urgentNoSubBoss' : 'urgentNoSub'))}</small></button>
         </div>
       </div>
@@ -943,12 +958,16 @@ function openFlag({ where = '' } = {}) {
     const pick = () => urgent ?? (category ? CATEGORIES[category].urgent : null);
     const paint = () => {
       const u = pick();
+      const sup = alertNames(); // la liste peut arriver du serveur après l'ouverture
+      root.querySelector('#flagUrgQ').textContent = t('urgentQ', sup);
+      root.querySelector('#flagUrgSub').textContent = t('urgentYesSub', sup);
       for (const b of root.querySelectorAll('[data-urg]')) b.setAttribute('aria-checked', String(u !== null && (b.dataset.urg === '1') === u));
       root.querySelector('#flagWhatLabel').textContent = t(category === 'autre' ? 'whatNeeded' : 'whatOpt');
       saveBtn.textContent = u ? t('flagSend', sup) : t('add');
       saveBtn.disabled = !category || (category === 'autre' && !text.value.trim());
     };
     mountPhotos(root, photos, () => {});
+    refreshAlerts().then(() => { if (root.contains(text)) paint(); });
     for (const b of root.querySelectorAll('[data-cat]')) {
       b.onclick = () => {
         category = b.dataset.cat;
@@ -964,9 +983,12 @@ function openFlag({ where = '' } = {}) {
     root.querySelector('[data-close]').onclick = () => { photos.forEach(deletePhoto); closeSheet(); };
     saveBtn.onclick = () => {
       const fl = { category, location: root.querySelector('#flagWhere').value.trim(), text: text.value.trim(), at: new Date().toISOString(), photos, urgent: Boolean(pick()) };
-      state.flags.push(fl);
-      save(); renderChecklist(); closeSheet();
-      submitProblem(fl);
+      closeSheet();
+      if (state) {
+        state.flags.push(fl);
+        save(); renderChecklist();
+        submitProblem(fl);
+      } else submitProblem(fl, looseCtx());
     };
     paint();
   }, `<div class="sheet-actions">
@@ -979,7 +1001,7 @@ function openFlag({ where = '' } = {}) {
 const sending = new WeakSet();
 const flagNeedsWork = (fl) => (accounts() && !fl.id) || (fl.urgent && !fl.emailed && session.mode !== 'demo');
 function flagMailLine(fl, i) {
-  const sup = state.supervisor || t('theSupervisor');
+  const sup = alertNames();
   if (sending.has(fl)) return `<span class="mail-line">${ICON.mail}${esc(t('flagSending'))}</span>`;
   if (flagNeedsWork(fl)) {
     return `<span class="mail-line bad">${ICON.mail}${esc(t(accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'))} <button type="button" class="link" data-retry-flag="${i}">${t('retryMail')}</button></span>`;
@@ -988,14 +1010,13 @@ function flagMailLine(fl, i) {
   return accounts() ? `<span class="mail-line ok">${esc(t('flagInBoss'))}</span>` : '';
 }
 
-async function submitProblem(fl) {
-  const s = state;
+async function submitProblem(fl, s = state) {
   if (sending.has(fl) || !flagNeedsWork(fl)) {
-    if (!sending.has(fl)) toast(t(fl.urgent ? 'flagDemo' : 'flagNoted'));
+    if (!sending.has(fl)) toast(t(fl.urgent ? 'flagDemo' : s.loose ? 'flagInBoss' : 'flagNoted'));
     return;
   }
   sending.add(fl);
-  renderChecklist();
+  if (state === s && current === 'checklist') renderChecklist();
   try {
     if (accounts() && !fl.id) {
       const blobs = (await Promise.all((fl.photos || []).map(getPhoto))).filter(Boolean);
@@ -1006,16 +1027,24 @@ async function submitProblem(fl) {
       await sendFlagEmail(fl, s);
       fl.emailed = true;
     }
-    toast(fl.urgent ? (session.mode === 'demo' ? t('flagDemo') : t('flagSent', s.supervisor || t('theSupervisor'))) : t('flagNoted'));
+    toast(fl.urgent ? (session.mode === 'demo' ? t('flagDemo') : t('flagSent', alertNames())) : t(s.loose ? 'flagInBoss' : 'flagNoted'));
   } catch {
-    toast(t(accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'), 'bad');
+    toast(t(s.loose ? 'flagLater' : accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'), 'bad');
   }
   sending.delete(fl);
   if (state === s) { save(); if (current === 'checklist') renderChecklist(); }
+  if (s.loose) {
+    // Pas de réseau : gardé sur le téléphone et renvoyé tout seul plus tard.
+    const rest = readLoose().filter((x) => x.fl.at !== fl.at);
+    write(LOOSE, flagNeedsWork(fl) ? [...rest, { fl, ctx: s }] : rest);
+    if (!flagNeedsWork(fl)) (fl.photos || []).forEach(deletePhoto);
+  }
 }
+const retryLoose = () => readLoose().forEach(({ fl, ctx }) => submitProblem(fl, ctx));
 
 // Le courriel : une ligne et un lien. Les détails et les photos sont sur le site.
-const recipientFor = (name) => CONFIG.supervisors.find((x) => x.name === name)?.email || CONFIG.reportTo;
+// Période de test (CONFIG.reportTo) : un seul courriel, à l'adresse de test,
+// qui dit à qui il serait allé.
 const problemLink = (id) => `${location.origin}${location.pathname}${id ? `#probleme=${id}` : ''}`;
 async function sendFlagEmail(fl, s) {
   const L = s.reportLang === 'en' ? 'en' : 'fr';
@@ -1028,14 +1057,20 @@ async function sendFlagEmail(fl, s) {
   fd.append('_captcha', 'false');
   fd.append(T.mailWhat, T.mailLine(cat, fl.location, s.name, when));
   fd.append(T.mailLink, problemLink(fl.id));
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20_000);
-  try {
-    const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipientFor(s.supervisor))}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' }, signal: ctrl.signal });
-    const out = await r.json().catch(() => ({}));
-    if (!r.ok || String(out.success) === 'false') throw new Error(out.message || `HTTP ${r.status}`);
-  } finally {
-    clearTimeout(timer);
+  await refreshAlerts();
+  const targets = CONFIG.reportTo ? [CONFIG.reportTo] : [...new Set(alertTo.map((x) => x.email).filter(Boolean))];
+  if (!targets.length) throw new Error('recipient');
+  if (CONFIG.reportTo) fd.append(T.mailFor, listNames(alertTo.map((x) => x.name)));
+  for (const to of targets) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20_000);
+    try {
+      const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' }, signal: ctrl.signal });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok || String(out.success) === 'false') throw new Error(out.message || `HTTP ${r.status}`);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -1872,6 +1907,7 @@ $('#authForm').addEventListener('submit', async (ev) => {
     $('#aCode').value = '';
     $('#authError').innerHTML = '';
     flushQueue();
+    refreshAlerts().then(retryLoose);
     toast(t('welcomeName', user.name));
     route();
   } catch (err) {
@@ -1888,6 +1924,7 @@ function paintAccount() {
   const u = session.user;
   line.hidden = !u;
   document.querySelector('.boss-link').hidden = !isBoss();
+  $('#flagHome').hidden = !u; // hors quart, il faut savoir qui signale
   if (!u) return;
   line.innerHTML = `<span class="who">${esc(u.name)} · ${esc(t(u.role === 'boss' ? 'roleBoss' : 'roleEmployee'))}</span><button type="button" class="link" id="signOutBtn">${t('signOut')}</button>`;
   const b = $('#signOutBtn');
@@ -1999,6 +2036,7 @@ function renderBoss({ animate = true } = {}) {
       <span class="pb-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg></span>
       <span class="rp-main"><b>${esc(t('shiftsHistory'))}</b><span class="hi-meta">${esc(t('shiftsHistorySub'))}</span></span>${CHEV_R}
     </button>
+    <div class="panel alerts-row">${switchRow('bAlerts', t('alertsMe'), Boolean(session.user?.alerts))}<p class="section-note">${esc(t('alertsMeSub', alertNames()))}</p></div>
     <div class="segmented boss-tabs" role="tablist">
       <button type="button" role="tab" data-btab="problems" aria-selected="${boss.tab === 'problems'}">${esc(t('tabProblems'))}</button>
       <button type="button" role="tab" data-btab="team" aria-selected="${boss.tab === 'team'}">${esc(t('tabTeam'))}</button>
@@ -2008,6 +2046,21 @@ function renderBoss({ animate = true } = {}) {
 }
 
 $('#bossBody').addEventListener('click', async (ev) => {
+  const sw = ev.target.closest('#bAlerts');
+  if (sw) {
+    const on = sw.getAttribute('aria-checked') !== 'true';
+    sw.setAttribute('aria-checked', String(on));
+    try {
+      await setAlerts(on);
+      await refreshAlerts();
+      toast(t(on ? 'alertsOn' : 'alertsOff'));
+    } catch (err) {
+      sw.setAttribute('aria-checked', String(!on));
+      toast(t(err.status === 0 ? 'errNetwork' : 'errServer'), 'bad');
+    }
+    renderBoss({ animate: false });
+    return;
+  }
   const el = ev.target.closest('[data-btab], [data-pfilter], [data-pid], [data-reset], [data-remove]');
   if (!el) return;
   const ds = el.dataset;
@@ -2209,12 +2262,16 @@ document.addEventListener('touchstart', () => {}, { passive: true });
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('paused', document.hidden));
 
 paintStatic();
-initAuth(() => { route(); flushQueue(); }); // le serveur a répondu autre chose que prévu
+initAuth(() => { route(); flushQueue(); refreshAlerts(); }); // le serveur a répondu autre chose que prévu
 route();
 
-// Un quart enregistré sans réseau part tout seul dès que le réseau revient.
+// Un quart ou un signalement enregistré sans réseau part tout seul dès que le réseau revient.
 flushQueue();
-window.addEventListener('online', () => { flushQueue().then(() => { if (current === 'history') refreshHistory(); }); });
+if (session.user) refreshAlerts().then(retryLoose);
+window.addEventListener('online', () => {
+  retryLoose();
+  flushQueue().then(() => { if (current === 'history') refreshHistory(); });
+});
 
 // Hors ligne (si le service worker est disponible).
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
