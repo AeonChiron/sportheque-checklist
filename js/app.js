@@ -663,11 +663,17 @@ function todayIn(area, day) {
 // qu'il y a dedans et ce qui est prévu aujourd'hui.
 function mountMap(box, { highlight = null, mirrors = null, states = {}, date = todayISO(), dayLabel = t('today') } = {}) {
   const day = dayInfo(date);
+  // Étiquettes du jour sur les zones : profondeur du matin, du soir, miroirs.
+  const tags = {};
+  const tag = (z, text, state) => (tags[z] ||= []).push({ text, state });
+  tag(day.zones[1], t('morning'), states[1] || 'planned');
+  tag(day.zones[2], t('evening'), states[2] || 'planned');
+  if (day.surfaces === 'miroirs') tag(day.zones.third, t('mirrorsOf'), 'planned');
   let selected = highlight || mirrors || null;
   const draw = () => {
     const info = selected ? FLOOR[selected][lang()] : null;
     const today = selected ? todayIn(selected, day) : [];
-    box.innerHTML = `${zoneMap({ highlight, mirrors, states, selected, labels: MAP_LABELS[lang()] })}
+    box.innerHTML = `${zoneMap({ highlight, tags, selected, labels: MAP_LABELS[lang()] })}
       <div class="map-info" aria-live="polite">${info
         ? `<b>${esc(info.name)}</b><ul>${info.what.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>${today.length ? `<p class="map-today"><span>${esc(dayLabel)}</span>${today.map((x) => `<em>${esc(x)}</em>`).join('')}</p>` : ''}`
         : `<p class="map-hint">${t('mapHint')}</p>`}</div>`;
@@ -1236,7 +1242,7 @@ function renderPanel({ animate = true, dir = 0 } = {}) {
     const list = ap.data[ap.day] || [];
     const st = (shift, id) => statusIn(list.filter((s) => s.shift === shift), id).kind;
     mountMap(box.querySelector('[data-map]'), {
-      states: { [info.zones[1]]: st(1, 'q1-profondeur'), [info.zones[2]]: st(2, 'q2-profondeur') },
+      states: { 1: st(1, 'q1-profondeur'), 2: st(2, 'q2-profondeur') },
       mirrors: info.surfaces === 'miroirs' ? info.zones.third : null,
       date: ap.day,
       dayLabel: ap.day === todayISO() ? t('today') : cap(dateOf(ap.day).toLocaleDateString(locale(), { weekday: 'long' })),
@@ -1309,7 +1315,7 @@ function dayPanel() {
     <div class="panel ap-mapcard">
       <div class="ap-dayhead"><h3>${esc(longDay(d))}</h3>${d === today ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</div>
       <div data-map></div>
-      <div class="legend">${['done', 'planned', 'unchecked', 'notdone'].map((k) => `<span><i class="sw ${k}"></i>${esc(t('legend')[k])}</span>`).join('')}${info.surfaces === 'miroirs' ? `<span><i class="sw mirror"></i>${esc(t('legend').mirrors)}</span>` : ''}</div>
+      <div class="legend">${['done', 'planned', 'unchecked', 'notdone'].map((k) => `<span><i class="sw ${k}"></i>${esc(t('legend')[k])}</span>`).join('')}</div>
     </div>
     <div class="ap-cards">${card(1)}${card(2)}</div>
     ${left.length ? `<div class="panel"><div class="ap-card-head"><h3>${t('stillToDo')}</h3><span class="num">${left.length}</span></div>

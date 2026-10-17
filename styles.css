@@ -506,10 +506,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .ap-status .pill { font-family: var(--display); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
 .ap-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
 .ap-zones .illus.map { width: 100%; margin-bottom: 8px; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 6px; font-size: 12.5px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin: 10px 0 2px; font-size: 12.5px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.sw { width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid var(--il-ink); }
-.sw.done { background: var(--il-ok); } .sw.planned { background: var(--il-aqua); } .sw.unchecked { background: var(--il-sun); } .sw.notdone { background: var(--il-bad); }
+.sw { width: 14px; height: 10px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--il-ink) 30%, transparent); }
+.sw.done { background: var(--ok); } .sw.planned { background: var(--surface); } .sw.unchecked { background: var(--sun); } .sw.notdone { background: var(--bad); }
 .sw.mirror { width: 5px; height: 14px; background: var(--il-glass); }
 .ap-list { list-style: none; margin: 0; padding: 0; }
 .ap-row { display: grid; grid-template-columns: 62px 1fr; gap: 2px 10px; padding: 9px 0; border-top: 1px solid var(--line); align-items: baseline; }
@@ -584,31 +584,34 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
-/* ---------- Plan du gym ---------- */
-.floor { width: 100%; display: block; }
+/* ---------- Plan du gym : plan d'architecte, épuré ---------- */
+.floor { width: 100%; max-width: 560px; display: block; margin: 0 auto; }
 .floor .zm { cursor: pointer; outline: none; }
-.floor .zm-wall { fill: none; stroke: var(--il-mid); stroke-width: 1.5; stroke-dasharray: 3 5; }
-.floor .zm-bg { stroke: var(--il-ink); stroke-width: 1.6; transition: stroke-width .2s, fill .25s; }
-.floor .zA .zm-bg { fill: var(--zA); }
-.floor .zB .zm-bg { fill: var(--zB); }
-.floor .zC .zm-bg { fill: var(--zC); }
-.floor .zA.hot .zm-bg { fill: var(--zA-strong); }
-.floor .zB.hot .zm-bg { fill: var(--zB-strong); }
-.floor .zC.hot .zm-bg { fill: var(--zC-strong); }
-.floor .zm.hot .zm-bg { stroke-width: 3; }
-.floor .zm.sel .zm-bg, .floor .zm.sel .zm-room { stroke-width: 3.2; stroke: var(--ink); }
-.floor .zm:focus-visible .zm-bg, .floor .zm:focus-visible .zm-room { stroke: var(--accent); stroke-width: 3.2; }
-.floor .zm-eq { fill: var(--il-ink); opacity: .13; pointer-events: none; }
-.floor .zm-eq-line { stroke: var(--il-ink); opacity: .22; stroke-width: 2.5; stroke-linecap: round; pointer-events: none; }
-.floor .zm-eq-line.thick { stroke-width: 4.5; opacity: .3; }
+.floor .zm-wall { fill: none; stroke: var(--il-ink); stroke-width: 2.2; stroke-linecap: round; opacity: .55; }
+.floor .zm-swing { fill: none; stroke: var(--il-ink); stroke-width: 1.4; stroke-dasharray: 3 3; opacity: .6; }
+.floor .zm-bg { stroke-width: 1.5; transition: fill .25s, stroke .2s, stroke-width .2s; }
+.floor .zA .zm-bg { fill: var(--zA); stroke: color-mix(in srgb, var(--zA-strong) 70%, transparent); }
+.floor .zB .zm-bg { fill: var(--zB); stroke: color-mix(in srgb, var(--zB-strong) 70%, transparent); }
+.floor .zC .zm-bg { fill: var(--zC); stroke: color-mix(in srgb, var(--zC-strong) 70%, transparent); }
+.floor .zA.hot .zm-bg { fill: color-mix(in srgb, var(--zA-strong) 55%, var(--zA)); stroke: var(--zA-strong); stroke-width: 2.5; }
+.floor .zB.hot .zm-bg { fill: color-mix(in srgb, var(--zB-strong) 55%, var(--zB)); stroke: var(--zB-strong); stroke-width: 2.5; }
+.floor .zC.hot .zm-bg { fill: color-mix(in srgb, var(--zC-strong) 55%, var(--zC)); stroke: var(--zC-strong); stroke-width: 2.5; }
+.floor .zm.sel .zm-bg, .floor .zm.sel .zm-room { stroke: var(--accent); stroke-width: 3; }
+.floor .zm:focus-visible .zm-bg, .floor .zm:focus-visible .zm-room { stroke: var(--accent); stroke-width: 3; }
 .floor .zm-id { font-size: 26px; font-weight: 700; fill: var(--il-ink); pointer-events: none; }
-.floor .zm-label { font-size: 11px; font-weight: 600; fill: var(--il-ink); pointer-events: none; }
-.floor .zm-badge { font-size: 11px; font-weight: 700; fill: var(--il-ink); pointer-events: none; }
-.floor .zm-mirror { fill: var(--il-glass); stroke: var(--il-ink); stroke-width: 1.2; }
-.floor .zm-room { fill: var(--il-fill); stroke: var(--il-ink); stroke-width: 1.4; transition: stroke-width .2s; }
-.floor .zm-num-bg { fill: var(--il-ink); pointer-events: none; }
-.floor .zm-num { font-size: 10px; font-weight: 700; fill: var(--il-fill); pointer-events: none; }
-.floor .zm-room-label { font-size: 8px; font-weight: 600; fill: var(--il-ink); pointer-events: none; }
+.floor .zm-label { font-size: 12.5px; font-weight: 600; fill: var(--il-ink); opacity: .8; pointer-events: none; }
+.floor .zm-picto { fill: none; stroke: var(--il-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .35; pointer-events: none; }
+.floor .zm-tag rect { fill: var(--surface); stroke: var(--il-ink); stroke-width: 1; stroke-opacity: .25; }
+.floor .zm-tag text { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; fill: var(--ink); }
+.floor .zm-tag.done rect { fill: var(--ok); stroke: none; } .floor .zm-tag.done text { fill: #fff; }
+.floor .zm-tag.notdone rect { fill: var(--bad); stroke: none; } .floor .zm-tag.notdone text { fill: #fff; }
+.floor .zm-tag.unchecked rect { fill: var(--sun); stroke: none; } .floor .zm-tag.unchecked text { fill: #1f2323; }
+.floor .zm-tag { pointer-events: none; }
+.floor .zm-room { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke .2s, stroke-width .2s; }
+.floor .door .zm-num-bg, .floor .zm-num-bg { fill: var(--il-ink); }
+.floor .zm-num { font-size: 10.5px; font-weight: 700; fill: var(--il-fill); pointer-events: none; }
+.floor .zm-room-label { font-size: 11px; font-weight: 600; fill: var(--ink); pointer-events: none; }
+.floor .door.sel .zm-num-bg { fill: var(--accent); }
 .map-info { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; animation: rise .25s var(--ease) both; }
 .map-info b { font-family: var(--display); font-size: 18px; font-weight: 700; }
 .map-info ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
@@ -620,8 +623,6 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 
 .visual.map-visual .illus.floor { max-height: none; }
 .sheet-hero:has(.map-visual) { grid-template-columns: 1fr; }
-.floor .zm-id { font-size: 28px; }
-.floor .zm-label { font-size: 12px; }
 .map-today { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .map-today span { margin-right: 2px; }
 .map-today em { font-style: normal; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--ink); border-radius: 7px; padding: 2px 8px; }
@@ -701,7 +702,7 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 @keyframes il-glow { 50% { opacity: .9; } }
 /* La zone du jour respire sur le plan. */
 .floor .zm.hot .zm-bg { animation: zone-breathe 2.8s ease-in-out infinite; }
-@keyframes zone-breathe { 50% { stroke-width: 4.5; } }
+@keyframes zone-breathe { 50% { stroke-width: 4; } }
 
 /* Changement d'écran (View Transitions) : la page glisse, le fond reste. */
 .env { view-transition-name: env; }
