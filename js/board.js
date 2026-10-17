@@ -1,10 +1,10 @@
 // Historique des quarts. Chaque téléphone garde ses propres quarts (six
-// semaines). Si l'hébergement offre /api/board (Netlify), chaque quart
-// enregistré y est aussi envoyé, et tout le monde voit le même historique;
-// sinon, on reste discrètement en mode local. Un envoi raté (pas de réseau)
-// est gardé en file et renvoyé plus tard, tout seul.
+// semaines). Avec le serveur du site (Netlify, comptes), chaque quart
+// enregistré y est aussi envoyé, et toute l'équipe voit le même historique;
+// sinon (GitHub Pages, démo), on reste discrètement en mode local. Un envoi
+// raté (pas de réseau, session expirée) est gardé en file et renvoyé plus tard.
 
-import { CONFIG } from './config.js';
+import { session, request } from './auth.js';
 import { sanitizeShift, mergeShift, combineDay, recentShifts } from './board-shape.js';
 
 const LOCAL = 'gym-board-local';
@@ -21,17 +21,7 @@ function writeLocal(all) {
   writeJSON(LOCAL, Object.fromEntries(dates.map((d) => [d, all[d]])));
 }
 
-async function call(url, opts = {}) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
-  try {
-    const r = await fetch(url, { ...opts, signal: ctrl.signal, cache: 'no-store' });
-    if (!r.ok) throw Object.assign(new Error(String(r.status)), { status: r.status });
-    return await r.json();
-  } finally {
-    clearTimeout(timer);
-  }
-}
+const shared = () => session.mode === 'accounts';
 
 function keepLocal(shift, code) {
   const all = readLocal();
@@ -39,15 +29,12 @@ function keepLocal(shift, code) {
   writeLocal(all);
 }
 
-const post = (shift) => call(CONFIG.boardEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(shift) });
-
-// 404 : cet hébergement n'a pas d'historique partagé (GitHub Pages, par
-// exemple). Ce n'est pas une panne de réseau : rien à renvoyer plus tard.
-const absent = (err) => err?.status === 404 || err?.status === 405;
+const post = (shift) => request('board', { method: 'POST', body: shift });
+const absent = (err) => err?.status === 404 || err?.status === 405 || err?.status === 400;
 
 // Renvoie les quarts restés en file (appelé au démarrage et au retour du réseau).
 export async function flushQueue() {
-  if (!CONFIG.boardEndpoint) return;
+  if (!shared() || !session.token) return;
   const queue = readJSON(QUEUE, []);
   if (!queue.length) return;
   const left = [];
@@ -64,7 +51,7 @@ export async function publishShift(raw, code = '') {
   const shift = sanitizeShift(raw);
   if (!shift) return 'local';
   keepLocal(shift, code);
-  if (!CONFIG.boardEndpoint) return 'local';
+  if (!shared()) return 'local';
   try {
     await post(shift);
     return 'shared';
@@ -85,9 +72,9 @@ export function keepReport(raw, code) {
 export async function loadWeek(dates) {
   const all = readLocal();
   const days = Object.fromEntries(dates.map((d) => [d, combineDay([], all[d] || [])]));
-  if (!CONFIG.boardEndpoint) return { live: false, days };
+  if (!shared()) return { live: false, days };
   try {
-    const res = await call(`${CONFIG.boardEndpoint}?dates=${dates.join(',')}`);
+    const res = await request(`board?dates=${dates.join(',')}`);
     for (const d of dates) {
       const remote = (Array.isArray(res?.days?.[d]) ? res.days[d] : []).map(sanitizeShift).filter(Boolean);
       days[d] = combineDay(remote, all[d] || []);
@@ -101,9 +88,9 @@ export async function loadWeek(dates) {
 // Les derniers quarts enregistrés, du plus récent au plus ancien : { live, shifts }.
 export async function loadRecent(n = 40) {
   const local = readLocal();
-  if (!CONFIG.boardEndpoint) return { live: false, shifts: recentShifts({}, local, n) };
+  if (!shared()) return { live: false, shifts: recentShifts({}, local, n) };
   try {
-    const res = await call(`${CONFIG.boardEndpoint}?recent=${n}`);
+    const res = await request(`board?recent=${n}`);
     const remote = Object.fromEntries(Object.entries(res?.days || {}).map(([d, list]) => [d, (Array.isArray(list) ? list : []).map(sanitizeShift).filter(Boolean)]));
     return { live: true, shifts: recentShifts(remote, local, n) };
   } catch {

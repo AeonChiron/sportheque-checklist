@@ -1,7 +1,7 @@
 // Forme d'un quart enregistré dans l'historique partagé. Fonctions pures,
-// partagées par le navigateur et la fonction serveur : on ne garde que les
-// champs attendus, avec des longueurs bornées. Pas de photos ici (elles
-// partent par courriel avec les problèmes urgents).
+// partagées par le navigateur et le serveur : on ne garde que les champs
+// attendus, avec des longueurs bornées. Les photos d'un problème restent
+// avec son signalement (id), pas dans le quart.
 
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const count = (v) => (Number.isInteger(v) && v >= 0 && v <= 99 ? v : null);
@@ -32,6 +32,7 @@ export function sanitizeShift(raw) {
       remark: str(i?.remark, 300),
     })).filter((i) => i.id),
     flags: (Array.isArray(raw.flags) ? raw.flags : []).slice(0, 20).map((f) => ({
+      id: /^[a-z0-9]{10,20}$/.test(f?.id || '') ? f.id : '',
       category: str(f?.category, 20),
       location: str(f?.location, 80),
       text: str(f?.text, 400),

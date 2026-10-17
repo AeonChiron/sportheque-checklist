@@ -57,18 +57,19 @@ export const CONFIG = {
     maxConsecutiveWork: 300,
   },
 
-  // Courriels : seulement pour un problème URGENT signalé pendant le quart
-  // (jamais à la fin du quart : le quart va dans l'historique). Service
-  // gratuit FormSubmit, sans compte ni clé (https://formsubmit.co). Le
-  // destinataire active l'adresse une seule fois en cliquant le lien du
-  // premier courriel. Période de test : tout va à l'adresse de test.
+  // Courriels : seulement pour un problème URGENT, et très courts : « un
+  // problème a été signalé par X », avec un lien vers le signalement (réservé
+  // aux superviseurs connectés). Service gratuit FormSubmit, sans compte ni
+  // clé : le destinataire active l'adresse une seule fois en cliquant le lien
+  // du premier courriel. Période de test : tout va à l'adresse de test.
   reportTo: 'thealchemicalseed@gmail.com',
 
-  // Historique des quarts et Aperçu partagés (fonction Netlify). Sur GitHub
-  // Pages, elle n'existe pas : chaque téléphone ne voit que ses propres quarts.
-  // Pour garder GitHub Pages, on peut mettre ici l'adresse complète du site
-  // Netlify : https://<site>.netlify.app/api/board
-  boardEndpoint: '/api/board',
+  // Le serveur du site (fonction Netlify) : comptes, historique, signalements.
+  // Sur GitHub Pages, il n'existe pas : le site fonctionne sans comptes et
+  // chaque téléphone ne voit que ses propres quarts. Pour garder GitHub Pages,
+  // on peut mettre ici l'adresse du site Netlify : https://<site>.netlify.app/api
+  // Codes d'inscription : variables TEAM_CODE et BOSS_CODE dans Netlify.
+  api: '/api',
 
   // Démo : aucun courriel n'est envoyé.
   demo: false,

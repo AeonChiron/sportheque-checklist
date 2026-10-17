@@ -2,8 +2,11 @@ import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR } from './manual.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
-import { FLAG_CATEGORIES, SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
-import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
+import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
+import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
+import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
+import { session, accounts, isBoss, initAuth, signIn, signOut, listTeam, teamAction } from './auth.js';
+import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport } from './board.js';
 
@@ -51,7 +54,7 @@ const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 // Changement d'écran : glissement doux (View Transitions quand Safari les
 // offre), vers la droite pour avancer, vers la gauche pour revenir.
 let current = null;
-const RANK = { setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, review: 6 };
+const RANK = { auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, boss: 5, problem: 6, review: 7 };
 function show(id) {
   const prev = current;
   current = id;
@@ -140,13 +143,10 @@ function renderBrand() {
     el.innerHTML = CONFIG.logo ? logoImgs(CONFIG.logo.mark, CONFIG.logo.markDark, 'mark-img') : '';
     el.hidden = !CONFIG.logo;
   }
-  if (CONFIG.logo) {
-    $('#brand').innerHTML = `${logoImgs(CONFIG.logo.full, CONFIG.logo.fullDark, 'brand-logo', CONFIG.gymName)}${floor}`;
-  } else if (CONFIG.gymName) {
-    $('#brand').innerHTML = `<span class="wordmark">${esc(CONFIG.gymName)}</span>${floor}`;
-  } else {
-    $('#brand').innerHTML = `<span class="wordmark">${esc(t('floor'))}</span>`;
-  }
+  const html = CONFIG.logo ? `${logoImgs(CONFIG.logo.full, CONFIG.logo.fullDark, 'brand-logo', CONFIG.gymName)}${floor}`
+    : CONFIG.gymName ? `<span class="wordmark">${esc(CONFIG.gymName)}</span>${floor}`
+      : `<span class="wordmark">${esc(t('floor'))}</span>`;
+  for (const el of document.querySelectorAll('#brand, [data-brand]')) el.innerHTML = html;
 }
 
 function paintStatic() {
@@ -170,6 +170,9 @@ function setLang(l) {
   if (current === 'finish') openFinish();
   if (current === 'apercu') { refCache.clear(); renderApercu({ animate: false }); }
   if (current === 'history') renderHistory({ animate: false });
+  if (current === 'auth') paintAuth();
+  if (current === 'boss') renderBoss({ animate: false });
+  if (current === 'problem' && lastProblem) renderProblem(lastProblem);
   if (current === 'review' && lastReview) openReview(...lastReview);
 }
 for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
@@ -261,7 +264,9 @@ function setupScreen() {
   // Chaque téléphone retient les dernières heures choisies pour chacun.
   const defShift = new Date().getHours() < 12 ? 1 : 2;
   const last = prefs.lastTimes?.[defShift];
-  $('#fName').value = prefs.name;
+  $('#fName').value = session.user?.name || prefs.name;
+  $('#nameField').hidden = Boolean(session.user);
+  paintAccount();
   $('#fDate').value = todayISO();
   $('#fDate').hidden = true;
   $('#dateChange').hidden = false;
@@ -325,7 +330,7 @@ $('#setupForm').addEventListener('input', (ev) => {
 
 $('#setupForm').addEventListener('submit', (ev) => {
   ev.preventDefault();
-  const name = $('#fName').value.trim();
+  const name = session.user?.name || $('#fName').value.trim();
   if (!name) { $('#fName').focus(); return; }
   if (!$('#fStart').value || !$('#fEnd').value || !$('#fDate').value) return;
   prefs.name = name;
@@ -499,7 +504,7 @@ function renderChecklist() {
 
   $('#flagsBlock').innerHTML = state.flags.length
     ? `<div class="section-head"><h3>${t('flags')}</h3><span class="num">${state.flags.length}</span></div>
-       ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
+       ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}">${catIcon(fl.category)}<div><b>${esc(catName(fl.category))}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${fl.text ? `${esc(fl.text)}<br>` : ''}<small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
     : '';
 }
 
@@ -575,7 +580,7 @@ for (const sel of ['#taskList', '#overflowBlock', '#nowCard']) {
 // Retirer un signalement : deux touchers (pas de confirm(), plus doux sur iPhone).
 $('#flagsBlock').addEventListener('click', (ev) => {
   const retry = ev.target.closest('[data-retry-flag]');
-  if (retry) { const fl = state.flags[+retry.dataset.retryFlag]; if (fl) mailFlag(fl); return; }
+  if (retry) { const fl = state.flags[+retry.dataset.retryFlag]; if (fl) submitProblem(fl); return; }
   const b = ev.target.closest('[data-del-flag]');
   if (!b) return;
   if (!b.dataset.armed) {
@@ -646,15 +651,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#she
   });
 })();
 
-// ---------- Photos d'un problème (elles partent avec le courriel urgent) ----------
-const allPhotoIds = () => state.flags.flatMap((fl) => fl.photos || []);
+// ---------- Photos d'un problème (elles vont avec le signalement, dans l'Espace superviseur) ----------
 
 const CAMERA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-const photoFieldHtml = () => `<div data-photofield><p class="block-label">${t('photosMail')}</p><div class="shots" data-shots></div></div>`;
+const photoFieldHtml = () => `<div data-photofield><p class="block-label">${t('photosOpt')}</p><div class="shots" data-shots></div></div>`;
 
-// ids : tableau modifié sur place; pending : photos pas encore dans l'état
-// (feuille de signalement), comptées dans la limite.
-function mountPhotos(root, ids, onChange, pending = []) {
+// ids : tableau modifié sur place (au plus 3 photos par signalement).
+function mountPhotos(root, ids, onChange) {
   const box = root.querySelector('[data-shots]');
   const urls = [];
   const draw = async () => {
@@ -666,9 +669,9 @@ function mountPhotos(root, ids, onChange, pending = []) {
       urls.push(u);
       return `<div class="shot"><img src="${u}" alt=""><button type="button" data-del="${esc(pid)}" aria-label="${t('remove')}">×</button></div>`;
     }));
-    const full = allPhotoIds().length + pending.length >= MAX_PHOTOS;
+    const full = ids.length >= MAX_PROBLEM_PHOTOS;
     box.innerHTML = thumbs.join('') + (full
-      ? `<p class="shots-full">${t('photosMax', MAX_PHOTOS)}</p>`
+      ? `<p class="shots-full">${t('photosMax', MAX_PROBLEM_PHOTOS)}</p>`
       : `<label class="add-shot"><input type="file" accept="image/*">${CAMERA}${t('addPhoto')}</label>`);
     box.querySelector('input')?.addEventListener('change', async (ev) => {
       const file = ev.target.files?.[0];
@@ -886,12 +889,25 @@ function openTask(id) {
 }
 
 // ---------- Signaler un problème ----------
-// Urgent : le superviseur reçoit tout de suite un courriel court, avec les
-// photos. Pas urgent : c'est noté dans le quart (et dans l'historique).
-// C'est le seul courriel que le site envoie.
+// Un toucher sur une catégorie suffit (« Autre » demande quelques mots).
+// Le signalement va dans l'Espace superviseur, avec ses photos. Urgent : le
+// superviseur reçoit aussi un courriel très court avec le lien. Pas urgent :
+// pas de courriel.
 $('#flagBtn').addEventListener('click', () => openFlag());
 
-const URGENT_BY_DEFAULT = new Set(['equipement', 'securite']);
+const CAT_ICON = {
+  machine: '<path d="M15 3.5a4.5 4.5 0 0 0-4.3 5.9l-6.3 6.3a2 2 0 0 0 2.8 2.8l6.3-6.3A4.5 4.5 0 0 0 19.4 7l-2.7 2.7-2.4-.5-.5-2.4L16.5 4a4.5 4.5 0 0 0-1.5-.5z"/>',
+  degat: '<path d="M12 3c3 4 5 6.6 5 9.2A5 5 0 0 1 7 12.2C7 9.6 9 7 12 3z"/><path d="M4 20c2-1 4-1 6 0s4 1 6 0 3-1 4 0"/>',
+  blessure: '<rect x="4" y="8" width="16" height="10" rx="2"/><path d="M9 8V6h6v2M12 10.5v5M9.5 13h5"/>',
+  altercation: '<path d="M4 6h10v7H8l-4 3z"/><path d="M14 9h6v7l-3-2h-5v-1"/>',
+  materiel: '<path d="M5 8l7-4 7 4v8l-7 4-7-4z"/><path d="M5 8l7 4 7-4M12 12v8"/>',
+  toilettes: '<path d="M7 4h4v7H7zM5 11h14a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6zM10 17v3h4v-3"/>',
+  batiment: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+  objet: '<path d="M6 8h12l-1 12H7z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+  autre: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4M12 16.6v.2"/>',
+};
+const catIcon = (k) => `<svg class="ico cat-ico" viewBox="0 0 24 24" aria-hidden="true">${CAT_ICON[k] || CAT_ICON.autre}</svg>`;
+const catName = (k, L = lang()) => FLAG_CATEGORIES[k]?.[L] || k;
 
 function openFlag({ where = '' } = {}) {
   let category = null;
@@ -902,52 +918,55 @@ function openFlag({ where = '' } = {}) {
       <p class="eyebrow danger">${ICON.flag}${t('flag')}</p>
       <h3>${t('flagTitle')}</h3>
     </div>
-    <div class="reasons cat">${Object.entries(FLAG_CATEGORIES).map(([k, v]) => `<button type="button" data-cat="${k}" aria-pressed="false">${esc(v[lang()])}</button>`).join('')}</div>
-    <label class="field"><span>${t('where')}</span>
-      <input id="flagWhere" list="areaList" placeholder="${esc(t('wherePh'))}" value="${esc(where)}">
-      <datalist id="areaList">${Object.values(AREAS).map((a) => `<option value="${esc(a[lang()])}">`).join('')}</datalist>
-    </label>
-    <label class="field"><span>${t('what')}</span>
-      <textarea id="flagText" rows="3" placeholder="${esc(t('whatPh'))}"></textarea>
-    </label>
-    <div class="field"><span>${esc(t('urgentQ', sup))}</span>
-      <div class="urgency" role="radiogroup">
-        <button type="button" role="radio" data-urg="1" aria-checked="false"><b>${t('urgentYes')}</b><small>${esc(t('urgentYesSub', sup))}</small></button>
-        <button type="button" role="radio" data-urg="0" aria-checked="false"><b>${t('urgentNo')}</b><small>${esc(t('urgentNoSub'))}</small></button>
+    <div class="cat-grid">${Object.entries(CATEGORIES).map(([k, v]) => `<button type="button" data-cat="${k}" aria-pressed="false">${catIcon(k)}<span>${esc(v[lang()])}</span></button>`).join('')}</div>
+    <div class="flag-more" hidden>
+      <label class="field"><span>${t('where')}</span>
+        <input id="flagWhere" list="areaList" placeholder="${esc(t('wherePh'))}" value="${esc(where)}">
+        <datalist id="areaList">${Object.values(AREAS).map((a) => `<option value="${esc(a[lang()])}">`).join('')}</datalist>
+      </label>
+      <label class="field"><span id="flagWhatLabel">${t('whatOpt')}</span>
+        <textarea id="flagText" rows="2" placeholder="${esc(t('whatPh'))}"></textarea>
+      </label>
+      ${photoFieldHtml()}
+      <div class="field"><span>${esc(t('urgentQ', sup))}</span>
+        <div class="urgency" role="radiogroup">
+          <button type="button" role="radio" data-urg="1" aria-checked="false"><b>${t('urgentYes')}</b><small>${esc(t('urgentYesSub', sup))}</small></button>
+          <button type="button" role="radio" data-urg="0" aria-checked="false"><b>${t('urgentNo')}</b><small>${esc(t(accounts() ? 'urgentNoSubBoss' : 'urgentNoSub'))}</small></button>
+        </div>
       </div>
     </div>
-    ${photoFieldHtml()}
     <div class="callout clock"><p>${t('danger')}</p></div>
   `, (root) => {
     const saveBtn = root.querySelector('#flagSave');
     const text = root.querySelector('#flagText');
     const photos = [];
-    const pick = () => urgent ?? (category ? URGENT_BY_DEFAULT.has(category) : null);
+    const pick = () => urgent ?? (category ? CATEGORIES[category].urgent : null);
     const paint = () => {
       const u = pick();
       for (const b of root.querySelectorAll('[data-urg]')) b.setAttribute('aria-checked', String(u !== null && (b.dataset.urg === '1') === u));
-      root.querySelector('[data-photofield]').hidden = !u;
+      root.querySelector('#flagWhatLabel').textContent = t(category === 'autre' ? 'whatNeeded' : 'whatOpt');
       saveBtn.textContent = u ? t('flagSend', sup) : t('add');
-      saveBtn.disabled = !(category && text.value.trim());
+      saveBtn.disabled = !category || (category === 'autre' && !text.value.trim());
     };
-    mountPhotos(root, photos, () => {}, photos);
+    mountPhotos(root, photos, () => {});
     for (const b of root.querySelectorAll('[data-cat]')) {
       b.onclick = () => {
         category = b.dataset.cat;
         for (const o of root.querySelectorAll('[data-cat]')) o.setAttribute('aria-pressed', String(o === b));
+        const more = root.querySelector('.flag-more');
+        if (more.hidden) { more.hidden = false; more.classList.add('reveal'); }
         paint();
+        if (category === 'autre') text.focus();
       };
     }
     for (const b of root.querySelectorAll('[data-urg]')) b.onclick = () => { urgent = b.dataset.urg === '1'; paint(); };
     text.addEventListener('input', paint);
     root.querySelector('[data-close]').onclick = () => { photos.forEach(deletePhoto); closeSheet(); };
     saveBtn.onclick = () => {
-      const u = Boolean(pick());
-      if (!u) photos.splice(0).forEach(deletePhoto); // pas de courriel : les photos n'iraient nulle part
-      const fl = { category, location: root.querySelector('#flagWhere').value.trim(), text: text.value.trim(), at: new Date().toISOString(), photos, urgent: u };
+      const fl = { category, location: root.querySelector('#flagWhere').value.trim(), text: text.value.trim(), at: new Date().toISOString(), photos, urgent: Boolean(pick()) };
       state.flags.push(fl);
       save(); renderChecklist(); closeSheet();
-      if (u) mailFlag(fl); else toast(t('flagNoted'));
+      submitProblem(fl);
     };
     paint();
   }, `<div class="sheet-actions">
@@ -956,57 +975,61 @@ function openFlag({ where = '' } = {}) {
     </div>`);
 }
 
-// Pendant l'envoi : le signalement le dit (et ne se renvoie pas en double).
-const mailing = new WeakSet();
+// Où en est le signalement : envoyé aux superviseurs? courriel parti?
+const sending = new WeakSet();
+const flagNeedsWork = (fl) => (accounts() && !fl.id) || (fl.urgent && !fl.emailed && session.mode !== 'demo');
 function flagMailLine(fl, i) {
-  if (!fl.urgent) return '';
   const sup = state.supervisor || t('theSupervisor');
-  if (fl.emailed) return `<span class="mail-line ok">${ICON.mail}${esc(t('flagSent', sup))}</span>`;
-  if (mailing.has(fl)) return `<span class="mail-line">${ICON.mail}${esc(t('flagSending'))}</span>`;
-  if (CONFIG.demo) return `<span class="mail-line">${ICON.mail}${esc(t('flagDemo'))}</span>`;
-  return `<span class="mail-line bad">${ICON.mail}${esc(t('flagMailFail'))} <button type="button" class="link" data-retry-flag="${i}">${t('retryMail')}</button></span>`;
+  if (sending.has(fl)) return `<span class="mail-line">${ICON.mail}${esc(t('flagSending'))}</span>`;
+  if (flagNeedsWork(fl)) {
+    return `<span class="mail-line bad">${ICON.mail}${esc(t(accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'))} <button type="button" class="link" data-retry-flag="${i}">${t('retryMail')}</button></span>`;
+  }
+  if (fl.urgent) return `<span class="mail-line ok">${ICON.mail}${esc(session.mode === 'demo' ? t('flagDemo') : t('flagSent', sup))}</span>`;
+  return accounts() ? `<span class="mail-line ok">${esc(t('flagInBoss'))}</span>` : '';
 }
 
-async function mailFlag(fl) {
+async function submitProblem(fl) {
   const s = state;
-  const sup = s.supervisor || t('theSupervisor');
-  if (CONFIG.demo) { toast(t('flagDemo')); return; }
-  if (mailing.has(fl)) return;
-  mailing.add(fl);
+  if (sending.has(fl) || !flagNeedsWork(fl)) {
+    if (!sending.has(fl)) toast(t(fl.urgent ? 'flagDemo' : 'flagNoted'));
+    return;
+  }
+  sending.add(fl);
   renderChecklist();
   try {
-    await sendFlagEmail(fl, s);
-    fl.emailed = true;
-    toast(t('flagSent', sup));
+    if (accounts() && !fl.id) {
+      const blobs = (await Promise.all((fl.photos || []).map(getPhoto))).filter(Boolean);
+      fl.id = await createProblem({ category: fl.category, location: fl.location, text: fl.text, urgent: fl.urgent, at: fl.at, shiftDate: s.date, shift: s.shift }, blobs);
+      if (state === s) save();
+    }
+    if (fl.urgent && !fl.emailed && session.mode !== 'demo') {
+      await sendFlagEmail(fl, s);
+      fl.emailed = true;
+    }
+    toast(fl.urgent ? (session.mode === 'demo' ? t('flagDemo') : t('flagSent', s.supervisor || t('theSupervisor'))) : t('flagNoted'));
   } catch {
-    toast(t('flagMailFail'), 'bad');
+    toast(t(accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'), 'bad');
   }
-  mailing.delete(fl);
+  sending.delete(fl);
   if (state === s) { save(); if (current === 'checklist') renderChecklist(); }
 }
 
-// Le courriel : quatre lignes, dans la langue choisie pour ce superviseur.
+// Le courriel : une ligne et un lien. Les détails et les photos sont sur le site.
 const recipientFor = (name) => CONFIG.supervisors.find((x) => x.name === name)?.email || CONFIG.reportTo;
+const problemLink = (id) => `${location.origin}${location.pathname}${id ? `#probleme=${id}` : ''}`;
 async function sendFlagEmail(fl, s) {
   const L = s.reportLang === 'en' ? 'en' : 'fr';
   const T = UI[L];
-  const cat = FLAG_CATEGORIES[fl.category]?.[L] || fl.category;
-  const when = new Date(fl.at).toLocaleString(L === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const cat = catName(fl.category, L);
+  const when = new Date(fl.at).toLocaleTimeString(L === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' });
   const fd = new FormData();
-  fd.append('_subject', T.mailSubject(cat, fl.location, s.name));
+  fd.append('_subject', T.mailSubject(cat, s.name));
   fd.append('_template', 'table');
   fd.append('_captcha', 'false');
-  fd.append(T.mailProblem, cat);
-  if (fl.location) fd.append(T.mailWhere, fl.location);
-  fd.append(T.mailWhat, fl.text);
-  fd.append(T.mailBy, `${s.name} · ${SHIFTS[s.shift][L].short} · ${when}`);
-  let n = 0;
-  for (const pid of fl.photos || []) {
-    const blob = await getPhoto(pid);
-    if (blob) fd.append('attachment', new File([blob], `photo-${++n}.jpg`, { type: 'image/jpeg' }));
-  }
+  fd.append(T.mailWhat, T.mailLine(cat, fl.location, s.name, when));
+  fd.append(T.mailLink, problemLink(fl.id));
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 30_000);
+  const timer = setTimeout(() => ctrl.abort(), 20_000);
   try {
     const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipientFor(s.supervisor))}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' }, signal: ctrl.signal });
     const out = await r.json().catch(() => ({}));
@@ -1163,7 +1186,7 @@ function boardSummary() {
       const e = state.tasks[it.id] || {};
       return { id: it.id, status: e.done ? 'done' : e.skipped ? 'notdone' : 'unchecked', doneAt: e.doneAt || '', reason: e.skipped ? e.reason || '' : '', remark: e.remark || '' };
     }),
-    flags: state.flags.map((fl) => ({ category: fl.category, location: fl.location, text: fl.text, at: fl.at, urgent: Boolean(fl.urgent), emailed: Boolean(fl.emailed), photos: (fl.photos || []).length })),
+    flags: state.flags.map((fl) => ({ id: fl.id || '', category: fl.category, location: fl.location, text: fl.text, at: fl.at, urgent: Boolean(fl.urgent), emailed: Boolean(fl.emailed), photos: (fl.photos || []).length })),
   };
 }
 
@@ -1216,7 +1239,7 @@ function openReview(r, opts = {}) {
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
     </li>`;
   const attention = [
-    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('emailedTo', r.supervisor || t('theSupervisor'), fl.nPhotos || 0))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
+    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('emailedTo', r.supervisor || t('theSupervisor')))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
     ...unchecked.map(row),
   ];
@@ -1601,7 +1624,7 @@ function summaryReport(s) {
   return {
     lang: L, gymName: CONFIG.gymName, supervisor: s.supervisor || '', name: s.name, date: s.date, weekday: p.weekdayName, shiftName: p.shiftName, submittedAt: s.submittedAt || '',
     hours: `${f(p.start)} – ${f(p.end)}`, items, overflow: p.overflow.map((it) => line(it, false)).filter((i) => i.status !== 'unchecked'), deficit: fmtDuration(p.deficit, L), outOfRange: [],
-    flags: s.flags.map((fl) => ({ category: FLAG_CATEGORIES[fl.category]?.[L] || fl.category, location: fl.location, text: fl.text, at: clock(fl.at), photos: [], urgent: fl.urgent, emailed: fl.emailed, nPhotos: fl.photos || 0 })),
+    flags: s.flags.map((fl) => ({ category: FLAG_CATEGORIES[fl.category]?.[L] || fl.category, location: fl.location, text: fl.text, at: clock(fl.at), photos: [], urgent: fl.urgent, emailed: fl.emailed, id: fl.id || '' })),
     notes: s.notes || '', completion: { done: items.filter((i) => i.status === 'done').length, total: items.length },
   };
 }
@@ -1796,6 +1819,309 @@ $('#historyBody').addEventListener('click', (ev) => {
 // Retour sur la page (téléphone sorti de la poche) : l'historique se met à jour.
 document.addEventListener('visibilitychange', () => { if (!document.hidden && current === 'history') refreshHistory(); });
 
+// ---------- 0. Connexion : une fois, le téléphone s'en souvient ----------
+const authUI = { tab: 'login', role: 'employee' };
+const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing' };
+
+function openAuth() {
+  paintAuth();
+  $('#authError').innerHTML = '';
+  show('auth');
+}
+function paintAuth() {
+  paintStatic();
+  const up = authUI.tab === 'signup';
+  for (const b of document.querySelectorAll('[data-authtab]')) b.setAttribute('aria-selected', String(b.dataset.authtab === authUI.tab));
+  for (const el of document.querySelectorAll('#authForm [data-only="signup"]')) el.hidden = !up;
+  for (const b of document.querySelectorAll('[data-role]')) b.setAttribute('aria-checked', String(b.dataset.role === authUI.role));
+  $('#aCodeLabel').textContent = t(authUI.role === 'boss' ? 'bossCode' : 'teamCode');
+  $('#aCodeHint').textContent = t(authUI.role === 'boss' ? 'bossCodeHint' : 'teamCodeHint');
+  $('#aPass').autocomplete = up ? 'new-password' : 'current-password';
+  $('#aShow').textContent = t($('#aPass').type === 'password' ? 'show' : 'hide');
+  $('#authSubmit').textContent = t(up ? 'signupBtn' : 'loginBtn');
+  $('#authNote').textContent = session.mode === 'demo' ? t('authDemo') : t(up ? 'authNoteUp' : 'authNoteIn');
+  if (!$('#aName').value && prefs.name) $('#aName').value = prefs.name;
+}
+for (const b of document.querySelectorAll('[data-authtab]')) {
+  b.addEventListener('click', () => { authUI.tab = b.dataset.authtab; $('#authError').innerHTML = ''; paintAuth(); });
+}
+for (const b of document.querySelectorAll('[data-role]')) b.addEventListener('click', () => { authUI.role = b.dataset.role; paintAuth(); });
+$('#aShow').addEventListener('click', () => {
+  const pw = $('#aPass');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+  $('#aShow').textContent = t(pw.type === 'password' ? 'show' : 'hide');
+});
+$('#authForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const up = authUI.tab === 'signup';
+  const fields = { email: $('#aEmail').value.trim(), password: $('#aPass').value };
+  if (up) Object.assign(fields, { name: $('#aName').value.trim(), role: authUI.role, code: $('#aCode').value.trim() });
+  const fail = (key) => { $('#authError').innerHTML = `<div class="notice bad">${esc(t(key))}</div>`; };
+  if (up && !fields.name) return fail('errName');
+  if (!/^\S+@\S+\.\S+$/.test(fields.email)) return fail('errEmail');
+  if (fields.password.length < 6) return fail('errPassword');
+  if (up && !fields.code && session.mode !== 'demo') return fail('errCode');
+  const btn = $('#authSubmit');
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const user = await signIn(up ? 'signup' : 'login', fields, $('#aRemember').checked);
+    prefs.name = user.name;
+    savePrefs();
+    $('#aPass').value = '';
+    $('#aCode').value = '';
+    $('#authError').innerHTML = '';
+    flushQueue();
+    toast(t('welcomeName', user.name));
+    route();
+  } catch (err) {
+    fail(err.status === 0 ? 'errNetwork' : AUTH_ERRORS[err.message] || (session.mode === 'demo' && err.message === 'login' ? 'errLogin' : 'errServer'));
+  } finally {
+    btn.disabled = false;
+    paintAuth();
+  }
+});
+
+// Sur l'accueil : qui est connecté, et la porte de l'Espace superviseur.
+function paintAccount() {
+  const line = $('#accountLine');
+  const u = session.user;
+  line.hidden = !u;
+  document.querySelector('.boss-link').hidden = !isBoss();
+  if (!u) return;
+  line.innerHTML = `<span class="who">${esc(u.name)} · ${esc(t(u.role === 'boss' ? 'roleBoss' : 'roleEmployee'))}</span><button type="button" class="link" id="signOutBtn">${t('signOut')}</button>`;
+  const b = $('#signOutBtn');
+  b.onclick = async () => {
+    if (!b.dataset.armed) {
+      b.dataset.armed = '1';
+      b.textContent = t('signOutSure');
+      setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = t('signOut'); } }, 3000);
+      return;
+    }
+    await signOut();
+    boss.problems = [];
+    boss.team = [];
+    boss.loaded = false;
+    boss.teamLoaded = false;
+    window.history.replaceState(null, '', location.pathname);
+    route();
+  };
+  if (isBoss()) refreshBossCount();
+}
+
+// ---------- 8. Espace superviseur : les signalements, l'équipe ----------
+const boss = { tab: 'problems', filter: 'open', problems: [], team: [], loaded: false, teamLoaded: false, error: '' };
+const openCount = () => boss.problems.filter((p) => p.status !== 'resolved').length;
+const whenShort = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const day = isoOf(d);
+  const today = todayISO();
+  return `${day === today ? t('today') : day === addDays(today, -1) ? t('yesterday') : dayMonth(day)} · ${clock(iso)}`;
+};
+
+function paintBossCount() {
+  const n = openCount();
+  const el = $('#bossCount');
+  el.hidden = !n;
+  el.textContent = n;
+}
+async function refreshBossCount() {
+  try { boss.problems = await listProblems(); boss.loaded = true; } catch { /* le compte reste à jour au prochain coup */ }
+  paintBossCount();
+}
+
+function openBoss({ keep = false } = {}) {
+  if (!isBoss()) { window.history.replaceState(null, '', location.pathname); route(); return; }
+  $('#boss .back span').dataset.t = state ? 'myShift' : 'home';
+  paintStatic();
+  renderBoss({ animate: !keep });
+  show('boss');
+  refreshBoss();
+}
+
+async function refreshBoss() {
+  const tab = boss.tab;
+  try {
+    if (tab === 'team') { boss.team = await listTeam(); boss.teamLoaded = true; } else { boss.problems = await listProblems(); boss.loaded = true; }
+    boss.error = '';
+  } catch (err) {
+    boss.error = err.status === 0 ? 'errNetwork' : 'errServer';
+    if (tab === 'team') boss.teamLoaded = true; else boss.loaded = true;
+  }
+  paintBossCount();
+  if (current === 'boss' && boss.tab === tab) renderBoss({ animate: false });
+}
+
+function problemCard(p, i) {
+  const tone = p.status === 'resolved' ? 'ok' : p.urgent ? 'bad' : 'warn';
+  const tags = [
+    p.urgent && p.status !== 'resolved' ? `<span class="tag bad">${esc(t('urgentYes'))}</span>` : '',
+    p.status === 'resolved' ? `<span class="tag ok">✓ ${esc(t('resolvedBy', p.resolvedBy))}</span>` : '',
+    p.photos ? `<span class="tag note">${esc(t('photosN', p.photos))}</span>` : '',
+  ].join('');
+  return `<button type="button" class="rp-card pb-card ${tone}" data-pid="${esc(p.id)}" style="--k:${Math.min(i, 8)}">
+    <span class="pb-ico">${catIcon(p.category)}</span>
+    <span class="rp-main">
+      <b>${esc(catName(p.category))}</b>
+      <span class="hi-meta">${p.location ? `${esc(p.location)} · ` : ''}${esc(p.by)} · ${esc(whenShort(p.at))}</span>
+      ${p.text ? `<span class="pb-text">${esc(p.text)}</span>` : ''}
+      ${tags ? `<span class="tags">${tags}</span>` : ''}
+    </span>${CHEV_R}</button>`;
+}
+
+function renderBoss({ animate = true } = {}) {
+  $('#bossEyebrow').textContent = [CONFIG.gymName, session.user?.name].filter(Boolean).join(' · ');
+  const n = openCount();
+  let panel = '';
+  if (boss.tab === 'team') {
+    panel = !boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
+      : `<p class="section-note">${esc(t('teamHint'))}</p>
+        <div class="panel team-list">${boss.team.map((u) => `<div class="team-row" data-email="${esc(u.email)}">
+          <div class="team-who"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
+          <span class="pill">${esc(t(u.role === 'boss' ? 'roleBoss' : 'roleEmployee'))}</span>
+          ${u.email === session.user?.email ? `<span class="team-you">${esc(t('you'))}</span>` : `<div class="team-acts">
+            ${session.mode === 'demo' ? '' : `<button type="button" class="link" data-reset>${esc(t('newPassword'))}</button>`}
+            <button type="button" class="link danger" data-remove>${esc(t('removeUser'))}</button></div>`}
+        </div>`).join('')}</div>`;
+  } else {
+    const list = boss.filter === 'open' ? boss.problems.filter((p) => p.status !== 'resolved') : boss.problems;
+    panel = !boss.loaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
+      : `<div class="segmented tiny pb-filter" role="tablist">
+          <button type="button" role="tab" data-pfilter="open" aria-selected="${boss.filter === 'open'}">${esc(t('toFix'))}${n ? ` · ${n}` : ''}</button>
+          <button type="button" role="tab" data-pfilter="all" aria-selected="${boss.filter === 'all'}">${esc(t('allProblems'))}</button>
+        </div>
+        <div class="pb-list${animate ? ' cascade' : ''}">${list.length ? list.map(problemCard).join('')
+          : `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
+  }
+  $('#bossBody').innerHTML = `
+    <button type="button" class="rp-card boss-hist" data-go="history">
+      <span class="pb-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg></span>
+      <span class="rp-main"><b>${esc(t('shiftsHistory'))}</b><span class="hi-meta">${esc(t('shiftsHistorySub'))}</span></span>${CHEV_R}
+    </button>
+    <div class="segmented boss-tabs" role="tablist">
+      <button type="button" role="tab" data-btab="problems" aria-selected="${boss.tab === 'problems'}">${esc(t('tabProblems'))}</button>
+      <button type="button" role="tab" data-btab="team" aria-selected="${boss.tab === 'team'}">${esc(t('tabTeam'))}</button>
+    </div>
+    ${boss.error ? `<div class="notice bad">${esc(t(boss.error))}</div>` : ''}
+    ${panel}`;
+}
+
+$('#bossBody').addEventListener('click', async (ev) => {
+  const el = ev.target.closest('[data-btab], [data-pfilter], [data-pid], [data-reset], [data-remove]');
+  if (!el) return;
+  const ds = el.dataset;
+  if (ds.btab) {
+    if (ds.btab === boss.tab) return;
+    boss.tab = ds.btab;
+    renderBoss();
+    refreshBoss();
+  } else if (ds.pfilter) {
+    boss.filter = ds.pfilter;
+    renderBoss();
+  } else if (ds.pid) {
+    location.hash = `probleme=${ds.pid}`;
+  } else if (ds.reset !== undefined) {
+    const email = el.closest('[data-email]').dataset.email;
+    const u = boss.team.find((x) => x.email === email);
+    openSheet(`<div class="sheet-head"><h3>${esc(t('newPasswordFor', u?.name || email))}</h3><p class="lede">${esc(t('newPasswordLede'))}</p></div>
+      <label class="field"><span>${t('password')}</span><input id="npw" type="text" autocomplete="off" minlength="6"></label>`, (root) => {
+      const input = root.querySelector('#npw');
+      const ok = root.querySelector('#npwSave');
+      input.addEventListener('input', () => { ok.disabled = input.value.length < 6; });
+      root.querySelector('[data-close]').onclick = closeSheet;
+      ok.onclick = async () => {
+        ok.disabled = true;
+        try { await teamAction('reset', email, { password: input.value }); closeSheet(); toast(t('passwordSet', u?.name || email)); } catch (err) { ok.disabled = false; toast(t(err.status === 0 ? 'errNetwork' : 'errServer'), 'bad'); }
+      };
+    }, `<div class="sheet-actions"><button class="btn ghost" data-close>${t('cancel')}</button><button class="btn primary" id="npwSave" disabled>${t('save')}</button></div>`);
+  } else if (ds.remove !== undefined) {
+    if (!el.dataset.armed) {
+      el.dataset.armed = '1';
+      el.textContent = t('removeSure');
+      setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.textContent = t('removeUser'); } }, 3000);
+      return;
+    }
+    const email = el.closest('[data-email]').dataset.email;
+    try {
+      await teamAction('remove', email);
+      boss.team = boss.team.filter((x) => x.email !== email);
+      renderBoss({ animate: false });
+      toast(t('removed'));
+    } catch (err) { toast(t(err.status === 0 ? 'errNetwork' : 'errServer'), 'bad'); }
+  }
+});
+
+// ---------- 9. Un signalement (le lien du courriel arrive ici) ----------
+let lastProblem = null;
+async function openProblem(id) {
+  lastProblem = null;
+  paintStatic();
+  if (!isBoss()) {
+    $('#problemBody').innerHTML = `<div class="notice bad"><b>${esc(t('bossOnly'))}</b></div>`;
+    show('problem');
+    return;
+  }
+  const cached = boss.problems.find((p) => p.id === id);
+  if (cached) renderProblem(cached); else $('#problemBody').innerHTML = '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>';
+  show('problem');
+  try {
+    const p = await getProblem(id);
+    if (current === 'problem' && (!cached || JSON.stringify(p) !== JSON.stringify(cached))) renderProblem(p);
+  } catch (err) {
+    if (!cached) $('#problemBody').innerHTML = `<div class="notice bad"><b>${esc(t(err.status === 404 ? 'problemMissing' : err.status === 0 ? 'errNetwork' : 'errServer'))}</b></div>`;
+  }
+}
+
+function renderProblem(p) {
+  lastProblem = p;
+  const done = p.status === 'resolved';
+  const tone = done ? 'ok' : p.urgent ? 'bad' : 'warn';
+  const day = p.at ? isoOf(new Date(p.at)) : '';
+  const facts = [
+    [t('reportedBy'), p.by],
+    [t('whenLabel'), day ? `${longDay(day)} · ${clock(p.at)}` : ''],
+    [t('whereLabel'), p.location],
+    [t('shiftLabel'), p.shift ? SHIFTS[p.shift][lang()].name : ''],
+  ].filter(([, v]) => v);
+  $('#problemBody').innerHTML = `
+    <div class="pb-head ${tone}">
+      <span class="pb-big">${catIcon(p.category)}</span>
+      <div>
+        <p class="eyebrow">${esc(t(p.urgent ? 'urgentYes' : 'problem'))}${done ? ` · ${esc(t('resolved'))}` : ''}</p>
+        <h1>${esc(catName(p.category))}</h1>
+      </div>
+    </div>
+    <div class="panel pb-facts">${facts.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    ${p.text ? `<div class="panel rv-notes pb-quote">« ${esc(p.text)} »</div>` : ''}
+    ${p.photos ? `<div class="pb-photos">${Array.from({ length: p.photos }, (_, i) => `<button type="button" class="pb-photo loading" data-ph="${i}" aria-label="${esc(t('photos'))} ${i + 1}"></button>`).join('')}</div>` : ''}
+    ${done ? `<div class="notice ok"><b>✓ ${esc(t('resolvedOn', p.resolvedBy, whenShort(p.resolvedAt)))}</b></div>
+      <button class="btn ghost big" id="pbToggle">${esc(t('reopen'))}</button>`
+      : `<button class="btn primary big" id="pbToggle">✓ ${esc(t('markResolved'))}</button>`}`;
+  $('#pbToggle').onclick = async (ev) => {
+    ev.currentTarget.disabled = true;
+    try {
+      const next = await setProblemStatus(p.id, done ? 'open' : 'resolved');
+      boss.problems = boss.problems.map((x) => (x.id === next.id ? next : x));
+      paintBossCount();
+      renderProblem(next);
+      toast(t(done ? 'reopened' : 'markedResolved'));
+      if (!done) celebrate();
+    } catch (err) {
+      ev.currentTarget.disabled = false;
+      toast(t(err.status === 0 ? 'errNetwork' : 'errServer'), 'bad');
+    }
+  };
+  for (const b of document.querySelectorAll('#problemBody [data-ph]')) {
+    photoSrc(p, Number(b.dataset.ph)).then((src) => {
+      if (!src || !b.isConnected) return;
+      b.innerHTML = `<img src="${src}" alt="">`;
+      b.classList.remove('loading');
+      b.onclick = () => openSheet(`<img class="pb-full" src="${src}" alt="">`);
+    }).catch(() => { b.classList.remove('loading'); b.classList.add('broken'); });
+  }
+}
+
 // ---------- Confort : texte plus grand ----------
 function setLarge(on, sw) {
   prefs.large = on;
@@ -1824,6 +2150,12 @@ document.addEventListener('click', (ev) => {
   if (go.dataset.go === 'apercu-keep') { openApercu({ keep: true }); return; }
   if (go.dataset.go === 'protocol') { goProtocol(); return; }
   if (go.dataset.go === 'history-keep') { openHistory({ keep: true }); return; }
+  if (go.dataset.go === 'boss-keep') { window.history.replaceState(null, '', '#patron'); openBoss({ keep: true }); return; }
+  if (go.dataset.go === 'boss') {
+    if (location.hash === '#patron') openBoss(); else location.hash = 'patron';
+    return;
+  }
+  if (go.dataset.go === 'problem') { location.hash = `probleme=${go.dataset.id}`; return; }
   if (go.dataset.go === 'history') {
     if (location.hash === '#historique') openHistory(); else location.hash = 'historique';
     return;
@@ -1837,7 +2169,11 @@ document.addEventListener('click', (ev) => {
 });
 
 function route() {
-  if (location.hash.startsWith('#r=')) return openReviewFromHash();
+  const h = location.hash;
+  if (h.startsWith('#r=')) return openReviewFromHash();
+  if (accounts() && !session.user) return openAuth(); // le lien demandé s'ouvre après la connexion
+  if (h.startsWith('#probleme=')) return openProblem(decodeURIComponent(h.slice(10)));
+  if (h === '#patron') return openBoss();
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();
   if (state?.name && state?.date) return openChecklist();
@@ -1873,6 +2209,7 @@ document.addEventListener('touchstart', () => {}, { passive: true });
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('paused', document.hidden));
 
 paintStatic();
+initAuth(() => { route(); flushQueue(); }); // le serveur a répondu autre chose que prévu
 route();
 
 // Un quart enregistré sans réseau part tout seul dès que le réseau revient.

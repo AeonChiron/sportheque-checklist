@@ -5,8 +5,13 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
 
 ## Ce que ça fait
 
+**Comptes (sur Netlify)** : chacun crée son compte une fois (prénom, courriel, mot de
+passe) et le téléphone s'en souvient (« Rester connecté », un an). Rôle **Employé**
+(il faut le **code d'équipe**) ou **Superviseur** (il faut le **code superviseur**).
+Mot de passe oublié : un superviseur en donne un nouveau dans l'Espace superviseur.
+
 **Pour l'employé**
-1. Il entre son nom, touche son quart (**Jour** 7 h 30–15 h 30, **Soir** 16 h 30–23 h,
+1. Il touche son quart (son nom vient de son compte) (**Jour** 7 h 30–15 h 30, **Soir** 16 h 30–23 h,
    **Soir court** 18 h–23 h) ou entre d'autres heures, la date, choisit le
    **superviseur en service** (Daniel ou Mathieu).
    Le téléphone retient ses dernières heures.
@@ -22,9 +27,12 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
 4. Le détail d'une tâche : illustration ou schéma (plan du gym, postes des
    télés), étapes précises **à cocher une par une** (la dernière coche la tâche),
    « Bon à savoir », « Pas pu faire » + raison, remarque, et « Signaler un problème ici ».
-4b. **⚑ Signaler** (bris, fournitures, danger) : **Urgent** → le superviseur reçoit
-   tout de suite un courriel court (catégorie, où, description, qui, photos).
-   **Pas urgent** → c'est noté dans le quart, sans courriel. C'est le **seul**
+4b. **⚑ Signaler** : une catégorie d'un toucher (Machine brisée, Dégât ou plancher
+   glissant, Blessure, Altercation, Matériel manquant, Toilettes ou vestiaire, Bâtiment,
+   Objet trouvé, Autre), où, quelques mots et jusqu'à 3 photos (facultatif). Le
+   signalement va dans l'**Espace superviseur**. **Urgent** → le superviseur reçoit
+   aussi un courriel d'une ligne : « ⚑ Machine brisée — signalé par Marie » + le lien
+   vers le signalement. Pas de photos ni de détails dans le courriel. C'est le **seul**
    courriel que le site envoie.
 5. **Le plan du gym** (d'après le croquis de l'équipe) : zones A/B/C en couleur et
    pièces 1 à 5. On touche une zone ou une pièce pour voir ce qu'il y a dedans et
@@ -33,7 +41,14 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
    (statuts, remarques, notes, problèmes). Pas de courriel. Ce qui n'est pas fait
    n'est pas reporté au prochain quart.
 
-**Pour le superviseur (et toute l'équipe) : l'Historique** (bouton sur l'accueil)
+**Pour le superviseur : l'Espace superviseur** (`#patron`, réservé au rôle Superviseur)
+- **Signalements** : « À régler » d'abord (ou Tous), avec catégorie, où, qui, quand, photos.
+  Le lien du courriel ouvre directement le bon signalement (connexion d'abord si besoin).
+  « Marquer comme réglé » / « Rouvrir ».
+- **Équipe** : les comptes, nouveau mot de passe, retirer quelqu'un.
+- Raccourci vers l'Historique des quarts.
+
+**Pour toute l'équipe : l'Historique** (bouton sur l'accueil)
 - **Récents** (par défaut) : les derniers quarts enregistrés, le plus récent en haut,
   groupés par jour (Aujourd'hui, Hier…). Chaque carte : nom, quart, heures,
   « 14/14 tâches faites » ou ce qui manque, problèmes, remarques. Vert = tout fait.
@@ -46,9 +61,10 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
   chaque quart, ce qui reste à faire, les problèmes et de bons trucs du manuel.
 
 **Partagé ou pas?**
-- **Sur GitHub Pages** : chaque téléphone ne voit que ses propres quarts (pas de stockage partagé).
-- **Sur Netlify** : l'Historique et l'Aperçu sont **partagés entre tous les téléphones**
-  (gratuit, voir plus bas). Rien à changer dans le code.
+- **Sur GitHub Pages** : pas de comptes ni d'Espace superviseur; chaque téléphone ne voit
+  que ses propres quarts. Le courriel urgent pointe vers le site.
+- **Sur Netlify** : comptes, Espace superviseur, Historique et Aperçu **partagés entre
+  tous les téléphones** (gratuit, voir plus bas). Rien à changer dans le code.
 - Sans réseau, le quart est gardé sur le téléphone et part tout seul au retour du réseau.
 
 Français québécois ou anglais au choix sur chaque téléphone. Mode sombre automatique.
@@ -66,7 +82,7 @@ L'« algorithme obligatoire » de la section 6 du manuel :
 - Rotation A → B → C continue (semaine 1 = lundi 19 octobre 2026), murs un jour
   sur deux, tuiles/miroirs en alternance, compost seulement le soir à 19 h.
 
-`npm test` vérifie tout ça (22 tests).
+`npm test` vérifie tout ça, plus les comptes et les signalements (27 tests).
 
 ## Réglages (`js/config.js`)
 
@@ -77,7 +93,7 @@ L'« algorithme obligatoire » de la section 6 du manuel :
 | `shiftPresets` | quarts proposés au début (Jour, Soir, Soir court); en ajouter ou en retirer ici |
 | `supervisors` | Daniel, Mathieu (ajouter `email` pour qu'un superviseur reçoive les problèmes urgents directement) |
 | `reportTo` | adresse de test pendant la période d'essai (tous les courriels urgents y vont) |
-| `boardEndpoint` | historique partagé : `/api/board` sur Netlify, ou l'adresse complète du site Netlify pour l'utiliser depuis GitHub Pages |
+| `api` | le serveur du site : `/api` sur Netlify, ou `https://<site>.netlify.app/api` pour l'utiliser depuis GitHub Pages |
 | `cycleAnchorMonday` | `2026-10-19` |
 
 ## Mettre en ligne (gratuit)
@@ -86,18 +102,21 @@ L'« algorithme obligatoire » de la section 6 du manuel :
 Les courriels urgents passent par FormSubmit (gratuit, sans compte : le destinataire
 clique « Activate » une seule fois).
 
-**Pour l'Historique partagé : Netlify** (gratuit, le dépôt peut rester privé)
+**Pour les comptes et l'Espace superviseur : Netlify** (gratuit, le dépôt peut rester privé)
 1. netlify.com → *Sign up with GitHub* → *Add new site* → *Import from GitHub* → ce dépôt.
-2. Aucun réglage : `netlify.toml` dit tout. *Deploy*.
-3. Le site répond sur `https://<nom>.netlify.app`; la fonction `netlify/functions/board.mjs`
+2. Aucun réglage de build : `netlify.toml` dit tout. *Deploy*.
+3. *Site configuration → Environment variables* : ajouter `TEAM_CODE` (code d'équipe) et
+   `BOSS_CODE` (code superviseur), puis *Deploys → Trigger deploy*. Les codes ne sont
+   jamais dans le code du site.
+4. Le site répond sur `https://<nom>.netlify.app`; la fonction `netlify/functions/api.mjs`
    et son stockage (Netlify Blobs) s'activent tout seuls.
-4. Pour garder l'adresse GitHub Pages : mettre `boardEndpoint: 'https://<nom>.netlify.app/api/board'`
-   dans `js/config.js` (la fonction accepte les deux adresses).
+5. Pour garder l'adresse GitHub Pages : mettre `api: 'https://<nom>.netlify.app/api'`
+   dans `js/config.js`.
 
 ## Développement local
 
 ```sh
-npm run dev           # http://localhost:3000 — historique partagé simulé (en mémoire)
+npm run dev           # http://localhost:3000 — API simulée en mémoire (codes : equipe / patron)
 npm test
 ```
 
@@ -107,8 +126,10 @@ npm test
 - `js/planner.js` — moteur de planification
 - `js/illustrations.js` — illustrations SVG des tâches, carte des zones, mur des télés
 - `js/report.js` — libellés du détail d'un quart; ouvre encore les anciens liens `#r=…`
-- `js/board.js`, `js/board-shape.js`, `netlify/functions/board.mjs` — historique partagé (et Aperçu)
+- `netlify/lib/api.mjs`, `netlify/functions/api.mjs` — le serveur : comptes, historique, signalements
+- `js/auth.js` — connexion (« rester connecté »); `js/problems.js`, `js/problem-shape.js` — signalements
+- `js/board.js`, `js/board-shape.js` — historique partagé (et Aperçu)
 - `js/app.js`, `index.html`, `styles.css`, `js/i18n.js` — interface
-- `js/photos.js` — photos d'un problème urgent (gardées sur le téléphone jusqu'à la fin du quart)
+- `js/photos.js` — photos d'un signalement (réduites sur le téléphone avant l'envoi)
 - `fonts/` — Barlow Condensed (licence OFL), hébergée sur le site
 - `api/send-report.js` — option d'envoi Vercel + Resend (non utilisée)

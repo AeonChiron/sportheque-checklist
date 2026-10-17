@@ -21,6 +21,57 @@
   <!-- Fond vivant : lumière de piscine, très lente. -->
   <div class="env" aria-hidden="true"><i></i></div>
 
+  <!-- 0. Connexion (une fois : le téléphone s'en souvient) -->
+  <section id="auth" class="screen" hidden>
+    <div class="setup-top">
+      <div class="brand" data-brand></div>
+      <div class="setup-tools">
+        <div class="lang-switch" role="group" aria-label="Langue / Language">
+          <button type="button" data-lang="fr">FR</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+    <header class="hero">
+      <h1 data-t="welcome"></h1>
+      <p class="lede" data-t="authLede"></p>
+    </header>
+    <div class="segmented auth-tabs" role="tablist">
+      <button type="button" role="tab" data-authtab="login" aria-selected="true" data-t="login"></button>
+      <button type="button" role="tab" data-authtab="signup" aria-selected="false" data-t="signup"></button>
+    </div>
+    <form id="authForm" class="panel form" novalidate>
+      <label class="field" data-only="signup">
+        <span data-t="name"></span>
+        <input id="aName" type="text" autocomplete="given-name" autocapitalize="words" data-ph="namePh">
+      </label>
+      <label class="field">
+        <span data-t="email"></span>
+        <input id="aEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" data-ph="emailPh">
+      </label>
+      <label class="field">
+        <span data-t="password"></span>
+        <span class="pw-wrap"><input id="aPass" type="password" autocomplete="current-password" minlength="6"><button type="button" class="link pw-eye" id="aShow" data-t="show"></button></span>
+      </label>
+      <div class="field" data-only="signup">
+        <span data-t="iAm"></span>
+        <div class="segmented" role="radiogroup" id="aRole">
+          <button type="button" role="radio" data-role="employee" aria-checked="true" data-t="roleEmployee"></button>
+          <button type="button" role="radio" data-role="boss" aria-checked="false" data-t="roleBoss"></button>
+        </div>
+      </div>
+      <label class="field" data-only="signup">
+        <span id="aCodeLabel"></span>
+        <input id="aCode" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <small class="hint" id="aCodeHint"></small>
+      </label>
+      <label class="check-line"><input type="checkbox" id="aRemember" checked><span data-t="remember"></span></label>
+      <div id="authError" aria-live="polite"></div>
+      <button class="btn primary big" type="submit" id="authSubmit"></button>
+    </form>
+    <p class="fineprint" id="authNote"></p>
+  </section>
+
   <!-- 1. Début de quart -->
   <section id="setup" class="screen" hidden>
     <div class="setup-top">
@@ -37,10 +88,11 @@
     <header class="hero">
       <h1 data-t="hello"></h1>
       <p class="lede" data-t="lede"></p>
+      <p class="account-line" id="accountLine" hidden></p>
     </header>
 
     <form id="setupForm" class="panel form" autocomplete="on" novalidate>
-      <label class="field">
+      <label class="field" id="nameField">
         <span data-t="name"></span>
         <input id="fName" name="name" type="text" autocomplete="given-name" autocapitalize="words" data-ph="namePh" required>
       </label>
@@ -76,6 +128,10 @@
     </form>
 
     <div class="home-links">
+      <button class="btn overview-link hist-link boss-link" type="button" data-go="boss" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+        <span data-t="bossSpace"></span><span class="count num" id="bossCount" hidden></span>
+      </button>
       <button class="btn ghost overview-link hist-link" type="button" data-go="history">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg>
         <span data-t="history"></span>
@@ -191,6 +247,26 @@
       <h1 data-t="history"></h1>
     </header>
     <div id="historyBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <!-- 8. Espace superviseur : signalements et équipe -->
+  <section id="boss" class="screen" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="home">‹ <span data-t="home"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <p class="eyebrow" id="bossEyebrow"></p>
+      <h1 data-t="bossSpace"></h1>
+    </header>
+    <div id="bossBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <!-- 9. Un signalement (ouvert depuis le courriel) -->
+  <section id="problem" class="screen" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="boss-keep">‹ <span data-t="bossSpace"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+    </header>
+    <div id="problemBody"></div>
     <div class="bottom-spacer small"></div>
   </section>
 
