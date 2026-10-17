@@ -32,6 +32,7 @@ const savePrefs = () => write(PREFS, prefs);
 let state = read(KEY, null);
 const save = () => write(KEY, state);
 let plan = null;
+const ensurePlan = () => { if (state && !plan) plan = buildPlan({ ...state, lang: lang() }); };
 
 const lang = () => (prefs.lang === 'en' ? 'en' : 'fr');
 const t = (key, ...args) => {
@@ -58,6 +59,8 @@ const RANK = { auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, h
 function show(id) {
   const prev = current;
   current = id;
+  ensurePlan();
+  paintShiftPill();
   const target = document.getElementById(id);
   if (!target.hidden) return;
   const swap = () => {
@@ -75,6 +78,25 @@ function show(id) {
   } else swap();
 }
 if (document.startViewTransition) document.documentElement.classList.add('vt');
+
+// « Mes tâches » : pendant un quart, un toucher ramène à la liste, de n'importe où.
+const PILL_HIDDEN = new Set(['checklist', 'finish', 'sent', 'auth']);
+function paintShiftPill() {
+  const pill = $('#shiftPill');
+  const on = Boolean(state && plan && !PILL_HIDDEN.has(current));
+  pill.hidden = !on;
+  document.documentElement.classList.toggle('has-pill', on);
+  if (!on) return;
+  const tasks = plan.items.filter((it) => it.kind === 'task');
+  const done = tasks.filter((x) => state.tasks[x.id]?.done).length;
+  pill.style.setProperty('--p', tasks.length ? done / tasks.length : 0);
+  pill.querySelector('b').textContent = `${done}/${tasks.length}`;
+}
+$('#shiftPill').addEventListener('click', () => {
+  if (!$('#sheet').hidden) closeSheet();
+  window.history.replaceState(null, '', location.pathname);
+  openChecklist();
+});
 
 // Message bref en bas de l'écran; avec onUndo, un bouton « Annuler » reste
 // quelques secondes de plus (un toucher de trop se répare tout de suite).
@@ -346,6 +368,7 @@ $('#setupForm').addEventListener('submit', (ev) => {
 function openChecklist() {
   paintStatic();
   plan = buildPlan({ ...state, lang: lang() });
+  setTimeout(() => document.querySelector('#taskList .task.current, #taskList .task:not(.done)')?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }), current === 'checklist' ? 0 : 450);
   renderChecklist();
   show('checklist');
 }
@@ -457,7 +480,7 @@ function renderChecklist() {
   $('#cEyebrow').textContent = `${SHIFTS[plan.shift][lang()].short} · ${dayMonth(state.date)}`;
   $('#cTitle').textContent = state.name;
   $('#rangeLabel').textContent = `${f(plan.start)} → ${f(plan.end)}`;
-  $('#progressLabel').textContent = done === tasks.length && tasks.length ? t('allDone') : t('doneOf', done, tasks.length);
+  $('#progressLabel').textContent = done === tasks.length && tasks.length ? t('allDone') : t('leftOf', tasks.length - done, done, tasks.length);
   renderTimeline();
   renderNow();
 
@@ -500,7 +523,29 @@ function toggleDone(id) {
   save();
   renderChecklist();
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
-  if (!wasAll && allDone()) { celebrate(); toast(t('allDone'), 'ok', undo); } else toast(t(e.done ? 'checked' : 'unchecked'), e.done ? 'ok' : 'muted', undo);
+  try { if (e.done) navigator.vibrate?.(12); } catch { /* iPhone : pas de vibration */ }
+  const tasks = planTasks();
+  const left = tasks.filter((x) => !state.tasks[x.id]?.done).length;
+  const half = Math.ceil(tasks.length / 2);
+  if (!wasAll && allDone()) { celebrate(); toast(t('allDone'), 'ok', undo); }
+  else if (e.done && left === 1) toast(t('lastOne'), 'ok', undo);
+  else if (e.done && tasks.length - left === half && tasks.length > 3) { celebrate(); toast(t('halfway'), 'ok', undo); }
+  else toast(e.done ? pickCheer() : t('unchecked'), e.done ? 'ok' : 'muted', undo);
+  bump($('#progressLabel'));
+}
+
+// Un mot différent à chaque tâche cochée (moins robotique).
+let cheerAt = -1;
+function pickCheer() {
+  const list = t('cheers');
+  cheerAt = (cheerAt + 1 + Math.floor(Math.random() * (list.length - 1))) % list.length;
+  return list[cheerAt];
+}
+function bump(el) {
+  if (!el || reducedMotion()) return;
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
 }
 
 // Glisser vers la droite pour cocher (le toucher simple marche toujours).
@@ -1196,7 +1241,8 @@ async function saveShift() {
   btn.disabled = true;
   btn.textContent = t('saving');
   const { name } = state;
-  const where = await publishShift(boardSummary());
+  const summary = boardSummary();
+  const where = await publishShift(summary);
   write(LAST_SHIFT, { ...state, savedAt: new Date().toISOString() }); // pour le modifier jusqu'à minuit
   state = null;
   save();
@@ -1204,10 +1250,22 @@ async function saveShift() {
   hist.loaded = false; // l'historique se recharge avec ce quart
   hist.weekLoaded = '';
   $('#sentText').textContent = t(where === 'queued' ? 'savedQueued' : 'savedText', name);
+  $('#sentWin').textContent = winLine(name, summary);
   $('#editShiftBtn').hidden = false;
   paintStatic();
   show('sent');
   celebrate();
+}
+
+// Une petite victoire à la fin : quart parfait, ou série de quarts complets.
+function winLine(name, summary) {
+  const all = Object.values(read('gym-board-local', {})).flat()
+    .filter((x) => x.name?.toLowerCase() === name.toLowerCase())
+    .sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  let streak = 0;
+  for (const x of all) { if (x.total && x.done === x.total) streak += 1; else break; }
+  if (streak >= 2) return t('streak', streak);
+  return summary.total && summary.done === summary.total ? t('perfect', summary.total) : '';
 }
 
 $('#newShiftBtn').addEventListener('click', setupScreen);
@@ -1431,7 +1489,7 @@ function renderApercu({ animate = true, dir = 0 } = {}) {
       ${AP_TABS.map((k) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${ap.tab === k}">${esc(t(`tab_${k}`))}</button>`).join('')}
     </div>
     <div class="ap-panel" id="apPanel"></div>
-    <button class="btn primary big" type="button" data-go="${state ? 'shift' : 'home'}">${esc(state ? t('backToShift') : t('startShift'))}</button>`;
+    ${state ? '' : `<button class="btn primary big" type="button" data-go="home">${esc(t('startShift'))}</button>`}`;
   renderPanel({ animate, dir });
 }
 
