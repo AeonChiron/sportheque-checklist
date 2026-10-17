@@ -981,3 +981,4 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .floor .eq-mirror { fill: #bfe3ef; stroke: #7fb6c8; stroke-width: .8; }
 .floor .zm-top { pointer-events: none; }
 .floor .zm:focus-visible .zm-tint { opacity: .7; }
+.floor .zm-room-label.tiny { font-size: 7.5px; letter-spacing: .06em; }

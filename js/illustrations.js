@@ -316,7 +316,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     const label = labels[`r${id}`] || '';
     return `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id] || label}">
       <rect x="${m.x}" y="${m.y}" width="${m.w}" height="${m.h}" class="zm-room"/>
-      <text x="${cx}" y="${cy + 4}" text-anchor="middle" class="zm-room-label" ${m.vertical ? `transform="rotate(-90 ${cx} ${cy})"` : ''}>${label}</text>
+      <text x="${cx}" y="${cy + 3}" text-anchor="middle" class="zm-room-label ${Math.min(m.w, m.h) < 24 ? 'tiny' : ''}" ${m.vertical ? `transform="rotate(-90 ${cx} ${cy})"` : ''}>${label}</text>
     </g>`;
   };
   // Murs intérieurs des pièces, avec la porte (ou l'ouverture) au bon endroit.
@@ -332,7 +332,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
       return x1 === x2 ? `M${x1} ${y1}V${d.from}M${x1} ${d.to}V${y2}` : `M${x1} ${y1}H${d.from}M${d.to} ${y1}H${x2}`;
     }).join('');
   }).join('');
-  const swings = Object.values(ROOMS).filter((m) => m.door && !m.open).map((m) => {
+  const swings = Object.values(ROOMS).filter((m) => m.door && !m.open && Math.min(m.w, m.h) >= 24).map((m) => {
     const d = m.door;
     if (d.side === 'top') return `M${d.from} ${m.y}A${d.to - d.from} ${d.to - d.from} 0 0 0 ${d.to} ${m.y + (d.to - d.from)}`;
     if (d.side === 'left') return `M${m.x} ${d.from}A${d.to - d.from} ${d.to - d.from} 0 0 1 ${m.x + (d.to - d.from)} ${d.to}`;

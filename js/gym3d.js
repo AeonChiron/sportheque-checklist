@@ -176,7 +176,7 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     platform: (g, it) => part(g, 0, 0, it.w, it.h, 1.4, C.wood, { shadow: false }),
     carpet: (g, it) => part(g, 0, 0, it.w, it.h, 0.8, C.carpet, { shadow: false }),
     mirror: (g, it) => part(g, 0, 0, it.w, it.h, 22, C.glass, { y: 1, extra: { metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.75 } }),
-    tv: (g, it) => { part(g, 0.6, 0, it.w + 0.5, it.h + 4, 8, C.dark, { y: 16 }); part(g, 1.8, 0, 0.3, it.h + 3, 6.5, C.accent, { y: 16.7, shadow: false, extra: screen }); },
+    tv: (g, it) => { part(g, 0, 0, it.w + 1, 2, 9, C.dark, { y: 16 }); part(g, 0, 1.1, it.w - 1, 0.3, 7, C.accent, { y: 17, shadow: false, extra: screen }); },
   };
   for (const it of GEAR) {
     const g = new THREE.Group();
@@ -229,7 +229,7 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     m.position.set(x, 1.6, z);
     root.add(m);
   };
-  for (const [id, m] of Object.entries(ROOMS)) flatLabel(labels[`r${id}`] || '', m.x + m.w / 2, m.y + m.h / 2 + (id === '4' ? 40 : 0), { turn: m.vertical ? Math.PI / 2 : 0, scale: m.vertical ? 0.3 : 0.36 });
+  for (const [id, m] of Object.entries(ROOMS)) flatLabel(labels[`r${id}`] || '', m.x + m.w / 2, m.y + m.h / 2, { turn: m.vertical ? Math.PI / 2 : 0, scale: Math.min(m.w, m.h) < 24 ? 0.2 : 0.36 });
   flatLabel(labels.r1 || '', 18, (en.from + en.to) / 2, { scale: 0.26, color: C.accent, turn: Math.PI / 2 });
   const carpet = GEAR.find((g) => g.t === 'carpet');
   if (carpet && labels.stretch) flatLabel(labels.stretch, carpet.x, carpet.y, { scale: 0.3 });
