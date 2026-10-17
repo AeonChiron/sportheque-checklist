@@ -1,17 +1,19 @@
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
-import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER } from './manual.js';
-import { buildPlan, detectShift, fmt, fmtDuration } from './planner.js';
+import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2 } from './manual.js';
+import { buildPlan, detectShift, dayInfo, fmt, fmtDuration } from './planner.js';
 import { buildReport, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS, encodeReport, decodeReport, reportGlance, REVIEW, reportLabels } from './report.js';
 import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink, blobToBase64 } from './photos.js';
+import { illustration, zoneMap, tvDiagram } from './illustrations.js';
+import { publishShift, loadBoard } from './board.js';
 
 const KEY = 'gym-shift-v2';
 const PREFS = 'gym-shift-prefs';
-const HISTORY = 'gym-shift-reports'; // aperçu du superviseur, sur son téléphone
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const md = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- Persistance (un rechargement de Safari ne perd rien) ----------
 function read(key, fallback) {
@@ -21,8 +23,8 @@ function write(key, value) {
   try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, JSON.stringify(value)); } catch { /* mode privé */ }
 }
 
-// prefs : langue de l'interface, dernier nom, superviseurs connus → langue.
-const prefs = { lang: CONFIG.defaultLang, name: '', supervisor: '', supervisors: {}, ...read(PREFS, {}) };
+// prefs : langue, dernier nom, dernier superviseur, langue de rapport par superviseur.
+const prefs = { lang: CONFIG.defaultLang, name: '', supervisor: '', supervisorLang: {}, swipeSeen: false, ...read(PREFS, {}) };
 const savePrefs = () => write(PREFS, prefs);
 let state = read(KEY, null);
 const save = () => write(KEY, state);
@@ -34,33 +36,81 @@ const t = (key, ...args) => {
   return typeof v === 'function' ? v(...args) : v;
 };
 const f = (min) => fmt(min, lang());
+const locale = () => (lang() === 'en' ? 'en-CA' : 'fr-CA');
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : '');
 
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const dayMonth = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
 
+// ---------- Écrans ----------
 function show(id) {
-  for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+  for (const s of document.querySelectorAll('.screen')) {
+    const on = s.id === id;
+    if (on && s.hidden) {
+      s.hidden = false;
+      s.classList.remove('enter');
+      void s.offsetWidth; // relance l'entrée
+      s.classList.add('enter');
+      clearTimeout(s.enterTimer);
+      s.enterTimer = setTimeout(() => s.classList.remove('enter'), 800); // pas de reprise à chaque mise à jour
+    } else if (!on) {
+      s.hidden = true;
+    }
+  }
   window.scrollTo(0, 0);
 }
 
-function toast(msg) {
+function toast(msg, tone = 'ok') {
   const el = $('#toast');
   el.textContent = msg;
+  el.dataset.tone = tone;
   el.hidden = false;
+  el.classList.remove('in');
+  void el.offsetWidth;
+  el.classList.add('in');
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { el.hidden = true; }, 2000);
+  toast.timer = setTimeout(() => { el.hidden = true; }, 1900);
 }
 
-// Textes fixes de la page, dans la langue choisie.
+// Petite fête quand tout est coché (rien si « réduire les animations »).
+function celebrate() {
+  if (reducedMotion()) return;
+  const box = $('#burst');
+  const colors = ['var(--aqua)', 'var(--coral)', 'var(--sun)', 'var(--brand)'];
+  box.innerHTML = Array.from({ length: 18 }, (_, i) => {
+    const a = (i / 18) * Math.PI * 2;
+    const r = 70 + (i % 3) * 26;
+    return `<i style="--x:${Math.cos(a) * r}px;--y:${Math.sin(a) * r}px;--c:${colors[i % 4]};--d:${(i % 5) * 30}ms"></i>`;
+  }).join('');
+  box.classList.remove('go');
+  void box.offsetWidth;
+  box.classList.add('go');
+  setTimeout(() => { box.innerHTML = ''; box.classList.remove('go'); }, 1300);
+}
+
+// ---------- Identité et textes fixes ----------
+function renderBrand() {
+  const floor = `<span class="brand-floor">${esc(t('floor'))}</span>`;
+  if (CONFIG.logo) {
+    $('#brand').innerHTML = `<img class="brand-logo" src="${esc(CONFIG.logo)}" alt="${esc(CONFIG.gymName)}">${floor}`;
+  } else if (CONFIG.gymName) {
+    $('#brand').innerHTML = `<span class="wordmark">${esc(CONFIG.gymName)}</span>${floor}`;
+  } else {
+    $('#brand').innerHTML = `<span class="wordmark">${esc(t('floor'))}</span>`;
+  }
+}
+
 function paintStatic() {
   document.documentElement.lang = lang() === 'en' ? 'en-CA' : 'fr-CA';
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
   for (const el of document.querySelectorAll('[data-ph]')) el.placeholder = t(el.dataset.ph);
+  for (const el of document.querySelectorAll('[data-label]')) el.setAttribute('aria-label', t(el.dataset.label));
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
-  $('#brandLine').textContent = CONFIG.gymName ? `${CONFIG.gymName} · ${t('floor')}` : t('floor');
   $('#manualVersion').textContent = t('manual', MANUAL_VERSION);
+  renderBrand();
 }
 
 function setLang(l) {
@@ -68,17 +118,29 @@ function setLang(l) {
   savePrefs();
   paintStatic();
   if (!$('#setup').hidden) updatePreview();
-  if (state && plan) {
-    plan = buildPlan({ ...state, lang: lang() });
-    if (!$('#checklist').hidden) renderChecklist();
-    if (!$('#finish').hidden) openFinish();
-  }
+  if (state && plan) plan = buildPlan({ ...state, lang: lang() });
+  if (!$('#checklist').hidden) renderChecklist();
+  if (!$('#finish').hidden) openFinish();
+  if (!$('#apercu').hidden) openApercu();
 }
 for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
 
 // ---------- 1. Début de quart ----------
 let manualShift = null;
 let editing = false;
+let supervisor = '';
+let reportLang = 'fr';
+
+function setSupervisor(name) {
+  supervisor = name;
+  for (const b of document.querySelectorAll('[data-sup]')) b.setAttribute('aria-checked', String(b.dataset.sup === name));
+  setReportLang(prefs.supervisorLang[name] || reportLang || lang());
+}
+function setReportLang(l) {
+  reportLang = l === 'en' ? 'en' : 'fr';
+  for (const b of document.querySelectorAll('[data-rlang]')) b.setAttribute('aria-checked', String(b.dataset.rlang === reportLang));
+}
+for (const b of document.querySelectorAll('[data-rlang]')) b.addEventListener('click', () => setReportLang(b.dataset.rlang));
 
 function setupScreen() {
   const defShift = new Date().getHours() < 16 ? 1 : 2;
@@ -86,9 +148,11 @@ function setupScreen() {
   $('#fDate').value = todayISO();
   $('#fStart').value = SHIFTS[defShift].start;
   $('#fEnd').value = SHIFTS[defShift].end;
-  $('#fSupervisor').value = prefs.supervisor;
-  $('#supervisorList').innerHTML = Object.keys(prefs.supervisors).map((n) => `<option value="${esc(n)}">`).join('');
-  setReportLang(prefs.supervisors[prefs.supervisor] || lang());
+  $('#supervisorPick').innerHTML = CONFIG.supervisors
+    .map((s) => `<button type="button" role="radio" data-sup="${esc(s.name)}">${esc(s.name)}</button>`).join('');
+  for (const b of document.querySelectorAll('[data-sup]')) b.addEventListener('click', () => setSupervisor(b.dataset.sup));
+  const known = CONFIG.supervisors.some((s) => s.name === prefs.supervisor);
+  setSupervisor(known ? prefs.supervisor : CONFIG.supervisors[0]?.name || '');
   manualShift = null;
   editing = false;
   paintStatic();
@@ -96,24 +160,13 @@ function setupScreen() {
   show('setup');
 }
 
-let reportLang = 'fr';
-function setReportLang(l) {
-  reportLang = l === 'en' ? 'en' : 'fr';
-  for (const b of document.querySelectorAll('[data-rlang]')) b.setAttribute('aria-checked', String(b.dataset.rlang === reportLang));
-}
-for (const b of document.querySelectorAll('[data-rlang]')) b.addEventListener('click', () => setReportLang(b.dataset.rlang));
-$('#fSupervisor').addEventListener('input', (ev) => {
-  const known = prefs.supervisors[ev.target.value.trim()];
-  if (known) setReportLang(known);
-});
-
 function currentShift() {
   const s = $('#fStart').value;
   const e = $('#fEnd').value;
   return manualShift || (s && e ? detectShift(s, e) : 1);
 }
 
-// Aperçu : ce qui attend l'employé, sans parler de règles ni d'horaire « standard ».
+// Aperçu du plan : ce qui attend l'employé, sans jargon de règles.
 function updatePreview() {
   const s = $('#fStart').value;
   const e = $('#fEnd').value;
@@ -124,7 +177,7 @@ function updatePreview() {
   const d = p.day;
   const facts = [
     `<span class="fact"><b>${esc(p.weekdayName)}</b></span>`,
-    `<span class="fact mono">${esc(fmtDuration(p.totals.presence, lang()))}</span>`,
+    `<span class="fact num">${esc(fmtDuration(p.totals.presence, lang()))}</span>`,
     `<span class="fact">${t('zoneDeep')} <b>${d.zones[shift]}</b></span>`,
   ];
   if (shift === 2) {
@@ -139,7 +192,7 @@ function updatePreview() {
 }
 $('#setupForm').addEventListener('input', (ev) => {
   if (ev.target.id === 'fStart' || ev.target.id === 'fEnd') manualShift = null;
-  if (ev.target.id !== 'fSupervisor') updatePreview();
+  updatePreview();
 });
 
 $('#setupForm').addEventListener('submit', (ev) => {
@@ -147,10 +200,9 @@ $('#setupForm').addEventListener('submit', (ev) => {
   const name = $('#fName').value.trim();
   if (!name) { $('#fName').focus(); return; }
   if (!$('#fStart').value || !$('#fEnd').value || !$('#fDate').value) return;
-  const supervisor = $('#fSupervisor').value.trim();
   prefs.name = name;
   prefs.supervisor = supervisor;
-  if (supervisor) prefs.supervisors[supervisor] = reportLang;
+  if (supervisor) prefs.supervisorLang[supervisor] = reportLang;
   savePrefs();
   const keep = editing && state ? { tasks: state.tasks, flags: state.flags, notes: state.notes, view: state.view } : {};
   state = {
@@ -170,6 +222,7 @@ $('#setupForm').addEventListener('submit', (ev) => {
   };
   editing = false;
   save();
+  window.history.replaceState(null, '', location.pathname);
   openChecklist();
 });
 
@@ -184,14 +237,17 @@ function openChecklist() {
 const entry = (id) => state.tasks[id] || (state.tasks[id] = {});
 const planTasks = () => plan.items.filter((it) => it.kind === 'task');
 const findTask = (id) => [...planTasks(), ...plan.overflow].find((x) => x.id === id);
+const allDone = () => planTasks().every((x) => state.tasks[x.id]?.done);
 
 function nowMinutes() {
-  if (state.date !== todayISO()) return null;
+  if (!state || state.date !== todayISO()) return null;
   const d = new Date();
   let m = d.getHours() * 60 + d.getMinutes();
   if (m < plan.start && plan.end > 1440) m += 1440;
   return m;
 }
+
+const icon = (it) => `<span class="t-icon" aria-hidden="true">${illustration(it.photo)}</span>`;
 
 function taskRow(it, { extra = false } = {}) {
   const e = state.tasks[it.id] || {};
@@ -204,29 +260,36 @@ function taskRow(it, { extra = false } = {}) {
   if (e.skipped && !e.done) tags.push(`<span class="tag bad">${t('notDone')}${e.reason ? ` · ${esc(SKIP_REASONS[e.reason]?.[lang()] || e.reason)}` : ''}</span>`);
   if (e.remark) tags.push(`<span class="tag note">${t('remark')}</span>`);
   if (e.photos?.length) tags.push(`<span class="tag note">${t('photos')} · ${e.photos.length}</span>`);
-  const time = extra ? `<span class="t-time mono">+<small>${it.minutes} min</small></span>` : `<span class="t-time mono">${f(it.start)}<small>${it.minutes} min</small></span>`;
+  const time = extra
+    ? `<span class="t-time num">+<small>${it.minutes} min</small></span>`
+    : `<span class="t-time num">${f(it.start)}<small>${it.minutes} min</small></span>`;
   return `<li class="${cls}" data-id="${esc(it.id)}">
-    <button class="task-main" data-act="open">
-      ${time}
-      <span class="t-body">
-        <span class="t-title">${esc(it.title)}</span>
-        ${it.summary ? `<span class="t-sum">${esc(it.summary)}</span>` : ''}
-        ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
-      </span>
-    </button>
-    <button class="check" data-act="toggle" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>
+    <span class="swipe-under" aria-hidden="true">✓</span>
+    <div class="task-inner">
+      <button class="task-main" data-act="open">
+        ${time}
+        ${icon(it)}
+        <span class="t-body">
+          <span class="t-title">${esc(it.title)}</span>
+          ${it.summary ? `<span class="t-sum">${esc(it.summary)}</span>` : ''}
+          ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
+        </span>
+      </button>
+      <button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>
+    </div>
   </li>`;
 }
 
 function breakRow(it) {
   if (it.kind === 'slack') {
-    return `<li class="break slack"><span class="ico">${f(it.start)}</span><span><b>${esc(it.title)}</b><br><small>${esc(it.summary)}</small></span><span class="t mono">${it.minutes} min</span></li>`;
+    return `<li class="break slack"><span class="ico num">${f(it.start)}</span><span><b>${esc(it.title)}</b><br><small>${esc(it.summary)}</small></span><span class="t num">${it.minutes} min</span></li>`;
   }
   const sub = it.kind === 'meal' ? t('unpaidMeal') : t('paidBreak');
   const rem = (it.reminders || []).map((r) => `<br><small>${f(r.at)} · ${esc(r.label)}</small>`).join('');
-  return `<li class="break"><span class="ico">${f(it.start)}</span><span><b>${esc(it.title)}</b> <small>· ${sub}</small>${rem}</span><span class="t mono">${it.minutes} min</span></li>`;
+  return `<li class="break"><span class="ico num">${f(it.start)}</span><span><b>${esc(it.title)}</b> <small>· ${sub}</small>${rem}</span><span class="t num">${it.minutes} min</span></li>`;
 }
 
+// Le « couloir » : la ligne du temps du quart, comme un couloir de piscine.
 function renderTimeline() {
   const now = nowMinutes();
   const segs = plan.items.map((it) => {
@@ -235,9 +298,9 @@ function renderTimeline() {
     const cur = now !== null && it.start <= now && now < it.end ? ' current' : '';
     return `<span class="seg ${cls}${cur}" style="--w:${it.minutes}"></span>`;
   });
-  const needle = now !== null && now >= plan.start && now <= plan.end
-    ? `<span class="needle" style="--x:${(100 * (now - plan.start)) / (plan.end - plan.start)}%"></span>` : '';
-  $('#timeline').innerHTML = segs.join('') + needle;
+  const swimmer = now !== null && now >= plan.start && now <= plan.end
+    ? `<span class="swimmer" style="--x:${(100 * (now - plan.start)) / (plan.end - plan.start)}%"></span>` : '';
+  $('#timeline').innerHTML = segs.join('') + swimmer;
 }
 
 // Carte « En cours » : ce qu'il faut faire maintenant, en un toucher.
@@ -251,16 +314,19 @@ function renderNow() {
   const cur = plan.items.find((it) => it.start <= now && now < it.end);
   if (!cur) { box.innerHTML = ''; return; }
   const nextIt = plan.items.find((it) => it.start >= cur.end && it.kind === 'task' && !state.tasks[it.id]?.done);
-  const next = nextIt ? `<div class="next">${t('next')} · <span class="mono">${f(nextIt.start)}</span> <b>${esc(nextIt.title)}</b></div>` : '';
-  const remain = `<span class="remain mono">${t('left', cur.end - now)}</span>`;
+  const next = nextIt ? `<div class="next">${t('next')} · <span class="num">${f(nextIt.start)}</span> <b>${esc(nextIt.title)}</b></div>` : '';
+  const pct = Math.round((100 * (now - cur.start)) / (cur.end - cur.start));
+  const remain = `<span class="remain num">${t('left', cur.end - now)}</span>`;
+  const bar = `<div class="now-bar" style="--p:${pct}%"></div>`;
   if (cur.kind !== 'task') {
     box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
-      <h3>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h3>${next}</div>`;
+      <h3>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h3>${bar}${next}</div>`;
     return;
   }
   const e = state.tasks[cur.id] || {};
   box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
-    <h3>${esc(cur.title)}</h3>${cur.summary ? `<p class="sum">${esc(cur.summary)}</p>` : ''}
+    <div class="now-main">${icon(cur)}<div><h3>${esc(cur.title)}</h3>${cur.summary ? `<p class="sum">${esc(cur.summary)}</p>` : ''}</div></div>
+    ${bar}
     <div class="acts" data-id="${esc(cur.id)}">
       <button class="btn ${e.done ? 'ghost' : 'primary'} small" data-act="toggle">${e.done ? '✓ ' : ''}${t('markDone')}</button>
       <button class="btn ghost small" data-act="open">${t('details')}</button>
@@ -271,9 +337,8 @@ function renderChecklist() {
   const tasks = planTasks();
   const done = tasks.filter((x) => state.tasks[x.id]?.done).length;
   const d = plan.day;
-  const [, mm, dd] = state.date.split('-');
 
-  $('#cEyebrow').textContent = [CONFIG.gymName, SHIFTS[plan.shift][lang()].short, `${plan.weekdayName.slice(0, 3)}. ${dd}/${mm}`].filter(Boolean).join(' · ');
+  $('#cEyebrow').textContent = [CONFIG.gymName, SHIFTS[plan.shift][lang()].short, `${plan.weekdayName.slice(0, 3)}. ${dayMonth(state.date)}`].filter(Boolean).join(' · ');
   $('#cTitle').textContent = state.name;
   $('#rangeLabel').textContent = `${f(plan.start)} → ${f(plan.end)}`;
   $('#progressLabel').textContent = done === tasks.length && tasks.length ? t('allDone') : t('doneOf', done, tasks.length);
@@ -285,10 +350,13 @@ function renderChecklist() {
     chips.push(`<span class="chip">${d.surfaces === 'miroirs' ? `${t('mirrorsZone')} <b>${d.zones.third}</b>` : esc(t(d.surfaces === 'tuiles' ? 'tiles' : 'inspection'))}</span>`);
     if (d.walls) chips.push(`<span class="chip">${t('walls')}</span>`);
   }
-  for (const r of plan.items.flatMap((it) => it.reminders || [])) chips.push(`<span class="chip"><b class="mono">${f(r.at)}</b> ${esc(r.label)}</span>`);
+  for (const r of plan.items.flatMap((it) => it.reminders || [])) chips.push(`<span class="chip"><b class="num">${f(r.at)}</b> ${esc(r.label)}</span>`);
   $('#dayStrip').innerHTML = chips.join('');
 
   for (const b of document.querySelectorAll('.view-toggle [data-view]')) b.setAttribute('aria-selected', String(b.dataset.view === state.view));
+  const hint = $('#swipeHint');
+  hint.hidden = prefs.swipeSeen || !matchMedia('(pointer: coarse)').matches;
+  hint.textContent = t('swipeHint');
 
   let html = '';
   if (state.view === 'zone') {
@@ -309,21 +377,70 @@ function renderChecklist() {
     : '';
 
   $('#flagsBlock').innerHTML = state.flags.length
-    ? `<div class="section-head"><h3>${t('flags')}</h3><span>${state.flags.length}</span></div>
-       ${state.flags.map((fl, i) => `<div class="flag-item"><span aria-hidden="true">⚑</span><div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="mono">${new Date(fl.at).toLocaleTimeString(lang() === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' })}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small></div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
+    ? `<div class="section-head"><h3>${t('flags')}</h3><span class="num">${state.flags.length}</span></div>
+       ${state.flags.map((fl, i) => `<div class="flag-item"><span aria-hidden="true">⚑</span><div><b>${esc(FLAG_CATEGORIES[fl.category]?.[lang()] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small></div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
     : '';
 }
 
 function toggleDone(id) {
+  const wasAll = allDone();
   const e = entry(id);
   e.done = !e.done;
-  if (e.done) { e.skipped = false; e.doneAt = new Date().toISOString(); toast(t('checked')); } else delete e.doneAt;
+  if (e.done) { e.skipped = false; delete e.reason; e.doneAt = new Date().toISOString(); } else delete e.doneAt;
   save();
   renderChecklist();
+  if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
+  if (!wasAll && allDone()) { celebrate(); toast(t('allDone')); } else toast(t(e.done ? 'checked' : 'unchecked'), e.done ? 'ok' : 'muted');
+}
+
+// Glisser vers la droite pour cocher (le toucher simple marche toujours).
+let swipe = null;
+let suppressClick = false;
+function bindSwipe(list) {
+  list.addEventListener('pointerdown', (e) => {
+    const li = e.target.closest('.task');
+    if (!li || e.pointerType === 'mouse') return;
+    swipe = { li, x: e.clientX, y: e.clientY, dx: 0, active: false, id: e.pointerId };
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    if (!swipe.active) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; }
+      if (dx > 12 && dx > Math.abs(dy) * 1.4) {
+        swipe.active = true;
+        swipe.li.classList.add('swiping');
+        try { swipe.li.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      } else return;
+    }
+    swipe.dx = Math.max(0, Math.min(dx - 12, 150));
+    swipe.li.style.setProperty('--sx', `${swipe.dx}px`);
+    swipe.li.classList.toggle('armed', swipe.dx > 84);
+  });
+  const end = () => {
+    if (!swipe) return;
+    const { li, dx, active } = swipe;
+    swipe = null;
+    if (!active) return;
+    li.classList.remove('swiping', 'armed');
+    li.style.removeProperty('--sx');
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 80);
+    if (dx > 84) {
+      if (!prefs.swipeSeen) { prefs.swipeSeen = true; savePrefs(); }
+      toggleDone(li.dataset.id);
+    }
+  };
+  list.addEventListener('pointerup', end);
+  list.addEventListener('pointercancel', end);
 }
 
 for (const sel of ['#taskList', '#overflowBlock', '#nowCard']) {
-  $(sel).addEventListener('click', (ev) => {
+  const el = $(sel);
+  if (sel !== '#nowCard') bindSwipe(el);
+  el.addEventListener('click', (ev) => {
+    if (suppressClick) return;
     const btn = ev.target.closest('[data-act]');
     if (!btn) return;
     const id = btn.closest('[data-id]').dataset.id;
@@ -332,7 +449,7 @@ for (const sel of ['#taskList', '#overflowBlock', '#nowCard']) {
   });
 }
 
-// Retirer un signalement : deux touchers (le site ne peut pas compter sur confirm()).
+// Retirer un signalement : deux touchers (pas de confirm(), plus doux sur iPhone).
 $('#flagsBlock').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-del-flag]');
   if (!b) return;
@@ -352,26 +469,32 @@ for (const b of document.querySelectorAll('.view-toggle [data-view]')) {
   b.addEventListener('click', () => { state.view = b.dataset.view; save(); renderChecklist(); });
 }
 
-// « En cours » et la ligne du temps avancent toutes les 30 secondes.
+// « En cours » et le couloir avancent toutes les 30 secondes.
 setInterval(() => { if (!$('#checklist').hidden && plan) { renderTimeline(); renderNow(); } }, 30_000);
 
 // ---------- Feuille du bas ----------
+let lastFocus = null;
 function openSheet(html, onMount) {
+  lastFocus = document.activeElement;
   $('#sheetBody').innerHTML = html;
   $('#sheetBody').scrollTop = 0;
   $('#backdrop').hidden = false;
   $('#sheet').hidden = false;
   requestAnimationFrame(() => { $('#backdrop').classList.add('open'); $('#sheet').classList.add('open'); });
   onMount?.($('#sheetBody'));
+  $('#sheet').focus({ preventScroll: true });
 }
 function closeSheet() {
   $('#backdrop').classList.remove('open');
   $('#sheet').classList.remove('open');
-  setTimeout(() => { $('#backdrop').hidden = true; $('#sheet').hidden = true; }, 280);
+  setTimeout(() => { $('#backdrop').hidden = true; $('#sheet').hidden = true; }, 300);
+  lastFocus?.focus?.({ preventScroll: true });
 }
+$('#sheet').tabIndex = -1;
 $('#backdrop').addEventListener('click', closeSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 
-// Glisser vers le bas pour fermer.
+// Glisser la feuille vers le bas pour la fermer.
 (() => {
   let y0 = null;
   const sheet = $('#sheet');
@@ -379,12 +502,13 @@ $('#backdrop').addEventListener('click', closeSheet);
   sheet.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
     const dy = e.touches[0].clientY - y0;
-    if (dy > 0) sheet.style.transform = `translateY(${dy}px)`;
+    if (dy > 0) { sheet.classList.add('dragging'); sheet.style.setProperty('--drag', `${dy}px`); }
   }, { passive: true });
   sheet.addEventListener('touchend', (e) => {
     if (y0 === null) return;
     const dy = e.changedTouches[0].clientY - y0;
-    sheet.style.transform = '';
+    sheet.classList.remove('dragging');
+    sheet.style.removeProperty('--drag');
     y0 = null;
     if (dy > 90) closeSheet();
   });
@@ -427,7 +551,7 @@ function mountPhotos(root, ids, onChange, pending = []) {
         onChange();
         toast(t('photoAdded'));
       } catch {
-        toast(t('photoBad'));
+        toast(t('photoBad'), 'bad');
       }
       draw();
     });
@@ -444,42 +568,59 @@ function mountPhotos(root, ids, onChange, pending = []) {
 }
 
 // ---------- Détail d'une tâche ----------
+const MAP_LABELS = {
+  fr: { A: 'Cardio · étirements', B: ['Muscu droite', 'Bas du corps'], C: ['Muscu gauche', 'Haut du corps'] },
+  en: { A: 'Cardio · stretching', B: ['Weights right', 'Lower body'], C: ['Weights left', 'Upper body'] },
+};
+
+function taskVisual(it) {
+  if (it.deep) {
+    return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption>${zoneMap(it.zone, { labels: MAP_LABELS[lang()] })}</figure>`;
+  }
+  if (it.zone && it.photo === 'miroirs') {
+    return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption>${zoneMap(null, { mirrors: it.zone, labels: MAP_LABELS[lang()] })}</figure>`;
+  }
+  return `<figure class="visual">${illustration(it.photo, it.title)}</figure>`;
+}
+
 function openTask(id) {
   const it = findTask(id);
   const e = entry(id);
   const extra = plan.overflow.includes(it);
   const pills = [
-    extra ? '' : `<span class="pill mono">${f(it.start)} – ${f(it.end)}</span>`,
-    `<span class="pill mono">${it.minutes} min</span>`,
+    extra ? '' : `<span class="pill num">${f(it.start)} – ${f(it.end)}</span>`,
+    `<span class="pill num">${it.minutes} min</span>`,
     it.zone ? `<span class="pill">Zone ${it.zone}</span>` : '',
   ].join('');
-  const photo = CONFIG.guidePhotos && it.photo ? `<div class="photo"><img src="photos/${esc(it.photo)}.jpg" alt="" onerror="this.parentNode.remove()"></div>` : '';
   const tv = it.tvTable
-    ? `<div><p class="block-label">${t('channels')}</p><table class="tv">${TV_CHANNELS.map((c) => `<tr><td>${esc(c[lang()])}</td><td>${esc(c.ch)}</td></tr>`).join('')}</table></div>`
+    ? `<figure class="visual map-visual"><figcaption class="block-label">${t('channels')}</figcaption>${tvDiagram(TV_CHANNELS)}</figure>`
     : '';
-  const clock = (it.reminders || []).length
-    ? `<div class="callout clock"><div class="c-head"><span class="c-ico">⏱</span>${t('atTime')}</div>${it.reminders.map((r) => `<p><b class="mono">${f(r.at)}</b> · ${esc(r.label)}</p>`).join('')}</div>`
+  const clockBox = (it.reminders || []).length
+    ? `<div class="callout clock"><div class="c-head"><span class="c-ico">⏱</span>${t('atTime')}</div>${it.reminders.map((r) => `<p><b class="num">${f(r.at)}</b> · ${esc(r.label)}</p>`).join('')}</div>`
     : '';
   const tips = (it.tips || []).length
     ? `<div class="callout tip"><div class="c-head"><span class="c-ico">i</span>${t('goodToKnow')}</div>${it.tips.map((x) => `<p>${md(x)}</p>`).join('')}</div>`
     : '';
+  const skipped = e.skipped && !e.done;
 
   openSheet(`
-    <div class="sheet-head">
-      <p class="eyebrow">${esc(AREAS[it.area]?.[lang()] || '')}</p>
-      <h3>${esc(it.title)}</h3>
-      <div class="meta-row">${pills}</div>
+    <div class="sheet-hero">
+      ${taskVisual(it)}
+      <div class="sheet-head">
+        <p class="eyebrow">${esc(AREAS[it.area]?.[lang()] || '')}</p>
+        <h3>${esc(it.title)}</h3>
+        <div class="meta-row">${pills}</div>
+      </div>
     </div>
-    ${photo}
     <div><p class="block-label">${t('steps')}</p><ol class="steps">${it.steps.map((s) => `<li>${md(s)}</li>`).join('')}</ol></div>
     ${tv}
-    ${clock}
+    ${clockBox}
     ${tips}
     <div class="status-row">
       <button class="btn ${e.done ? 'on-done' : 'ghost'}" data-status="done">✓ ${t('done')}</button>
-      <button class="btn ${e.skipped && !e.done ? 'on-skip' : 'ghost'}" data-status="skip">✕ ${t('notDone')}</button>
+      <button class="btn ${skipped ? 'on-skip' : 'ghost'}" data-status="skip">✕ ${t('notDone')}</button>
     </div>
-    ${e.skipped && !e.done ? `<div><p class="block-label">${t('why')}</p><div class="reasons">${Object.entries(SKIP_REASONS).map(([k, v]) => `<button type="button" data-reason="${k}" aria-pressed="${e.reason === k}">${esc(v[lang()])}</button>`).join('')}</div></div>` : ''}
+    ${skipped ? `<div><p class="block-label">${t('why')}</p><div class="reasons">${Object.entries(SKIP_REASONS).map(([k, v]) => `<button type="button" data-reason="${k}" aria-pressed="${e.reason === k}">${esc(v[lang()])}</button>`).join('')}</div></div>` : ''}
     <label class="field"><span>${t('remark')}</span>
       <textarea id="remark" rows="2" placeholder="${esc(t(e.skipped ? 'remarkSkipPh' : 'remarkPh'))}">${esc(e.remark || '')}</textarea>
     </label>
@@ -491,9 +632,8 @@ function openTask(id) {
     e.photos ||= [];
     mountPhotos(root, e.photos, () => { save(); renderChecklist(); });
     root.querySelector('[data-status="done"]').onclick = () => {
-      e.done = !e.done;
-      if (e.done) { e.skipped = false; e.doneAt = new Date().toISOString(); toast(t('checked')); } else delete e.doneAt;
-      save(); renderChecklist(); closeSheet();
+      closeSheet();
+      toggleDone(id);
     };
     root.querySelector('[data-status="skip"]').onclick = () => {
       const on = !(e.skipped && !e.done);
@@ -518,7 +658,7 @@ function openFlag() {
   let category = null;
   openSheet(`
     <div class="sheet-head">
-      <p class="eyebrow" style="color:var(--bad)">⚑ ${t('flag')}</p>
+      <p class="eyebrow danger">⚑ ${t('flag')}</p>
       <h3>${t('flagTitle')}</h3>
       <p class="lede">${t('flagLede')}</p>
     </div>
@@ -569,7 +709,7 @@ $('#menuBtn').addEventListener('click', () => {
         <button type="button" role="radio" data-mlang="en" aria-checked="${lang() === 'en'}">English</button>
       </div>
     </div>
-    <div class="callout tip"><div class="c-head"><span class="c-ico">i</span>${t('priorities')}</div>${PRIORITY_ORDER[lang()].map((p, i) => `<p><b class="mono">${i + 1}.</b> ${esc(p)}</p>`).join('')}</div>
+    <div class="callout tip"><div class="c-head"><span class="c-ico">i</span>${t('priorities')}</div>${PRIORITY_ORDER[lang()].map((p, i) => `<p><b class="num">${i + 1}.</b> ${esc(p)}</p>`).join('')}</div>
     <div class="menu-list">
       <button class="btn ghost" id="mEdit">${t('editHours')}</button>
       <button class="btn ghost danger" id="mReset">${t('abandon')}</button>
@@ -578,11 +718,7 @@ $('#menuBtn').addEventListener('click', () => {
   `, (root) => {
     root.querySelector('[data-close]').onclick = closeSheet;
     for (const b of root.querySelectorAll('[data-mlang]')) {
-      b.onclick = () => {
-        setLang(b.dataset.mlang);
-        for (const o of root.querySelectorAll('[data-mlang]')) o.setAttribute('aria-checked', String(o === b));
-        closeSheet();
-      };
+      b.onclick = () => { closeSheet(); setLang(b.dataset.mlang); };
     }
     root.querySelector('#mEdit').onclick = () => {
       closeSheet();
@@ -591,7 +727,7 @@ $('#menuBtn').addEventListener('click', () => {
       $('#fDate').value = state.date;
       $('#fStart').value = state.start;
       $('#fEnd').value = state.end;
-      $('#fSupervisor').value = state.supervisor || '';
+      if (state.supervisor) setSupervisor(state.supervisor);
       setReportLang(state.reportLang);
       manualShift = state.shift;
       editing = true; // les tâches cochées sont gardées (mêmes identifiants)
@@ -621,15 +757,15 @@ function openFinish() {
 
   $('#finishSummary').innerHTML = `
     <div class="stat-grid">
-      <div class="stat ok"><b>${done}</b><span>${t('statDone')}</span></div>
-      <div class="stat bad"><b>${skipped}</b><span>${t('statNot')}</span></div>
-      <div class="stat warn"><b>${state.flags.length}</b><span>${t('statFlags')}</span></div>
+      <div class="stat ok"><b class="num">${done}</b><span>${t('statDone')}</span></div>
+      <div class="stat bad"><b class="num">${skipped}</b><span>${t('statNot')}</span></div>
+      <div class="stat warn"><b class="num">${state.flags.length}</b><span>${t('statFlags')}</span></div>
     </div>
     ${nPhotos ? `<p class="photo-count">${t('photosAttached', nPhotos)}</p>` : ''}
     ${open.length ? `<div class="panel">
-      <div class="section-head" style="margin-top:0"><h3>${t('pending')}</h3><span class="mono">${open.length}</span></div>
-      ${open.map((x) => `<div class="pending" data-id="${esc(x.id)}"><div class="t">${esc(x.title)}<small>${f(x.start)} – ${f(x.end)}</small></div>
-        <button class="btn small ghost" data-act="done">✓ ${t('done')}</button><button class="btn small flag" data-act="skip">${t('notDone')}</button></div>`).join('')}
+      <div class="section-head" style="margin-top:0"><h3>${t('pending')}</h3><span class="num">${open.length}</span></div>
+      ${open.map((x) => `<div class="pending" data-id="${esc(x.id)}">${icon(x)}<div class="t">${esc(x.title)}<small class="num">${f(x.start)} – ${f(x.end)}</small></div>
+        <button class="btn small ghost" data-act="done">✓</button><button class="btn small flag" data-act="skip">✕</button></div>`).join('')}
     </div>` : `<div class="notice ok"><b>${t('allChecked')}</b></div>`}`;
   $('#fNotes').value = state.notes || '';
   $('#sendError').innerHTML = '';
@@ -657,6 +793,25 @@ $('#finishSummary').addEventListener('click', (ev) => {
 
 $('#sendBtn').addEventListener('click', send);
 
+// Résumé du quart pour l'Aperçu (statuts seulement, pas de remarques).
+function boardSummary() {
+  return {
+    date: state.date,
+    shift: state.shift,
+    name: state.name,
+    start: state.start,
+    end: state.end,
+    submittedAt: new Date().toISOString(),
+    items: [...planTasks(), ...plan.overflow].map((it) => {
+      const e = state.tasks[it.id] || {};
+      return { id: it.id, status: e.done ? 'done' : e.skipped ? 'notdone' : 'unchecked', doneAt: e.doneAt || '', reason: e.skipped ? e.reason || '' : '' };
+    }),
+    flags: state.flags.map((fl) => ({ category: fl.category, location: fl.location, text: fl.text, at: fl.at })),
+  };
+}
+
+const recipientFor = (name) => CONFIG.supervisors.find((s) => s.name === name)?.email || CONFIG.reportTo;
+
 async function send() {
   const btn = $('#sendBtn');
   btn.disabled = true;
@@ -675,29 +830,23 @@ async function send() {
   // Rapport dans la langue du superviseur; les remarques restent telles quelles.
   const reportPlan = buildPlan({ ...state, lang: state.reportLang || 'fr' });
   const report = buildReport(reportPlan, state, names);
-
-  const finishSent = (html) => {
-    const { supervisor, name } = state;
-    state = null;
-    save();
-    clearPhotos();
-    $('#sentText').textContent = html ? t('demoText', supervisor) : t('sentText', supervisor, name);
-    $('#emailPreview').hidden = !html;
-    if (html) $('#emailPreview').innerHTML = html;
-    paintStatic();
-    show('sent');
-  };
-
   const code = await encodeReport(report);
   const link = `${location.origin}${location.pathname}#r=${code}`;
+  const summary = boardSummary();
 
-  if (CONFIG.demo) {
-    // Démo : rien n'est envoyé; on montre directement ce que verra le superviseur.
+  const finish = () => {
+    const { supervisor: sup, name } = state;
+    publishShift(summary);
     state = null;
     save();
     clearPhotos();
+    return { sup, name };
+  };
+
+  if (CONFIG.demo) {
+    const { sup } = finish();
     window.history.replaceState(null, '', `#r=${code}`);
-    openReview(report, code, { demo: true, photos: blobs.length });
+    openReview(report, { demo: true, sup });
     return;
   }
   try {
@@ -711,7 +860,7 @@ async function send() {
       fd.append(R.open, link);
       if (report.notes) fd.append(reportLabels(report).notes, report.notes);
       for (const [filename, b] of blobs) fd.append('attachment', new File([b], filename, { type: 'image/jpeg' }));
-      const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(CONFIG.reportTo)}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
+      const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipientFor(state.supervisor))}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
       const out = await r.json().catch(() => ({}));
       if (!r.ok || String(out.success) === 'false') throw new Error(out.message || `HTTP ${r.status}`);
     } else {
@@ -726,7 +875,11 @@ async function send() {
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
     }
-    finishSent(null);
+    const { sup, name } = finish();
+    $('#sentText').textContent = t('sentText', sup, name);
+    paintStatic();
+    show('sent');
+    celebrate();
   } catch (err) {
     btn.disabled = false;
     btn.textContent = t('retry');
@@ -737,7 +890,7 @@ async function send() {
 function showFallback(report, msg, hasPhotos, link) {
   const subject = reportSubject(report);
   const body = `${renderReportText(report)}\n\n${REVIEW[report.lang].open} : ${link}`;
-  const mailto = `mailto:${encodeURIComponent(CONFIG.fallbackEmail || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const mailto = `mailto:${encodeURIComponent(recipientFor(state.supervisor))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   $('#sendError').innerHTML = `
     <div class="notice bad"><b>${t('sendFail')}</b>${esc(msg)}. ${t('sendFailMore')}${hasPhotos ? t('photosByHand') : ''}</div>
     <div class="menu-list">
@@ -745,33 +898,16 @@ function showFallback(report, msg, hasPhotos, link) {
       <button class="btn ghost" id="copyReport">${t('copy')}</button>
     </div>`;
   $('#copyReport').onclick = async () => {
-    try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); toast(t('copied')); } catch { toast(t('copyFail')); }
+    try { await navigator.clipboard.writeText(`${subject}\n\n${body}`); toast(t('copied')); } catch { toast(t('copyFail'), 'bad'); }
   };
 }
 
-$('#newShiftBtn').addEventListener('click', () => { $('#emailPreview').hidden = true; setupScreen(); });
+$('#newShiftBtn').addEventListener('click', setupScreen);
 
-// ---------- 5-6. Espace superviseur ----------
-// Chaque rapport ouvert depuis un courriel est gardé sur ce téléphone pour
-// l'aperçu. Rien ne quitte l'appareil.
-const savedReports = () => read(HISTORY, []);
-function remember(r, code) {
-  const key = `${r.date}|${r.name}|${r.shiftName}|${r.hours}`;
-  const list = savedReports().filter((h) => h.key !== key);
-  const notDone = r.items.filter((i) => i.status === 'notdone').length;
-  const unchecked = r.items.filter((i) => i.status === 'unchecked').length;
-  list.push({
-    key, code, date: r.date, weekday: r.weekday, name: r.name, shift: r.shiftName, hours: r.hours,
-    done: r.completion.done, total: r.completion.total, notDone, unchecked, flags: r.flags.length,
-  });
-  list.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.hours < b.hours ? 1 : -1));
-  write(HISTORY, list.slice(0, 300));
-}
-
+// ---------- 5. Rapport ouvert depuis le courriel ----------
 const STATUS_MARK = { done: '✓', notdone: '✕', unchecked: '○' };
 
-function openReview(r, code, { demo = false, photos = 0 } = {}) {
-  if (code) remember(r, code);
+function openReview(r, { demo = false, sup = '' } = {}) {
   const R = REVIEW[r.lang] || REVIEW.fr;
   const T = reportLabels(r);
   const notDone = r.items.filter((i) => i.status === 'notdone');
@@ -786,133 +922,209 @@ function openReview(r, code, { demo = false, photos = 0 } = {}) {
   const row = (i) => `<li class="rv-row ${i.status}">
       <span class="rv-mark">${STATUS_MARK[i.status]}</span>
       <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
-      <span class="rv-time mono">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
+      <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
     </li>`;
-
   const attention = [
-    ...r.flags.map((f) => `<li class="rv-flag"><span class="rv-mark">⚑</span><span class="rv-main"><span class="rv-title">${esc(f.category)}${f.location ? ` · ${esc(f.location)}` : ''}</span><span class="rv-quote">« ${esc(f.text)} »</span>${f.photos?.length ? `<span class="rv-meta">📎 ${esc(f.photos.join(', '))}</span>` : ''}</span><span class="rv-time mono">${esc(f.at)}</span></li>`),
+    ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">⚑</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span><span class="rv-quote">« ${esc(fl.text)} »</span>${fl.photos?.length ? `<span class="rv-meta">📎 ${esc(fl.photos.join(', '))}</span>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
     ...unchecked.map(row),
   ];
-  const nPhotos = photos || [...r.items, ...r.flags, ...r.overflow].reduce((n, x) => n + (x.photos?.length || 0), 0);
+  const nPhotos = [...r.items, ...r.flags, ...r.overflow].reduce((n, x) => n + (x.photos?.length || 0), 0);
 
   $('#reviewBody').innerHTML = `
-    ${demo ? `<div class="notice ok"><b>${esc(t('demoText', r.supervisor))}</b></div>` : ''}
+    ${demo ? `<div class="notice ok"><b>${esc(t('demoText', sup || r.supervisor))}</b></div>` : ''}
     <div class="rv-head">
       <p class="eyebrow">${[r.gymName, R.title].filter(Boolean).map(esc).join(' · ')}</p>
       <h1>${esc(r.name)}</h1>
-      <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(r.date.slice(8))}/${esc(r.date.slice(5, 7))} · <span class="mono">${esc(r.hours)}</span></p>
+      <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(dayMonth(r.date))} · <span class="num">${esc(r.hours)}</span></p>
       ${r.supervisor ? `<p class="rv-sub">${esc(T.to)} ${esc(r.supervisor)}</p>` : ''}
     </div>
     <div class="rv-verdict ${nAttention ? 'warn' : 'ok'}">
-      <div class="rv-ring" style="--p:${pct}"><span class="mono">${pct}%</span></div>
+      <div class="rv-ring" style="--p:${pct}"><span class="num">${pct}%</span></div>
       <div>
         <b>${nAttention ? esc(R.toSee(nAttention)) : esc(R.allGood)}</b>
-        <span class="mono">${r.completion.done}/${r.completion.total} ${esc(T.done)}</span>
+        <span class="num">${r.completion.done}/${r.completion.total} ${esc(T.done)}</span>
       </div>
     </div>
-    <div class="stat-grid">
-      <div class="stat ok"><b>${r.completion.done}</b><span>${esc(T.status.done)}</span></div>
-      <div class="stat bad"><b>${notDone.length + unchecked.length}</b><span>${esc(T.status.notdone)}</span></div>
-      <div class="stat warn"><b>${r.flags.length}</b><span>${esc(T.flags)}</span></div>
-    </div>
-    ${attention.length ? `<div class="section-head"><h3>${esc(R.attention)}</h3><span class="mono">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
+    ${attention.length ? `<div class="section-head"><h3>${esc(R.attention)}</h3><span class="num">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
     ${r.notes ? `<div class="section-head"><h3>${esc(T.notes)}</h3></div><div class="panel rv-notes">${esc(r.notes)}</div>` : ''}
-    <div class="section-head"><h3>${esc(R.full)}</h3><span class="mono">${r.completion.done}/${r.completion.total}</span></div>
+    <div class="section-head"><h3>${esc(R.full)}</h3><span class="num">${r.completion.done}/${r.completion.total}</span></div>
     <ul class="rv-list">${r.items.map(row).join('')}</ul>
     ${r.overflow.length ? `<div class="section-head"><h3>${esc(T.overflow)}</h3></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
     ${r.outOfRange.length ? `<p class="section-note">${esc(T.fixed)} : ${esc(r.outOfRange.join(', '))}</p>` : ''}
-    ${nPhotos && !demo ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}
-    ${demo ? `<button class="btn primary big" id="reviewNew">${esc(R.newShift)}</button>` : ''}`;
-  $('#reviewNew')?.addEventListener('click', () => { window.history.replaceState(null, '', location.pathname); setupScreen(); });
+    ${nPhotos && !demo ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}`;
   paintStatic();
   show('review');
 }
 
 async function openReviewFromHash() {
-  const code = location.hash.slice(3);
   try {
-    openReview(await decodeReport(code), code);
+    openReview(await decodeReport(location.hash.slice(3)));
   } catch {
-    $('#reviewBody').innerHTML = `<div class="notice bad"><b>${esc(REVIEW[lang()].bad)}</b></div>`;
+    $('#reviewBody').innerHTML = `<div class="notice bad"><b>${esc(t('reportBad'))}</b></div>`;
     paintStatic();
     show('review');
   }
 }
 
-function mondayOf(iso) {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// ---------- 6. Aperçu du gym ----------
+// Ce que le plan prévoit aujourd'hui, croisé avec les quarts envoyés.
+function dailyTips(date, n = 3) {
+  const list = TECHNIQUES[lang()];
+  const seed = Number(date.replaceAll('-', ''));
+  return Array.from({ length: n }, (_, i) => list[(seed + i * 4) % list.length]);
 }
 
-let overviewRange = 'week';
-function openOverview() {
+async function openApercu() {
   paintStatic();
-  const all = savedReports();
-  const thisWeek = mondayOf(todayISO());
-  const list = overviewRange === 'week' ? all.filter((h) => mondayOf(h.date) === thisWeek) : all;
-  for (const b of document.querySelectorAll('[data-range]')) b.setAttribute('aria-selected', String(b.dataset.range === overviewRange));
-  $('#ovEyebrow').textContent = CONFIG.gymName ? `${CONFIG.gymName} · ${t('supervisorSpace')}` : t('supervisorSpace');
+  const date = todayISO();
+  const day = dayInfo(date);
+  const L = lang();
+  const weekday = buildPlan({ shift: 1, date, start: '07:30', end: '15:30', lang: L }).weekdayName;
+  $('#apEyebrow').textContent = [CONFIG.gymName, t('today'), `${weekday} ${dayMonth(date)}`].filter(Boolean).join(' · ');
+  if ($('#apercu').hidden) {
+    $('#apercuBody').innerHTML = '<div class="skeleton"></div><div class="skeleton short"></div>';
+    show('apercu');
+  }
 
-  if (!all.length || !list.length) {
-    $('#overviewBody').innerHTML = `<div class="panel empty">${esc(all.length ? t('emptyWeek') : t('emptyOverview'))}</div>`;
-    show('overview');
+  const { live, shifts } = await loadBoard(date);
+  if ($('#apercu').hidden) return; // l'utilisateur est parti entre-temps
+
+  const ref = {
+    1: buildPlan({ shift: 1, date, start: '07:30', end: '15:30', lang: L }),
+    2: buildPlan({ shift: 2, date, start: '16:30', end: '23:00', lang: L }),
+  };
+  const titleOf = (id) => [...ref[1].items, ...ref[2].items, ...ref[1].overflow, ...ref[2].overflow].find((x) => x.id === id)?.title || id;
+  const sent = { 1: shifts.filter((s) => s.shift === 1), 2: shifts.filter((s) => s.shift === 2) };
+  // Statut d'une tâche du jour : fait l'emporte, puis pas fait, puis rien.
+  const statusOf = (shift, id) => {
+    let res = null;
+    for (const s of sent[shift]) {
+      const it = s.items.find((x) => x.id === id);
+      if (!it) continue;
+      if (it.status === 'done') return { kind: 'done', by: s.name, at: clock(it.doneAt) };
+      if (it.status === 'notdone') res = { kind: 'notdone', by: s.name, reason: it.reason };
+      else res ||= { kind: 'unchecked', by: s.name };
+    }
+    return res || { kind: sent[shift].length ? 'unchecked' : 'planned' };
+  };
+  const stateLine = (st) => {
+    if (st.kind === 'done') return `<span class="st ok">✓ ${esc(t('doneBy', st.by, st.at))}</span>`;
+    if (st.kind === 'notdone') return `<span class="st bad">✕ ${esc(t('notDoneBy', SKIP_REASONS[st.reason]?.[L] || st.by))}</span>`;
+    if (st.kind === 'unchecked') return `<span class="st warn">○ ${esc(t('notChecked'))}</span>`;
+    return `<span class="st">${esc(t('planned'))}</span>`;
+  };
+
+  // 1. Zones du jour
+  const z1 = day.zones[1];
+  const z2 = day.zones[2];
+  const deep1 = statusOf(1, 'q1-profondeur');
+  const deep2 = statusOf(2, 'q2-profondeur');
+  const zoneRows = [
+    { who: t('morning'), what: `${t('deepClean')} · zone ${z1}`, st: deep1 },
+    { who: t('evening'), what: `${t('deepClean')} · zone ${z2}`, st: deep2 },
+  ];
+  if (day.surfaces === 'miroirs') zoneRows.push({ who: t('evening'), what: `${t('mirrorsOf')} · zone ${day.zones.third}`, st: statusOf(2, 'q2-surfaces-2') });
+  const mapStates = { [z1]: deep1.kind, [z2]: deep2.kind }; // 'planned' tant que rien n'est envoyé
+
+  // 2. Au programme (les points qui changent selon le jour)
+  const highlights = [
+    { who: t('morning'), what: `${t('weekly')} · ${WEEKLY_Q1[day.weekday][L].short}`, st: statusOf(1, 'q1-hebdo') },
+    { who: t('morning'), what: t('spinRoom'), st: statusOf(1, 'q1-spinning') },
+    { who: t('evening'), what: `${t('weekly')} · ${WEEKLY_Q2[day.weekday][L].short.replace(/\*\*/g, '')}${day.walls ? ` + ${t('walls')}` : ''}`, st: statusOf(2, 'q2-hebdo') },
+    { who: t('evening'), what: day.weekday === 2 ? t('compostWed') : t('compost'), st: statusOf(2, 'q2-poubelles') },
+  ];
+  if (day.surfaces !== 'miroirs') highlights.push({ who: t('evening'), what: day.surfaces === 'tuiles' ? `${t('tiles')[0].toUpperCase()}${t('tiles').slice(1)}` : t('inspection'), st: statusOf(2, 'q2-surfaces-2') });
+
+  // 3. Reste à faire (ce qui a été envoyé sans être fait)
+  const left = [];
+  for (const shift of [1, 2]) {
+    for (const s of sent[shift]) {
+      for (const it of s.items) {
+        if (it.status === 'done') continue;
+        if (statusOf(shift, it.id).kind === 'done') continue;
+        if (left.some((l) => l.id === it.id)) continue;
+        left.push({ id: it.id, shift, by: s.name, kind: it.status, reason: it.reason });
+      }
+    }
+  }
+  const flags = shifts.flatMap((s) => s.flags.map((fl) => ({ ...fl, by: s.name })));
+
+  const row = (r) => `<li class="ap-row"><span class="ap-who">${esc(r.who)}</span><span class="ap-what">${esc(r.what)}</span>${stateLine(r.st)}</li>`;
+  const shiftCard = (shift) => {
+    const list = sent[shift];
+    const name = SHIFTS[shift][L].name;
+    if (!list.length) return `<div class="ap-shift"><b>${esc(name)}</b><span class="st">${esc(t('notSent'))}</span></div>`;
+    return list.map((s) => {
+      const done = s.items.filter((i) => i.status === 'done').length;
+      return `<div class="ap-shift"><b>${esc(name)}</b><span class="st">${esc(t('sentBy', s.name, clock(s.submittedAt)))}</span><span class="ap-score num">${done}/${s.items.length}</span></div>`;
+    }).join('');
+  };
+
+  $('#apercuBody').innerHTML = `
+    <div class="ap-status"><span class="pill ${live ? 'is-live' : ''}">${esc(live ? t('live') : t('planOnly'))}</span></div>
+    <section class="ap-grid">
+      <div class="panel ap-zones">
+        <h3>${t('zonesToday')}</h3>
+        ${zoneMap(null, { labels: MAP_LABELS[L], states: mapStates, mirrors: day.surfaces === 'miroirs' ? day.zones.third : null })}
+        <div class="legend">${['done', 'planned', 'unchecked', 'notdone'].map((k) => `<span><i class="sw ${k}"></i>${esc(t('legend')[k])}</span>`).join('')}${day.surfaces === 'miroirs' ? `<span><i class="sw mirror"></i>${esc(t('legend').mirrors)}</span>` : ''}</div>
+        <ul class="ap-list">${zoneRows.map(row).join('')}</ul>
+      </div>
+      <div class="panel">
+        <h3>${t('dayHighlights')}</h3>
+        <ul class="ap-list">${highlights.map(row).join('')}</ul>
+      </div>
+      <div class="panel">
+        <h3>${t('shiftsToday')}</h3>
+        ${shiftCard(1)}${shiftCard(2)}
+      </div>
+      <div class="panel">
+        <h3>${t('stillToDo')}</h3>
+        ${left.length
+          ? `<ul class="ap-list">${left.map((l) => `<li class="ap-row"><span class="ap-who">${esc(SHIFTS[l.shift][L].short)}</span><span class="ap-what">${esc(titleOf(l.id))}</span>${l.kind === 'notdone' ? `<span class="st bad">✕ ${esc(SKIP_REASONS[l.reason]?.[L] || t('notDone'))}</span>` : `<span class="st warn">○ ${esc(t('notChecked'))}</span>`}</li>`).join('')}</ul>`
+          : `<p class="empty-line">${esc(sent[1].length || sent[2].length ? t('nothingLeft') : t('notSent'))}</p>`}
+      </div>
+      <div class="panel">
+        <h3>${t('openIssues')}</h3>
+        ${flags.length
+          ? flags.map((fl) => `<div class="flag-item"><span aria-hidden="true">⚑</span><div><b>${esc(FLAG_CATEGORIES[fl.category]?.[L] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${esc(fl.by)} · ${clock(fl.at)}</small></div></div>`).join('')
+          : `<p class="empty-line">${esc(t('noIssues'))}</p>`}
+      </div>
+      <div class="panel ap-tips">
+        <h3>${t('tips')}</h3>
+        ${dailyTips(date).map((tip) => `<div class="tip-row">${illustration(tipIcon(tip.area))}<p>${esc(tip.text)}</p></div>`).join('')}
+      </div>
+    </section>
+    ${live ? '' : `<p class="section-note">${esc(t('planOnlyNote'))}</p>`}
+    <button class="btn primary big" type="button" data-go="${state ? 'shift' : 'home'}">${esc(state ? t('backToShift') : t('startShift'))}</button>`;
+}
+
+const TIP_ICONS = { gym: 'points-contact', cardio: 'desinfection', zone: 'inspection', surfaces: 'miroirs', bureaux: 'bureaux', muscu: 'aspirateur', buanderie: 'guenilles', dechets: 'poubelles' };
+const tipIcon = (area) => TIP_ICONS[area] || 'inspection';
+
+// ---------- Navigation ----------
+document.addEventListener('click', (ev) => {
+  const go = ev.target.closest('[data-go]');
+  if (!go) return;
+  if (go.dataset.go === 'apercu') {
+    if (location.hash === '#apercu') openApercu(); else location.hash = 'apercu';
     return;
   }
-  const done = list.reduce((n, h) => n + h.done, 0);
-  const total = list.reduce((n, h) => n + h.total, 0);
-  const flags = list.reduce((n, h) => n + h.flags, 0);
-  const groups = new Map();
-  for (const h of list) {
-    const wk = mondayOf(h.date);
-    if (!groups.has(wk)) groups.set(wk, []);
-    groups.get(wk).push(h);
-  }
-  const fmtDay = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
-  $('#overviewBody').innerHTML = `
-    <div class="stat-grid">
-      <div class="stat"><b>${list.length}</b><span>${t('shiftsCount')}</span></div>
-      <div class="stat ok"><b>${total ? Math.round((100 * done) / total) : 0}%</b><span>${t('completion')}</span></div>
-      <div class="stat warn"><b>${flags}</b><span>${t('issues')}</span></div>
-    </div>
-    ${[...groups].map(([wk, hs]) => `
-      ${overviewRange === 'all' ? `<p class="group-title">${esc(t('week', fmtDay(wk)))}</p>` : ''}
-      <ul class="ov-list">${hs.map((h) => {
-        const issues = h.notDone + h.unchecked;
-        const ok = !issues && !h.flags;
-        return `<li><button class="ov-row" data-code="${esc(h.code)}">
-          <span class="ov-day"><b>${esc(h.weekday.slice(0, 3))}</b><small class="mono">${fmtDay(h.date)}</small></span>
-          <span class="ov-main"><span class="ov-name">${esc(h.name)}</span><span class="ov-sub">${esc(h.shift)} · <span class="mono">${esc(h.hours)}</span></span></span>
-          <span class="ov-status">
-            <span class="ov-pill ${ok ? 'ok' : 'warn'} mono">${h.done}/${h.total}</span>
-            ${h.flags ? `<span class="ov-pill bad">⚑ ${h.flags}</span>` : ''}
-          </span>
-        </button></li>`;
-      }).join('')}</ul>`).join('')}`;
-  show('overview');
-}
-
-$('#overviewBody').addEventListener('click', (ev) => {
-  const b = ev.target.closest('[data-code]');
-  if (b) location.hash = `r=${b.dataset.code}`;
-});
-for (const b of document.querySelectorAll('[data-range]')) b.addEventListener('click', () => { overviewRange = b.dataset.range; openOverview(); });
-$('#toOverview').addEventListener('click', () => { location.hash = 'apercu'; });
-$('#reviewBack').addEventListener('click', () => { location.hash = 'apercu'; });
-$('#overviewBack').addEventListener('click', () => {
   window.history.replaceState(null, '', location.pathname);
   route();
 });
 
-// ---------- Démarrage ----------
 function route() {
   if (location.hash.startsWith('#r=')) return openReviewFromHash();
-  if (location.hash === '#apercu') return openOverview();
+  if (location.hash === '#apercu') return openApercu();
   if (state?.name && state?.date) return openChecklist();
   return setupScreen();
 }
 window.addEventListener('hashchange', route);
+
+// Animations en pause quand l'onglet est caché (batterie).
+document.addEventListener('visibilitychange', () => document.body.classList.toggle('paused', document.hidden));
+
 paintStatic();
 route();
 

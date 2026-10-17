@@ -4,6 +4,17 @@ export const CONFIG = {
   // Nom du centre, affiché dans le site et dans le rapport.
   gymName: 'Sporthèque',
 
+  // Logo officiel : déposer le fichier (SVG ou PNG) dans icons/ et mettre
+  // son chemin ici, ex. 'icons/logo-sportheque.svg'. Vide = mot-symbole texte.
+  logo: '',
+
+  // Superviseurs proposés au début du quart. Ajouter un courriel pour qu'il
+  // reçoive ses rapports directement; sans courriel, le rapport va à reportTo.
+  supervisors: [
+    { name: 'Daniel', email: '' },
+    { name: 'Mathieu', email: '' },
+  ],
+
   // Langue par défaut de l'interface ('fr' ou 'en'); chaque téléphone
   // garde ensuite son choix. Le superviseur en service et la langue de son
   // rapport sont choisis au début de chaque quart.
@@ -41,6 +52,10 @@ export const CONFIG = {
   // Période de test : les rapports vont à l'adresse de test, pas au superviseur.
   reportTo: 'thealchemicalseed@gmail.com',
   reportEndpoint: '/api/send-report',
+
+  // Tableau partagé de l'Aperçu (fonction Netlify). Sur GitHub Pages, il
+  // n'existe pas : l'Aperçu passe tout seul en mode « plan du jour ».
+  boardEndpoint: '/api/board',
 
   // Bouton de secours « Envoyer avec l'app Mail » (adresse facultative).
   fallbackEmail: '',

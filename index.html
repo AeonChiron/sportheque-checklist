@@ -3,22 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f3d40">
+  <meta name="theme-color" content="#eef4f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a1416" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Quart gym">
+  <meta name="description" content="Checklist de quart de l’équipe d’entretien du gym, 2e étage.">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preload" href="fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
   <title>Quart gym</title>
 </head>
 <body>
+  <!-- Fond vivant : lumière de piscine, très lente. -->
+  <div class="env" aria-hidden="true"><i></i><i></i><i></i></div>
+
   <!-- 1. Début de quart -->
   <section id="setup" class="screen" hidden>
     <div class="setup-top">
-      <p class="brand"><span class="brand-dot" aria-hidden="true"></span><span id="brandLine"></span></p>
+      <div class="brand" id="brand"></div>
       <div class="lang-switch" role="group" aria-label="Langue / Language">
         <button type="button" data-lang="fr">FR</button>
         <button type="button" data-lang="en">EN</button>
@@ -50,14 +56,13 @@
         <input id="fDate" name="date" type="date" required>
       </label>
       <div class="field-group">
-        <label class="field">
+        <div class="field">
           <span data-t="supervisor"></span>
-          <input id="fSupervisor" name="supervisor" type="text" autocapitalize="words" list="supervisorList" data-ph="supervisorPh">
-          <datalist id="supervisorList"></datalist>
-        </label>
+          <div class="segmented" role="radiogroup" id="supervisorPick"></div>
+        </div>
         <div class="inline-choice">
           <span data-t="reportLang"></span>
-          <div class="segmented tiny" role="radiogroup" id="reportLang">
+          <div class="segmented tiny" role="radiogroup">
             <button type="button" role="radio" data-rlang="fr">Français</button>
             <button type="button" role="radio" data-rlang="en">English</button>
           </div>
@@ -67,8 +72,10 @@
       <div id="preview" class="preview" aria-live="polite"></div>
       <button class="btn primary big" type="submit" data-t="create"></button>
     </form>
-    <button class="btn ghost big supervisor-link" type="button" id="toOverview">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span data-t="supervisorSpace"></span>
+
+    <button class="btn ghost big overview-link" type="button" data-go="apercu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+      <span data-t="overview"></span>
     </button>
     <p class="fineprint" id="manualVersion"></p>
   </section>
@@ -81,14 +88,19 @@
           <p class="eyebrow" id="cEyebrow"></p>
           <h2 id="cTitle"></h2>
         </div>
-        <button class="icon-btn" id="menuBtn" aria-label="Options">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
-        </button>
+        <div class="topbar-actions">
+          <button class="icon-btn" data-go="apercu" data-label="overviewShort">
+            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
+          </button>
+          <button class="icon-btn" id="menuBtn" aria-label="Options">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="timeline" id="timeline" aria-hidden="true"></div>
+      <div class="lane" id="timeline" aria-hidden="true"></div>
       <div class="timeline-legend">
         <span id="progressLabel"></span>
-        <span class="mono" id="rangeLabel"></span>
+        <span class="num" id="rangeLabel"></span>
       </div>
     </header>
 
@@ -99,6 +111,7 @@
       <button type="button" role="tab" data-view="time" data-t="byTime"></button>
       <button type="button" role="tab" data-view="zone" data-t="byZone"></button>
     </div>
+    <p class="hint" id="swipeHint" hidden></p>
 
     <ol class="tasks" id="taskList"></ol>
     <div id="overflowBlock"></div>
@@ -137,30 +150,26 @@
     <h2 data-t="sentTitle"></h2>
     <p class="lede" id="sentText"></p>
     <button class="btn primary big" id="newShiftBtn" data-t="newShift"></button>
-    <div class="email-preview" id="emailPreview" hidden></div>
+    <button class="btn ghost big" type="button" data-go="apercu" data-t="overview"></button>
   </section>
 
-  <!-- 5. Vue superviseur : un rapport -->
+  <!-- 5. Rapport (ouvert depuis le courriel) -->
   <section id="review" class="screen" hidden>
     <header class="review-top">
-      <button class="back" id="reviewBack">‹ <span data-t="overviewShort"></span></button>
+      <button class="back" data-go="home">‹ <span data-t="home"></span></button>
     </header>
     <div id="reviewBody"></div>
     <div class="bottom-spacer small"></div>
   </section>
 
-  <!-- 6. Vue superviseur : aperçu des quarts -->
-  <section id="overview" class="screen" hidden>
+  <!-- 6. Aperçu du gym (pour toute l'équipe) -->
+  <section id="apercu" class="screen" hidden>
     <header class="review-top">
-      <button class="back" id="overviewBack">‹ <span data-t="home"></span></button>
-      <p class="eyebrow" id="ovEyebrow"></p>
+      <button class="back" data-go="home">‹ <span data-t="home"></span></button>
+      <p class="eyebrow" id="apEyebrow"></p>
       <h1 data-t="overview"></h1>
     </header>
-    <div class="segmented view-toggle" role="tablist">
-      <button type="button" role="tab" data-range="week" data-t="thisWeek"></button>
-      <button type="button" role="tab" data-range="all" data-t="allReports"></button>
-    </div>
-    <div id="overviewBody"></div>
+    <div id="apercuBody"></div>
     <div class="bottom-spacer small"></div>
   </section>
 
@@ -172,6 +181,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>
+  <div class="burst" id="burst" aria-hidden="true"></div>
 
   <script type="module" src="js/app.js"></script>
 </body>

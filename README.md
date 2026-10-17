@@ -1,101 +1,87 @@
 # Quart gym — checklist d'entretien Sporthèque
 
-Site web (pensé pour iPhone) pour l'équipe d'entretien de la Sporthèque, 2e étage.
-On l'ouvre dans Safari; aucune app à installer.
+Site web (pensé d'abord pour iPhone, puis ordinateur et iPad) pour l'équipe
+d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à installer.
 
-1. L'employé entre **son nom, ses heures et le superviseur en service**
-   (Daniel, Mathieu, Marie…) et la langue du rapport pour ce superviseur.
-2. Le site bâtit le plan du quart à partir du **manuel de référence**
+## Ce que ça fait
+
+**Pour l'employé**
+1. Il entre son nom, ses heures, la date, choisit le **superviseur en service**
+   (Daniel ou Mathieu) et la langue du rapport pour lui.
+2. Le plan du quart se bâtit tout seul à partir du **manuel de référence**
    (`RÉFÉRENCE-IA-2026-10-17`) : tâches dans l'ordre, heures, zone A/B/C du jour,
-   tâche hebdo, tuiles/miroirs, murs, compost. Si les heures sont différentes de
-   l'horaire standard, le plan s'adapte tout seul, sans rien expliquer à l'employé.
-3. Carte « En cours », ligne du temps du quart, cases à cocher; un toucher ouvre
-   les étapes détaillées et le « Bon à savoir ».
-4. « Pas pu faire » + raison, remarques, photos, et **⚑ Signaler** (bris,
-   fournitures, danger…).
-5. **Terminer** → le rapport part par courriel, adressé au superviseur choisi, dans
-   sa langue. Les remarques de l'employé restent telles qu'écrites.
+   tâche hebdo, tuiles/miroirs, murs, compost. Des heures différentes de
+   l'horaire standard? Le plan s'adapte sans rien expliquer à l'employé.
+3. **Le couloir** (ligne du temps du quart), la carte **« En cours »**, une
+   illustration par tâche. On coche d'un toucher **ou en glissant vers la droite**.
+4. Le détail d'une tâche : illustration ou schéma (carte des zones, postes des
+   télés), étapes numérotées, « Bon à savoir », « Pas pu faire » + raison,
+   remarque, photos. **⚑ Signaler** pour un bris, des fournitures, un danger.
+5. **Terminer** → courriel au superviseur (résumé + bouton « Voir le rapport »,
+   photos en pièces jointes), dans sa langue. Les remarques restent telles qu'écrites.
 
-Français québécois ou anglais au choix sur chaque téléphone. Tout reste enregistré
-sur le téléphone pendant le quart.
+**Pour toute l'équipe : l'Aperçu du gym** (bouton sur l'accueil et dans la checklist)
+- Zones du jour (carte A/B/C), ce qui est au programme, les quarts envoyés,
+  ce qui reste à faire, les problèmes ouverts et de bons trucs du manuel.
+- **Sur GitHub Pages** : mode « plan du jour » (+ les quarts envoyés depuis ce téléphone).
+- **Sur Netlify** : **en direct**, partagé entre tous les téléphones (gratuit,
+  voir plus bas). Rien à changer dans le code.
+
+Français québécois ou anglais au choix sur chaque téléphone. Mode sombre automatique.
+« Réduire les animations » (iPhone : Réglages → Accessibilité) est respecté à 100 %.
+Tout reste enregistré sur le téléphone pendant le quart, même si Safari se recharge.
 
 ## Logique de planification (`js/planner.js`)
 
-Elle applique l'« algorithme obligatoire » de la section 6 du manuel :
+L'« algorithme obligatoire » de la section 6 du manuel :
+- **Horaires de référence** (7 h 30–15 h 30, 16 h 30–23 h) : reproduits à la minute.
+- **Autres horaires** : même ordre, mêmes durées, aucun bloc raccourci; ce qui
+  n'entre pas va dans « Si tu as du temps » (et dans le rapport du superviseur).
+- Repas : CNESST exige au moins 30 min après 5 h consécutives; le gym donne 1 h
+  (non payée). Pause de 15 min accordée (payée) dès 4 h de présence.
+- Rotation A → B → C continue (semaine 1 = lundi 19 octobre 2026), murs un jour
+  sur deux, tuiles/miroirs en alternance, compost seulement le soir à 19 h.
 
-- **Horaire de référence** (Quart 1 7 h 30–15 h 30, Quart 2 16 h 30–23 h) :
-  reproduit à la minute près, pauses et repas compris.
-- **Horaire personnalisé** : même ordre et mêmes durées; les heures sont recalculées.
-  - Aucun bloc n'est raccourci. Ce qui ne tient pas va dans **Hors plage**, avec le
-    déficit en minutes, et apparaît dans le rapport.
-  - L'ouverture et la fermeture sont gardées en priorité (sécurité).
-  - Repas : la CNESST exige au moins 30 min après 5 h consécutives de travail
-    (non payé si on est libre de son poste). Le gym donne 1 h, comme dans ses
-    horaires de référence; le repas est placé pour qu'aucune période de travail
-    ne dépasse 5 h.
-  - Pause de 15 min : pas exigée par la loi, mais accordée par le gym et donc
-    payée. Donnée dès 4 h de présence (réglable).
-  - Heures fixes (compost 19 h, playlists 12 h / 15 h) : rappel au bon moment
-    si le quart les couvre, sinon « hors de tes heures » — jamais attribuées
-    fictivement.
-- **Rotations** : A → B → C continue (Quart 1 puis Quart 2, sans recommencer le lundi),
-  cycles de 2 semaines pour murs et tuiles/miroirs.
+`npm test` vérifie tout ça (19 tests).
 
-`npm test` vérifie la reproduction exacte des deux fiches, le tableau de rotation
-de 21 jours et les cas du manuel (début 18 h, fin avant 19 h…).
+## Réglages (`js/config.js`)
 
-## À confirmer avant la mise en service (`js/config.js`)
-
-| Réglage | Valeur actuelle |
+| Réglage | Valeur |
 |---|---|
 | `gymName` | `Sporthèque` |
-| `cycleAnchorMonday` — lundi de la « Semaine 1 » (A-B-C) et « Semaine I » (murs, tuiles) | `2026-10-19` (début officiel) |
-| `guidePhotos` — photos de référence dans les consignes | `false` (à activer quand `photos/` sera rempli) |
-| `custom.pauseIfPresenceAtLeast` — seuil pour la pause de 15 min | 240 min |
-| `custom.mealMinutes` — durée du repas en horaire personnalisé | 60 min |
-
-## Le rapport et l'espace superviseur
-
-- À la fin du quart, le superviseur reçoit un courriel court avec un bouton
-  **« Voir le rapport »**. Le lien ouvre le même site, en **vue superviseur** :
-  verdict d'un coup d'œil, problèmes signalés, tâches pas faites, checklist complète.
-- Le rapport voyage **dans le lien lui-même** (après le `#`) : aucune base de
-  données, et le contenu n'est jamais envoyé au serveur qui héberge le site.
-- Chaque rapport ouvert s'ajoute à l'**Aperçu des quarts** (bouton « Espace
-  superviseur » sur l'accueil), gardé sur le téléphone du superviseur.
-- Les photos arrivent en pièces jointes du courriel.
+| `logo` | vide → mot-symbole texte. Déposer le logo officiel dans `icons/` et mettre son chemin ici. |
+| `supervisors` | Daniel, Mathieu (ajouter `email` pour qu'un superviseur reçoive ses rapports directement) |
+| `reportTo` | adresse de test pendant la période d'essai |
+| `cycleAnchorMonday` | `2026-10-19` |
 
 ## Mettre en ligne (gratuit)
 
-**Site : GitHub Pages**
-1. Dépôt **Settings → General → Danger Zone → Change visibility → Public**
-   (GitHub Pages est gratuit pour les dépôts publics; il n'y a aucun secret dans le code).
-2. **Settings → Pages** → *Source* : **Deploy from a branch** → **main** → **/(root)** → **Save**.
-3. Après 1 à 2 minutes : `https://aeonchiron.github.io/sportheque-checklist/`.
+**Option actuelle : GitHub Pages** — Settings → Pages → *Deploy from a branch* → `main` / `(root)`.
+Le courriel passe par FormSubmit (gratuit, sans compte : le destinataire clique
+« Activate » une seule fois).
 
-**Courriel : FormSubmit** (gratuit, sans compte ni clé)
-- L'adresse est dans `js/config.js` (`reportTo`). Au premier envoi, FormSubmit
-  écrit au destinataire pour **activer** l'adresse : il clique une fois, c'est réglé.
-- Ensuite, FormSubmit fournit un alias secret : le mettre dans `reportTo` à la
-  place de l'adresse pour qu'elle ne soit plus visible dans le code public.
-
-**Option plus « pro » (plus tard)** : `sendVia: 'api'` avec Vercel + Resend
-(`api/send-report.js`, variables `RESEND_API_KEY`, `SUPERVISOR_EMAIL`, `REPORT_FROM`).
+**Pour l'Aperçu en direct : Netlify** (gratuit, le dépôt peut rester privé)
+1. netlify.com → *Sign up with GitHub* → *Add new site* → *Import from GitHub* → ce dépôt.
+2. Aucun réglage : `netlify.toml` dit tout. *Deploy*.
+3. Le site répond sur `https://<nom>.netlify.app`; la fonction `netlify/functions/board.mjs`
+   et son stockage (Netlify Blobs) s'activent tout seuls.
 
 ## Développement local
 
 ```sh
-npm run dev   # http://localhost:3000 — sans clé, le courriel est écrit dans last-report.html
+npm run dev           # http://localhost:3000 — courriel simulé, tableau partagé simulé
+DEMO=1 npm run dev    # mode démo : l'envoi ouvre directement la vue du superviseur
 npm test
 ```
 
 ## Fichiers
 
-- `js/manual.js` — contenu du manuel en français et en anglais (tâches, étapes, « bon à savoir »)
-- `js/i18n.js` — textes de l'interface (FR/EN)
+- `js/manual.js` — contenu du manuel (FR/EN), techniques pour les « bons trucs »
 - `js/planner.js` — moteur de planification
-- `js/report.js` — rapport (texte + HTML du courriel)
-- `js/app.js`, `index.html`, `styles.css` — interface
-- `api/send-report.js` — envoi du courriel (fonction serveur)
-- `js/photos.js` — photos prises pendant le quart (réduction, stockage local)
-- `photos/` — futures photos de référence du gym (voir `photos/README.md`)
+- `js/illustrations.js` — illustrations SVG des tâches, carte des zones, mur des télés
+- `js/report.js` — rapport (courriel, lien `#r=…`, vue superviseur)
+- `js/board.js`, `js/board-shape.js`, `netlify/functions/board.mjs` — tableau de l'Aperçu
+- `js/app.js`, `index.html`, `styles.css`, `js/i18n.js` — interface
+- `js/photos.js` — photos prises pendant le quart
+- `fonts/` — Barlow Condensed (licence OFL), hébergée sur le site
+- `api/send-report.js` — option d'envoi Vercel + Resend (non utilisée)

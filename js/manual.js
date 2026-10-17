@@ -38,11 +38,41 @@ export const ZONES = {
 };
 
 export const TV_CHANNELS = [
-  { fr: 'Télé en bas à droite', en: 'Bottom-right TV', ch: '619 — TV5' },
-  { fr: 'Télé en bas à gauche', en: 'Bottom-left TV', ch: '625' },
-  { fr: 'Télé en haut à gauche', en: 'Top-left TV', ch: '779' },
-  { fr: 'Télé en haut à droite', en: 'Top-right TV', ch: '620' },
+  { key: 'Bas droite', fr: 'Télé en bas à droite', en: 'Bottom-right TV', ch: '619 · TV5' },
+  { key: 'Bas gauche', fr: 'Télé en bas à gauche', en: 'Bottom-left TV', ch: '625' },
+  { key: 'Haut gauche', fr: 'Télé en haut à gauche', en: 'Top-left TV', ch: '779' },
+  { key: 'Haut droite', fr: 'Télé en haut à droite', en: 'Top-right TV', ch: '620' },
 ];
+
+// Techniques du manuel (section 5) : les « bons trucs » de l'Aperçu.
+export const TECHNIQUES = {
+  fr: [
+    { area: 'gym', text: 'Points de contact : travaille une rangée d’appareils à la fois et couvre poignées, sièges, dossiers, boutons et réglages.' },
+    { area: 'gym', text: 'Laisse agir le désinfectant le temps indiqué sur l’étiquette du produit, pas moins.' },
+    { area: 'cardio', text: 'Écrans et boîtiers : mets le produit sur la guenille, jamais directement sur l’électronique.' },
+    { area: 'zone', text: 'Repose-pieds : surface de contact des souliers d’abord (plateformes, pédaliers), puis contours, supports et bases.' },
+    { area: 'surfaces', text: 'Miroirs : couvre tout le panneau, puis regarde sous plusieurs angles avant de retoucher.' },
+    { area: 'bureaux', text: 'Murs : petits cercles, doucement. Si la peinture pâlit, arrête et signale.' },
+    { area: 'muscu', text: 'Tapis noirs : les allées d’abord, puis autour des bancs, racks et supports; finis par les coins.' },
+    { area: 'surfaces', text: 'Tuiles blanches : saletés sèches d’abord (balayeuse ou balai), puis la moppe. Protège les zones glissantes.' },
+    { area: 'buanderie', text: 'Guenilles « clients » et « ménage » : garde-les séparées et pars les brassées tôt pour que la machine travaille pendant toi.' },
+    { area: 'dechets', text: 'Essuie l’extérieur des poubelles pendant la tournée des déchets, pas pendant le nettoyage en profondeur.' },
+    { area: 'gym', text: 'Ne mélange jamais les produits chimiques et remets chaque outil à sa place.' },
+  ],
+  en: [
+    { area: 'gym', text: 'Touch points: work one row of machines at a time and cover handles, seats, backrests, buttons and adjusters.' },
+    { area: 'gym', text: 'Let the disinfectant sit for the time on the product label, not less.' },
+    { area: 'cardio', text: 'Screens and boxes: spray the rag, never the electronics directly.' },
+    { area: 'zone', text: 'Footrests: shoe-contact surfaces first (platforms, pedals), then edges, supports and bases.' },
+    { area: 'surfaces', text: 'Mirrors: cover the whole panel, then check from several angles before touching up.' },
+    { area: 'bureaux', text: 'Walls: small gentle circles. If the paint fades, stop and flag it.' },
+    { area: 'muscu', text: 'Black mats: aisles first, then around benches, racks and supports; finish with the corners.' },
+    { area: 'surfaces', text: 'White tiles: dry dirt first (vacuum or broom), then the mop. Protect slippery spots.' },
+    { area: 'buanderie', text: 'Keep “member” and “cleaning” rags separate, and start loads early so the machine works while you do.' },
+    { area: 'dechets', text: 'Wipe the outside of the bins during the trash round, not during the deep clean.' },
+    { area: 'gym', text: 'Never mix chemicals, and put every tool back where it belongs.' },
+  ],
+};
 
 // Jours : 0 = lundi … 6 = dimanche.
 export const WEEKDAYS = {
@@ -504,7 +534,7 @@ export const SHIFTS = {
         },
       },
       {
-        id: 'q2-rangement', kind: 'task', minutes: 15, area: 'gym', photo: 'tour-general',
+        id: 'q2-rangement', kind: 'task', minutes: 15, area: 'gym', photo: 'rangement',
         fr: {
           title: 'Rangement des équipements',
           summary: 'Haltères, poids, bancs; dégager les allées.',

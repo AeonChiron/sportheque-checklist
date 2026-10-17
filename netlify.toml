@@ -1,0 +1,9 @@
+# Hébergement Netlify (gratuit) : site statique + fonction du tableau partagé.
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

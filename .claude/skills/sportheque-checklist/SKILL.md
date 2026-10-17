@@ -34,20 +34,22 @@ to the supervisor. Plain static site + one serverless function. No build step.
 
 ## Product decisions from the owner
 
-- **Seamless for workers**: never show rule talk ("hors plage", "horaire personnalisé", CNESST, deficits) to the cleaner. The plan just adapts; leftover blocks appear as "Si tu as du temps". Fixed times outside the shift (e.g. compost) disappear from the worker view. The *supervisor report* does carry those details.
-- **Supervisor is not fixed**: entered each shift (Daniel, Mathieu, Marie, Oli, Amélie…); report addressed to that name. Report language chosen per supervisor (remembered on the phone).
-- **Languages**: UI FR/EN per phone; report in the supervisor's language; employee-typed text (remarks, flags, notes) is never translated.
-- **Voice**: Quebec French, *tu*, short imperatives, local terms (balayeuse, vidanges, guenilles, moppe, brassée, poste de télé). Headline titles follow the manual; details are the simplified layer.
-- **Design**: professional, calm, "tech" through clarity, not decoration. Hairline surfaces, one teal accent, state colors separate, tabular digits, timeline + "Now" card, bottom sheet for details with numbered steps and a "Bon à savoir" callout. Ergonomics first (big tap targets, check on the right, nothing hidden behind toasts).
-- **Supervisor side, all inside the site**: email (FormSubmit, free, no account) = short summary + "Voir le rapport" link. The report is compressed into the link hash (`#r=…`, `encodeReport`/`decodeReport`), opens a glance view (verdict ring, "À voir", full checklist). Opened reports are kept on the supervisor's phone (localStorage `gym-shift-reports`) and listed in "Aperçu des quarts" (`#apercu`). Owner refused Google Sheets / external databases. Everything must stay free.
-- Hosting: GitHub Pages from `main` root (repo public). Vercel/Resend path kept as `sendVia: 'api'` option only.
+- **Seamless for workers**: never show rule talk (custom hours, CNESST, deficits) to the cleaner. Leftover blocks appear as "Si tu as du temps". Fixed times outside the shift disappear from the worker view; the supervisor report keeps them.
+- **Supervisors**: a fixed picker (Daniel, Mathieu) from `CONFIG.supervisors`; each may get an `email` later. During testing every report goes to `CONFIG.reportTo` (test address). Report language remembered per supervisor.
+- **Languages**: UI FR/EN per phone; report in the supervisor's language; employee-typed text never translated.
+- **Voice**: Quebec French, *tu*, short imperatives, local terms (balayeuse, vidanges, guenilles, moppe, brassée, poste de télé).
+- **Supervisor side**: email (FormSubmit, free) = summary + "Voir le rapport" link; the report is compressed in the hash (`#r=…`) and opens a glance view. The old per-phone "Espace superviseur" was removed by the owner.
+- **Aperçu du gym** (`#apercu`), public to the whole team: zones of the day (map), day highlights, shifts sent, what's left, open issues, tips. Shared live through `/api/board` (Netlify function + Blobs) when hosted on Netlify; on GitHub Pages it silently degrades to "plan du jour" + this phone's shifts. Owner refused Google Sheets / external databases. Everything must stay free.
+- **Identity**: pool + gym floor world. Chlorine-white canvas, deep teal, aqua; coral/sun in small doses. Barlow Condensed (self-hosted, `fonts/`) for titles/times, system font for text. Signature: "le couloir" (timeline as a swim lane with lane ropes and a swimmer = now). Living background = slow pool-light blobs. Colored SVG illustrations per task in `js/illustrations.js` (theme-aware `--il-*` vars) plus real diagrams (zone map, TV wall). Official Sporthèque logo not available: text wordmark + `CONFIG.logo` slot. Never fake their logo.
+- **Ergonomics**: swipe right to check (tap still works), check button on the right, toasts above the bottom bar, sheet = bottom sheet on phone / centered dialog ≥900px. Motion is short and purposeful; `prefers-reduced-motion` kills all of it.
 - Reference photos of the gym are off (`guidePhotos: false`) until real photos exist in `photos/`.
+- Public demo artifact stays unbranded (`gymName: ''`, `boardEndpoint: ''`).
 
 ## Workflow
 
 1. Edit; keep `fr` and `en` in sync (test "Toutes les tâches ont des étapes dans les deux langues" catches gaps).
 2. `npm test`.
-3. Visual check: `node dev-server.js` (simulated email → `last-report.html`), then Playwright with iPhone 14 at `/opt/node-tools/node_modules/playwright/index.mjs`; use `page.clock.setFixedTime` to land inside a shift so the "Now" card shows.
+3. Visual check: `DEMO=1 PORT=3200 node dev-server.js` (simulated email + in-memory board), then Playwright with iPhone 14 at `/opt/node-tools/node_modules/playwright/index.mjs`; use `page.clock.setFixedTime` to land inside a shift so the "Now" card shows.
 4. Demo artifact: copy `index.html` body (strip doctype/html/head/body, charset, viewport, manifest), `styles.css`, `js/*.js` to a scratch folder; in the copy set `demo: true` and `gymName: ''` (the public demo stays unbranded); publish with the Artifact tool, `files` mapping each js file.
 
 ## Gotchas
