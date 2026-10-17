@@ -583,8 +583,8 @@ function mountPhotos(root, ids, onChange, pending = []) {
 
 // ---------- Détail d'une tâche ----------
 const MAP_LABELS = {
-  fr: { A: 'Cardio · étirements', B: ['Muscu droite', 'Bas du corps'], C: ['Muscu gauche', 'Haut du corps'] },
-  en: { A: 'Cardio · stretching', B: ['Weights right', 'Lower body'], C: ['Weights left', 'Upper body'] },
+  fr: { A: 'Cardio · étirements', B: ['Musculation', 'côté droit'], C: ['Musculation', 'côté gauche'] },
+  en: { A: 'Cardio · stretching', B: ['Weights', 'right side'], C: ['Weights', 'left side'] },
 };
 
 function taskVisual(it) {

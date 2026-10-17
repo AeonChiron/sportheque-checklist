@@ -55,7 +55,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0c1011; --surface: #141a1b; --sunk: #101516; --ink: #e9eeee; --muted: #9aa6a5; --faint: #5e6a69; --line: #242c2d;
-    --brand: #e9eeee; --brand-ink: #0c1011; --brand-soft: #1d2425; --accent: #45c9c4; --accent-soft: #123131; --grid: rgba(233, 238, 238, .04);
+    --brand: #45c9c4; --brand-ink: #062322; --brand-soft: #1d2425; --accent: #45c9c4; --accent-soft: #123131; --grid: rgba(233, 238, 238, .04);
     --aqua: #3fc6c2; --coral: #ff8a6b; --sun: #ffd166;
     --ok: #5cc28e; --ok-soft: #12301f; --warn: #e3b552; --warn-soft: #2e250e; --bad: #f2867b; --bad-soft: #3a1a17; --break: #201d17;
     --toast: #e6f0f0; --toast-ink: #0a1416;
@@ -68,7 +68,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0c1011; --surface: #141a1b; --sunk: #101516; --ink: #e9eeee; --muted: #9aa6a5; --faint: #5e6a69; --line: #242c2d;
-  --brand: #e9eeee; --brand-ink: #0c1011; --brand-soft: #1d2425; --accent: #45c9c4; --accent-soft: #123131; --grid: rgba(233, 238, 238, .04);
+  --brand: #45c9c4; --brand-ink: #062322; --brand-soft: #1d2425; --accent: #45c9c4; --accent-soft: #123131; --grid: rgba(233, 238, 238, .04);
   --aqua: #3fc6c2; --coral: #ff8a6b; --sun: #ffd166;
   --ok: #5cc28e; --ok-soft: #12301f; --warn: #e3b552; --warn-soft: #2e250e; --bad: #f2867b; --bad-soft: #3a1a17; --break: #201d17;
   --toast: #e6f0f0; --toast-ink: #0a1416;
@@ -368,7 +368,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .steps li:first-child { border-top: 0; padding-top: 2px; }
 .steps li::before {
   content: counter(step); position: absolute; left: 0; top: 9px; width: 28px; height: 28px; border-radius: 8px;
-  background: var(--sunk); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); font: 700 16px/28px var(--display); text-align: center;
+  background: var(--accent); color: #fff; font: 700 16px/28px var(--display); text-align: center;
 }
 .steps li:first-child::before { top: 1px; }
 
@@ -401,6 +401,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .callout p + p { padding-top: 6px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
 .callout.tip { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 24%, transparent); }
 .callout.tip .c-head { color: var(--accent); }
+.callout.tip .c-head .ico { background: var(--accent); color: #fff; border-radius: 6px; padding: 2px; stroke-width: 2.6; }
 .callout.clock { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
 .callout.clock .c-head { color: var(--warn); }
 

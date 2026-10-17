@@ -191,36 +191,41 @@ ART['aspirateur-gym'] = ART.aspirateur;
 ART['bureaux-patrons'] = ART.bureaux;
 ART['bureaux-entraineurs'] = ART.bureaux;
 
-// Petite carte des zones, la zone du jour en aqua (icône du nettoyage en profondeur).
+// Petite carte des zones au même plan, la zone du jour en aqua.
 const miniZone = (z) => () => `${shadow(30)}
-    <rect x="14" y="14" width="68" height="22" rx="5" fill="var(${z === 'A' ? '--il-accent' : '--il-fill2'})" ${S}/>
-    <rect x="14" y="42" width="32" height="38" rx="5" fill="var(${z === 'C' ? '--il-accent' : '--il-fill2'})" ${S}/>
-    <rect x="50" y="42" width="32" height="38" rx="5" fill="var(${z === 'B' ? '--il-accent' : '--il-fill2'})" ${S}/>
-    <text x="${z === 'A' ? 48 : z === 'B' ? 66 : 30}" y="${z === 'A' ? 31 : 67}" text-anchor="middle" class="zm-id ${'on'}">${z}</text>`;
+    <rect x="14" y="14" width="32" height="38" rx="5" fill="var(${z === 'C' ? '--il-accent' : '--il-fill2'})" ${S}/>
+    <rect x="50" y="14" width="32" height="38" rx="5" fill="var(${z === 'B' ? '--il-accent' : '--il-fill2'})" ${S}/>
+    <rect x="14" y="56" width="68" height="26" rx="5" fill="var(${z === 'A' ? '--il-accent' : '--il-fill2'})" ${S}/>
+    <text x="${z === 'A' ? 48 : z === 'B' ? 66 : 30}" y="${z === 'A' ? 75 : 39}" text-anchor="middle" class="zm-id">${z}</text>`;
 ART['zone-a'] = miniZone('A');
 ART['zone-b'] = miniZone('B');
 ART['zone-c'] = miniZone('C');
 
-// Plan schématique du 2e étage : où est chaque zone de la rotation.
-// highlight : zone en profondeur; mirrors : zone des miroirs du soir.
+// Plan du 2e étage, d'après le croquis de l'équipe : C en haut à gauche,
+// B en haut à droite, A (cardio) en bas sur toute la largeur.
+// highlight : zone en profondeur; mirrors : zone des miroirs du soir;
 // states : { A: 'done' | 'notdone' | 'unchecked' | 'planned' } pour l'Aperçu.
-const STATE_FILL = { done: '--il-ok', notdone: '--il-bad', unchecked: '--il-sun', planned: '--il-aqua' };
+const STATE_FILL = { done: '--il-ok', notdone: '--il-bad', unchecked: '--il-sun', planned: '--il-accent' };
 export function zoneMap(highlight, { mirrors = null, labels, states = {} } = {}) {
-  const zone = (id, x, y, w, h) => {
+  const zone = (id, x, y, w, h, detail) => {
     const on = id === highlight || Boolean(states[id]);
-    const mir = id === mirrors;
-    const fill = states[id] ? STATE_FILL[states[id]] : on ? '--il-aqua' : '--il-tile';
+    const fill = states[id] ? STATE_FILL[states[id]] : on ? '--il-accent' : '--il-fill2';
     return `<g class="zm ${on ? 'on' : ''} ${states[id] || ''}">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="var(${fill})" ${S} stroke-width="${on ? 2.6 : 1.6}"/>
-      <text x="${x + 10}" y="${y + 24}" class="zm-id">${id}</text>
-      ${[].concat(labels[id]).map((l, i) => `<text x="${x + 10}" y="${y + 40 + i * 13}" class="zm-label">${l}</text>`).join('')}
-      ${mir ? `<rect x="${x + w - 10}" y="${y + 8}" width="4" height="${h - 16}" rx="2" fill="var(--il-glass)" ${S} stroke-width="1.4"/>` : ''}
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="var(${fill})" ${S} stroke-width="${on ? 2.6 : 1.8}"/>
+      ${detail}
+      <text x="${x + 12}" y="${y + 28}" class="zm-id">${id}</text>
+      ${[].concat(labels[id]).map((l, i) => `<text x="${x + 12}" y="${y + 45 + i * 14}" class="zm-label">${l}</text>`).join('')}
+      ${id === mirrors ? `<rect x="${x + w - 11}" y="${y + 9}" width="4" height="${h - 18}" rx="2" fill="var(--il-glass)" ${T}/>` : ''}
     </g>`;
   };
-  return `<svg viewBox="0 0 300 170" role="img" aria-label="Zones A B C" class="illus map">
-    ${zone('A', 6, 6, 288, 56)}
-    ${zone('C', 6, 70, 140, 94)}
-    ${zone('B', 154, 70, 140, 94)}
+  // Petits repères d'équipement, discrets : bancs en haut, rangées de cardio en bas.
+  const benches = (x, y) => [0, 1, 2].map((i) => `<rect x="${x + i * 26}" y="${y}" width="16" height="7" rx="2" fill="var(--il-ink)" opacity=".18"/>`).join('');
+  const cardio = [0, 1, 2, 3, 4, 5].map((i) => `<rect x="${150 + i * 22}" y="132" width="12" height="40" rx="3" fill="var(--il-ink)" opacity=".16"/>`).join('');
+  return `<svg viewBox="0 0 300 200" role="img" aria-label="Zones A B C" class="illus map">
+    <rect x="2" y="2" width="296" height="196" rx="10" fill="none" stroke="var(--il-mid)" stroke-width="1.5" stroke-dasharray="3 5"/>
+    ${zone('C', 8, 8, 138, 104, benches(54, 92))}
+    ${zone('B', 154, 8, 138, 104, benches(200, 92))}
+    ${zone('A', 8, 120, 284, 72, cardio)}
   </svg>`;
 }
 
