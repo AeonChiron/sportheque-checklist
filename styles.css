@@ -584,34 +584,55 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
-/* ---------- Plan du gym : plan d'architecte, épuré ---------- */
-.floor { width: 100%; max-width: 560px; display: block; margin: 0 auto; }
+/* ---------- Plan du gym : vue du dessus, planchers et équipement réels ---------- */
+:root { --fl-base: #e4e9e9; --fl-wood: #ecdcc0; --fl-wood-line: rgba(120, 82, 30, .16); --fl-rubber: #d3d9d9; --fl-rubber-line: rgba(31, 35, 35, .06); --fl-room: #f7f9f9; --eq: #ffffff; --eq-ink: #2b3434; --eq-dark: #3a4545; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fl-base: #151c1e; --fl-wood: #3b3124; --fl-wood-line: rgba(255, 220, 170, .07); --fl-rubber: #101618; --fl-rubber-line: rgba(255, 255, 255, .035); --fl-room: #1b2426; --eq: #2a3436; --eq-ink: #8fa3a3; --eq-dark: #b7c6c6; } }
+:root[data-theme="dark"] { --fl-base: #151c1e; --fl-wood: #3b3124; --fl-wood-line: rgba(255, 220, 170, .07); --fl-rubber: #101618; --fl-rubber-line: rgba(255, 255, 255, .035); --fl-room: #1b2426; --eq: #2a3436; --eq-ink: #8fa3a3; --eq-dark: #b7c6c6; }
+.floor { width: 100%; display: block; }
 .floor .zm { cursor: pointer; outline: none; }
-.floor .zm-wall { fill: none; stroke: var(--il-ink); stroke-width: 2.2; stroke-linecap: round; opacity: .55; }
-.floor .zm-swing { fill: none; stroke: var(--il-ink); stroke-width: 1.4; stroke-dasharray: 3 3; opacity: .6; }
-.floor .zm-bg { stroke-width: 1.5; transition: fill .25s, stroke .2s, stroke-width .2s; }
-.floor .zA .zm-bg { fill: var(--zA); stroke: color-mix(in srgb, var(--zA-strong) 70%, transparent); }
-.floor .zB .zm-bg { fill: var(--zB); stroke: color-mix(in srgb, var(--zB-strong) 70%, transparent); }
-.floor .zC .zm-bg { fill: var(--zC); stroke: color-mix(in srgb, var(--zC-strong) 70%, transparent); }
-.floor .zA.hot .zm-bg { fill: color-mix(in srgb, var(--zA-strong) 55%, var(--zA)); stroke: var(--zA-strong); stroke-width: 2.5; }
-.floor .zB.hot .zm-bg { fill: color-mix(in srgb, var(--zB-strong) 55%, var(--zB)); stroke: var(--zB-strong); stroke-width: 2.5; }
-.floor .zC.hot .zm-bg { fill: color-mix(in srgb, var(--zC-strong) 55%, var(--zC)); stroke: var(--zC-strong); stroke-width: 2.5; }
-.floor .zm.sel .zm-bg, .floor .zm.sel .zm-room { stroke: var(--accent); stroke-width: 3; }
-.floor .zm:focus-visible .zm-bg, .floor .zm:focus-visible .zm-room { stroke: var(--accent); stroke-width: 3; }
-.floor .zm-id { font-size: 26px; font-weight: 700; fill: var(--il-ink); pointer-events: none; }
-.floor .zm-label { font-size: 12.5px; font-weight: 600; fill: var(--il-ink); opacity: .8; pointer-events: none; }
-.floor .zm-picto { fill: none; stroke: var(--il-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .35; pointer-events: none; }
+.floor .zm-base { fill: var(--fl-base); }
+.floor .pt-wood { fill: var(--fl-wood); } .floor .pt-wood-line { stroke: var(--fl-wood-line); stroke-width: 1; fill: none; }
+.floor .pt-rubber { fill: var(--fl-rubber); } .floor .pt-rubber-line { stroke: var(--fl-rubber-line); stroke-width: 1; fill: none; }
+.floor .zm-floor.wood { fill: url(#fl-wood); } .floor .zm-floor.rubber { fill: url(#fl-rubber); }
+.floor .zm-tint { opacity: .32; transition: opacity .25s; }
+.floor .zA .zm-tint { fill: var(--zA-strong); } .floor .zB .zm-tint { fill: var(--zB-strong); } .floor .zC .zm-tint { fill: var(--zC-strong); }
+.floor .zA .zm-tint { opacity: .18; }
+.floor .zm-edge { fill: none; stroke-width: 1.5; transition: stroke-width .2s, stroke .2s; }
+.floor .zA .zm-edge { stroke: var(--zA-strong); } .floor .zB .zm-edge { stroke: var(--zB-strong); } .floor .zC .zm-edge { stroke: var(--zC-strong); }
+.floor .zm.hot .zm-edge { stroke-width: 3.5; }
+.floor .zm.hot .zm-tint { opacity: .45; }
+.floor .zm.sel .zm-edge, .floor .zm:focus-visible .zm-edge { stroke: var(--accent); stroke-width: 3; }
+.floor .zm-gear { pointer-events: none; }
+.floor .eq { fill: var(--eq); stroke: var(--eq-ink); stroke-width: 1; }
+.floor .eq.frame { fill: none; stroke-width: 1.6; }
+.floor .eq-seat { fill: var(--eq-ink); opacity: .35; }
+.floor .eq-dark { fill: var(--eq-dark); }
+.floor .eq-dot { fill: var(--eq-dark); }
+.floor .eq-bar { stroke: var(--eq-dark); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+.floor .eq-belt { fill: var(--eq-ink); opacity: .55; }
+.floor .eq-wood { fill: var(--fl-wood); stroke: var(--fl-wood-line); stroke-width: 1; }
+.floor .eq-mat { fill: var(--accent-soft); stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 1; }
+.floor .eq-tv { fill: var(--eq-dark); }
+.floor .zm-walk { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 1.5 4; stroke-linecap: round; opacity: .7; }
+.floor .zm-badge rect { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.floor .zA .zm-badge rect { fill: var(--zA-strong); stroke: none; } .floor .zB .zm-badge rect { fill: var(--zB-strong); stroke: none; } .floor .zC .zm-badge rect { fill: var(--zC-strong); stroke: none; }
+.floor .zm-id { font-size: 15px; font-weight: 700; fill: #13201f; pointer-events: none; }
+.floor .zm-label { font-size: 11px; font-weight: 600; fill: #13201f; pointer-events: none; }
 .floor .zm-tag rect { fill: var(--surface); stroke: var(--il-ink); stroke-width: 1; stroke-opacity: .25; }
 .floor .zm-tag text { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; fill: var(--ink); }
 .floor .zm-tag.done rect { fill: var(--ok); stroke: none; } .floor .zm-tag.done text { fill: #fff; }
 .floor .zm-tag.notdone rect { fill: var(--bad); stroke: none; } .floor .zm-tag.notdone text { fill: #fff; }
 .floor .zm-tag.unchecked rect { fill: var(--sun); stroke: none; } .floor .zm-tag.unchecked text { fill: #1f2323; }
-.floor .zm-tag { pointer-events: none; }
-.floor .zm-room { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke .2s, stroke-width .2s; }
-.floor .door .zm-num-bg, .floor .zm-num-bg { fill: var(--il-ink); }
+.floor .zm-tag, .floor .zm-badge { pointer-events: none; }
+.floor .zm-room { fill: var(--fl-room); transition: fill .2s; }
+.floor .room.sel .zm-room { fill: var(--accent-soft); }
+.floor .zm-wall { fill: none; stroke: var(--il-ink); stroke-width: 2.6; stroke-linecap: round; }
+.floor .zm-wall.thin { stroke-width: 1.8; }
+.floor .zm-swing { fill: none; stroke: var(--il-ink); stroke-width: 1.1; stroke-dasharray: 2.5 2.5; opacity: .55; }
+.floor .zm-num-bg { fill: var(--il-ink); }
 .floor .zm-num { font-size: 10.5px; font-weight: 700; fill: var(--il-fill); pointer-events: none; }
 .floor .zm-room-label { font-size: 11px; font-weight: 600; fill: var(--ink); pointer-events: none; }
-.floor .door.sel .zm-num-bg { fill: var(--accent); }
+.floor .door.sel .zm-num-bg, .floor .room.sel .zm-num-bg { fill: var(--accent); }
 .map-info { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; animation: rise .25s var(--ease) both; }
 .map-info b { font-family: var(--display); font-size: 18px; font-weight: 700; }
 .map-info ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
@@ -701,8 +722,8 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 .illus .a-glow { opacity: 0; }
 @keyframes il-glow { 50% { opacity: .9; } }
 /* La zone du jour respire sur le plan. */
-.floor .zm.hot .zm-bg { animation: zone-breathe 2.8s ease-in-out infinite; }
-@keyframes zone-breathe { 50% { stroke-width: 4; } }
+.floor .zm.hot .zm-edge { animation: zone-breathe 2.8s ease-in-out infinite; }
+@keyframes zone-breathe { 50% { stroke-width: 5; } }
 
 /* Changement d'écran (View Transitions) : la page glisse, le fond reste. */
 .env { view-transition-name: env; }

@@ -252,59 +252,100 @@ ART['zone-a'] = miniZone('A');
 ART['zone-b'] = miniZone('B');
 ART['zone-c'] = miniZone('C');
 
-// Plan du 2e étage, d'après le croquis de l'équipe, dessiné comme un plan
-// d'architecte : un mur, une porte (1), trois zones, les pièces le long du mur
-// du bas. C en haut à gauche (haut du corps), B en haut à droite (bas du
-// corps), A en bas (cardio et étirements).
+// Plan du 2e étage, d'après le croquis de l'équipe et les photos du gym :
+// vu du dessus, comme un plan d'architecte. Planchers réels (bois sous le
+// cardio, caoutchouc et plateformes de bois aux poids), équipement en
+// rangées, 4 télés au mur, pièces bâties le long du mur du bas, porte (1).
+// C en haut à gauche (haut du corps), B en haut à droite (bas du corps),
+// A en bas (cardio et étirements).
 // Options : highlight (zone de la tâche), selected (zone ou pièce touchée),
 // tags { A: [{ text, state }] } (Matin, Soir, Miroirs… colorés selon le statut),
 // labels { A, B, C, 1..5, r1..r5 }.
-const PICTO = {
-  // Haltère (haut du corps)
-  C: (x, y) => `<g class="zm-picto" transform="translate(${x} ${y})"><path d="M6 9h18"/><rect x="2" y="3" width="5" height="12" rx="1.5"/><rect x="23" y="3" width="5" height="12" rx="1.5"/></g>`,
-  // Cage à squat (bas du corps)
-  B: (x, y) => `<g class="zm-picto" transform="translate(${x} ${y})"><path d="M4 0v18M26 0v18M0 6h30M2 18h6M22 18h6"/></g>`,
-  // Tapis roulant (cardio)
-  A: (x, y) => `<g class="zm-picto" transform="translate(${x} ${y})"><path d="M0 16h26l2-4H4zM24 12L20 0h-4"/><circle cx="6" cy="16" r="1.5"/><circle cx="22" cy="16" r="1.5"/></g>`,
+const r = (x, y, w, h, rx, cls) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" class="${cls}"/>`;
+const EQ = {
+  // Support à haltères : une longue tablette, les poids en rangée.
+  rackH: (x, y, len) => `${r(x, y, len, 6, 1.5, 'eq')}${Array.from({ length: Math.floor((len - 4) / 6) }, (_, i) => `<circle cx="${x + 5 + i * 6}" cy="${y + 3}" r="1.7" class="eq-dot"/>`).join('')}`,
+  rackV: (x, y, len) => `${r(x, y, 6, len, 1.5, 'eq')}${Array.from({ length: Math.floor((len - 4) / 6) }, (_, i) => `<circle cx="${x + 3}" cy="${y + 5 + i * 6}" r="1.7" class="eq-dot"/>`).join('')}`,
+  // Cage à squat : cadre carré et barre.
+  squat: (x, y) => `${r(x, y, 18, 18, 1.5, 'eq frame')}<path d="M${x - 3} ${y + 9}h24" class="eq-bar"/>`,
+  machine: (x, y, w = 14, h = 12) => `${r(x, y, w, h, 2.5, 'eq')}${r(x + 3, y + h - 5, w - 6, 3, 1.5, 'eq-seat')}`,
+  bench: (x, y, w = 34) => `${r(x, y, w, 6, 3, 'eq')}${r(x + 2, y + 1.5, 10, 3, 1.5, 'eq-seat')}`,
+  press: (x, y) => `${r(x, y, 3.5, 3.5, 1, 'eq-dark')}${r(x + 16, y, 3.5, 3.5, 1, 'eq-dark')}<path d="M${x - 3} ${y + 1.75}h26" class="eq-bar"/>${r(x + 6.5, y + 6, 6.5, 18, 3, 'eq')}`,
+  plates: (x, y) => `<circle cx="${x}" cy="${y}" r="7" class="eq"/><circle cx="${x}" cy="${y}" r="3" class="eq-seat"/>`,
+  // Tapis roulant vu de haut : courroie, console vers les télés.
+  treadmill: (x, y) => `${r(x, y, 12, 28, 3, 'eq')}${r(x + 2.5, y + 3, 7, 18, 2, 'eq-belt')}${r(x + 1, y + 23, 10, 4, 1.5, 'eq-dark')}`,
+  stair: (x, y) => `${r(x, y, 10, 13, 2.5, 'eq')}${r(x + 2, y + 2, 6, 5, 1.5, 'eq-seat')}`,
+  rower: (x, y) => `${r(x, y, 6, 40, 3, 'eq')}<circle cx="${x + 3}" cy="${y + 26}" r="2.4" class="eq-dark"/>${r(x - 1, y, 8, 5, 2, 'eq-dark')}`,
+  elliptical: (x, y) => `${r(x, y, 9, 24, 4.5, 'eq')}<path d="M${x + 4.5} ${y + 5}v14" class="eq-bar"/>`,
+  mat: (x, y) => r(x, y, 24, 34, 4, 'eq-mat'),
+  tv: (x, y) => r(x, y, 16, 4, 1, 'eq-tv'),
 };
 export function zoneMap({ highlight = null, selected = null, tags = {}, labels } = {}) {
-  const pills = (id, x, y) => {
-    let cx = x;
-    return (tags[id] || []).map((tag) => {
-      const w = 12 + tag.text.length * 6.2;
-      const out = `<g class="zm-tag ${tag.state || 'planned'}"><rect x="${cx}" y="${y}" width="${w}" height="18" rx="9"/><text x="${cx + w / 2}" y="${y + 12.5}" text-anchor="middle">${tag.text}</text></g>`;
-      cx += w + 5;
+  const badge = (id, x, y, w) => {
+    const bw = 30 + labels[id].length * 5.3;
+    let tx = w > 250 ? x + bw + 6 : x;
+    const ty = w > 250 ? y : y + 22;
+    const pills = (tags[id] || []).map((tag) => {
+      const tw = 12 + tag.text.length * 6.2;
+      const out = `<g class="zm-tag ${tag.state || 'planned'}"><rect x="${tx}" y="${ty}" width="${tw}" height="17" rx="8.5"/><text x="${tx + tw / 2}" y="${ty + 12}" text-anchor="middle">${tag.text}</text></g>`;
+      tx += tw + 4;
       return out;
     }).join('');
+    return `<g class="zm-badge"><rect x="${x}" y="${y}" width="${bw}" height="18" rx="6"/><text x="${x + 7}" y="${y + 14}" class="zm-id">${id}</text><text x="${x + 21}" y="${y + 13}" class="zm-label">${labels[id]}</text></g>${pills}`;
   };
-  const zone = (id, x, y, w, h) => `<g class="zm z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" class="zm-bg"/>
-      <text x="${x + 12}" y="${y + 30}" class="zm-id">${id}</text>
-      <text x="${x + 32}" y="${y + 28}" class="zm-label">${labels[id]}</text>
-      ${PICTO[id](x + w - 42, y + 12)}
-      ${pills(id, x + 12, y + h - 28)}
+  const zone = (id, x, y, w, h, floor, gear) => `<g class="zm z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" class="zm-floor ${floor}"/>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" class="zm-tint"/>
+      <g class="zm-gear">${gear}</g>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" class="zm-edge"/>
+      ${badge(id, x + 6, y + 6, w)}
     </g>`;
-  const room = (id, x, y, w, h) => `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" class="zm-room"/>
-      <circle cx="${x + 14}" cy="${y + h / 2}" r="8" class="zm-num-bg"/>
-      <text x="${x + 14}" y="${y + h / 2 + 3.5}" text-anchor="middle" class="zm-num">${id}</text>
-      <text x="${x + 27}" y="${y + h / 2 + 4}" class="zm-room-label">${labels[`r${id}`] || ''}</text>
+  const room = (id, x, w, gap) => `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
+      <rect x="${x}" y="228" width="${w}" height="48" class="zm-room"/>
+      <circle cx="${x + w / 2 - 16}" cy="252" r="8" class="zm-num-bg"/>
+      <text x="${x + w / 2 - 16}" y="255.5" text-anchor="middle" class="zm-num">${id}</text>
+      <text x="${x + w / 2 - 5}" y="256" class="zm-room-label">${labels[`r${id}`] || ''}</text>
+      ${gap ? `<path d="M${gap} 228A12 12 0 0 0 ${gap + 12} 240" class="zm-swing"/>` : ''}
     </g>`;
-  return `<svg viewBox="0 0 360 272" class="illus map floor" aria-label="Plan du 2e étage">
-    <path class="zm-wall" d="M4 146V18A14 14 0 0 1 18 4H342A14 14 0 0 1 356 18V254A14 14 0 0 1 342 268H18A14 14 0 0 1 4 254V200"/>
-    <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
-      <rect x="0" y="140" width="32" height="66" fill="transparent"/>
-      <path class="zm-swing" d="M4 146h24M28 146A27 27 0 0 1 4 173"/>
-      <circle cx="17" cy="186" r="8" class="zm-num-bg"/>
-      <text x="17" y="189.5" text-anchor="middle" class="zm-num">1</text>
+  const id = (k) => `fl-${k}`;
+  return `<svg viewBox="0 0 360 280" class="illus map floor" aria-label="Plan du 2e étage">
+    <defs>
+      <pattern id="${id('wood')}" width="36" height="6" patternUnits="userSpaceOnUse"><rect width="36" height="6" class="pt-wood"/><path d="M0 6H36M12 0V3M30 3V6" class="pt-wood-line"/></pattern>
+      <pattern id="${id('rubber')}" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" class="pt-rubber"/><path d="M12 0V12H0" class="pt-rubber-line"/></pattern>
+      <clipPath id="${id('clip')}"><rect x="4" y="4" width="352" height="272" rx="14"/></clipPath>
+    </defs>
+    <rect x="4" y="4" width="352" height="272" rx="14" class="zm-base"/>
+    <path class="zm-walk" d="M8 180H20V126H182V16"/>
+    ${zone('C', 30, 12, 148, 110, 'rubber', `
+      ${r(36, 64, 108, 22, 3, 'eq-wood')}${[0, 1, 2, 3, 4].map((i) => EQ.machine(40 + i * 21, 69)).join('')}
+      ${r(150, 18, 20, 40, 3, 'eq')}<circle cx="155" cy="24" r="2.5" class="eq-dark"/><circle cx="165" cy="24" r="2.5" class="eq-dark"/><path d="M155 26v26M165 26v26" class="eq-bar"/>
+      ${EQ.press(50, 94)}${EQ.press(100, 94)}${EQ.rackV(160, 68, 48)}`)}
+    ${zone('B', 186, 12, 162, 110, 'rubber', `
+      ${EQ.rackH(296, 16, 46)}${EQ.rackV(338, 28, 88)}
+      ${r(192, 70, 76, 46, 3, 'eq-wood')}${EQ.squat(198, 76)}${EQ.squat(224, 76)}${EQ.machine(250, 74, 13, 30)}${EQ.machine(198, 100, 44, 12)}
+      ${EQ.bench(280, 40)}${EQ.bench(280, 58)}${EQ.bench(280, 76)}${EQ.plates(300, 102)}`)}
+    ${zone('A', 30, 130, 318, 90, 'wood', `
+      ${[0, 1, 2, 3, 4, 5].map((i) => EQ.treadmill(42 + i * 18, 158)).join('')}
+      ${[0, 1, 2, 3, 4, 5].map((i) => EQ.stair(43 + i * 18, 194)).join('')}
+      ${EQ.rower(166, 160)}${EQ.rower(180, 160)}
+      ${EQ.elliptical(206, 178)}${EQ.elliptical(220, 178)}
+      ${[0, 1, 2].map((i) => EQ.mat(250 + i * 30, 156)).join('')}
+      ${[0, 1, 2].map((i) => EQ.stair(300 + i * 15, 198)).join('')}`)}
+    ${[0, 1, 2, 3].map((i) => EQ.tv(44 + i * 28, 222)).join('')}
+    <g clip-path="url(#${id('clip')})">
+      ${room('5', 4, 92, 12)}
+      ${room('2', 96, 80, 0)}
+      ${room('3', 176, 86, 236)}
+      ${room('4', 262, 94, 272)}
     </g>
-    ${zone('C', 36, 16, 148, 112)}
-    ${zone('B', 192, 16, 152, 112)}
-    ${zone('A', 36, 136, 308, 76)}
-    ${room('5', 36, 222, 71, 34)}
-    ${room('2', 115, 222, 71, 34)}
-    ${room('3', 194, 222, 71, 34)}
-    ${room('4', 273, 222, 71, 34)}
+    <path class="zm-wall" d="M4 146V18A14 14 0 0 1 18 4H342A14 14 0 0 1 356 18V262A14 14 0 0 1 342 276H18A14 14 0 0 1 4 262V190"/>
+    <path class="zm-wall thin" d="M4 228H12M24 228H110M160 228H236M248 228H272M284 228H356M96 228V276M176 228V276M262 228V276"/>
+    <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
+      <rect x="0" y="140" width="28" height="56" fill="transparent"/>
+      <path class="zm-swing" d="M4 146h22M26 146A22 22 0 0 1 4 168"/>
+      <circle cx="15" cy="180" r="8" class="zm-num-bg"/>
+      <text x="15" y="183.5" text-anchor="middle" class="zm-num">1</text>
+    </g>
   </svg>`;
 }
 
