@@ -39,6 +39,7 @@
   --il-ink: #0f2a2e; --il-aqua: #2bb3b1; --il-coral: #ff7a59; --il-sun: #ffc94d; --il-steel: #b8c7ca;
   --il-paper: #ffffff; --il-wall: #e3eded; --il-screen: #d4f0ef; --il-glass: #cde7f1; --il-tile: #eef3f3;
   --il-mat: #2b3a3d; --il-floor: #cfdcdc; --il-night: #1d3a52; --il-ok: #6fcf9f; --il-bad: #f2978b;
+  --il-fill: #ffffff; --il-fill2: #e3e9e8; --il-mid: #b4bfbe; --il-accent: #14a5a0; --il-accent-soft: #c6ebe9; --il-shadow: rgba(31, 35, 35, .10);
 
   --radius: 16px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
@@ -61,7 +62,7 @@
     --env-a: rgba(69, 201, 196, .07);
     --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
     --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
-    --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c;
+    --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
 }
@@ -74,7 +75,7 @@
   --env-a: rgba(69, 201, 196, .07);
   --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
   --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
-  --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c;
+  --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
   color-scheme: dark;
 }
 
@@ -272,7 +273,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .t-time { flex: none; width: 50px; display: flex; flex-direction: column; gap: 1px; font-size: 18px; color: var(--ink); white-space: nowrap; line-height: 1.1; }
 .t-time small { font-family: var(--font); font-size: 11.5px; font-weight: 500; color: var(--faint); letter-spacing: 0; }
 .t-icon { flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--sunk); display: grid; place-items: center; overflow: hidden; }
-.t-icon .illus { width: 120%; height: 120%; }
+.t-icon .illus { width: 100%; height: 100%; padding: 3px; }
 .t-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .t-title { font-family: var(--display); font-size: 20px; font-weight: 700; line-height: 1.1; letter-spacing: .01em; }
 .t-sum { font-size: 14px; color: var(--muted); line-height: 1.35; }
