@@ -288,6 +288,11 @@ const GEAR_SVG = {
   mirror: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 1.5, 'eq-mirror'),
   tv: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-tv'),
   aisle: (g) => r(-g.w / 2, -g.h / 2, g.w, g.h, 3, 'eq-aisle'),
+  turf: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 3, 'eq-turf')}${Array.from({ length: Math.floor(g.h / 10) }, (_, i) => `<path d="M${-g.w / 2 + 1} ${-g.h / 2 + 10 * (i + 1)}h${g.w - 2}" class="eq-turf-line"/>`).join('')}`,
+  sled: () => `${r(-5, -4, 10, 10, 2, 'eq-dark')}<path d="M-4 -4V-7M4 -4V-7" class="eq-bar"/>`,
+  smith: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1.5, 'eq frame')}<path d="M${-g.w / 2 - 3} 0h${g.w + 6}" class="eq-bar"/><path d="M${-g.w / 2 + 3} ${-g.h / 2}v${g.h}M${g.w / 2 - 3} ${-g.h / 2}v${g.h}" class="eq-rail"/>`,
+  legpress: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2.5, 'eq')}${r(-g.w / 2 + 2, -g.h / 2 + 3, g.w - 4, 8, 2, 'eq-dark')}${r(-g.w / 2 + 3, g.h / 2 - 9, g.w - 6, 6, 2, 'eq-seat')}`,
+  pullup: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2, 'eq frame')}<path d="M${-g.w / 2 - 2} ${-g.h / 2 + 2}h${g.w + 4}" class="eq-bar"/>${r(-3, 0, 6, 5, 1.5, 'eq-seat')}`,
   window: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 1, 'eq-window')}${Array.from({ length: Math.floor(g.h / 12) }, (_, i) => `<path d="M${-g.w / 2} ${-g.h / 2 + 12 * (i + 1)}h${g.w}" class="eq-mullion"/>`).join('')}`,
   balls: () => `<circle cx="-2.5" cy="-2" r="2.6" class="eq-ball"/><circle cx="2.5" cy="1" r="2.2" class="eq-ball b2"/><circle cx="-1" cy="3.5" r="1.8" class="eq-ball b3"/>`,
   barbells: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2, 'eq frame')}${Array.from({ length: 4 }, (_, i) => `<path d="M${-g.w / 2 - 2} ${-g.h / 2 + 5 + i * 5.5}h${g.w + 4}" class="eq-bar"/>`).join('')}`,
@@ -298,21 +303,25 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
       <rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="6" class="zm-tint"/>
     </g>`;
   const zoneTop = (id, z) => {
+    return `<g class="zm-top z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}">
+      <rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="6" class="zm-edge"/>
+    </g>`;
+  };
+  // Nom de la zone : un onglet sur le mur du haut pour C et B (leur bord du
+  // haut est plein d'équipement), dans le coin pour A.
+  const zoneLabel = (id, z) => {
+    const tab = z.y < 40;
     const x = z.x + 6;
-    const y = z.y + 6;
+    const y = tab ? 1 : z.y + 6;
     const bw = 30 + labels[id].length * 5.3;
-    let tx = z.w > 200 ? x + bw + 6 : x;
-    const ty = z.w > 200 ? y : y + 22;
+    let tx = x + bw + 4;
     const pills = (tags[id] || []).map((tag) => {
       const tw = 12 + tag.text.length * 6.2;
-      const out = `<g class="zm-tag ${tag.state || 'planned'}"><rect x="${tx}" y="${ty}" width="${tw}" height="17" rx="8.5"/><text x="${tx + tw / 2}" y="${ty + 12}" text-anchor="middle">${tag.text}</text></g>`;
+      const out = `<g class="zm-tag ${tag.state || 'planned'}"><rect x="${tx}" y="${y + 0.5}" width="${tw}" height="17" rx="8.5"/><text x="${tx + tw / 2}" y="${y + 12.5}" text-anchor="middle">${tag.text}</text></g>`;
       tx += tw + 4;
       return out;
     }).join('');
-    return `<g class="zm-top z${id} ${id === highlight ? 'hot' : ''} ${id === selected ? 'sel' : ''}">
-      <rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="6" class="zm-edge"/>
-      <g class="zm-badge"><rect x="${x}" y="${y}" width="${bw}" height="18" rx="6"/><text x="${x + 7}" y="${y + 14}" class="zm-id">${id}</text><text x="${x + 21}" y="${y + 13}" class="zm-label">${labels[id]}</text></g>${pills}
-    </g>`;
+    return `<g class="zm-label-group z${id}"><g class="zm-badge"><rect x="${x}" y="${y}" width="${bw}" height="18" rx="6"/><text x="${x + 7}" y="${y + 14}" class="zm-id">${id}</text><text x="${x + 21}" y="${y + 13}" class="zm-label">${labels[id]}</text></g>${pills}</g>`;
   };
   const room = (id, m) => {
     const cx = m.x + m.w / 2;
@@ -361,6 +370,7 @@ export function zoneMap({ highlight = null, selected = null, tags = {}, labels }
     <path class="zm-wall thin" d="${roomWalls}"/>
     <path class="zm-wall part" d="${PARTITIONS.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join('')}"/>
     <path class="zm-swing" d="${swings}M4 ${en.from}h22M26 ${en.from}A22 22 0 0 1 4 ${en.from + 22}M${tp.from} 4v14M${tp.from} 18A14 14 0 0 0 ${tp.to} 4"/>
+    ${Object.entries(ZONES).map(([id, z]) => zoneLabel(id, z)).join('')}
     <g class="zm room door ${selected === '1' ? 'sel' : ''}" data-area="1" role="button" tabindex="0" aria-label="${labels[1]}">
       <rect x="0" y="${en.from - 6}" width="28" height="${en.to - en.from + 12}" fill="transparent"/>
       <text x="13" y="${(en.from + en.to) / 2 + 6}" text-anchor="middle" class="zm-door-label" transform="rotate(-90 13 ${(en.from + en.to) / 2 + 6})">${labels.r1 || ''}</text>

@@ -686,7 +686,7 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
   tag(day.zones[1], t('morning'), states[1] || 'planned');
   tag(day.zones[2], t('evening'), states[2] || 'planned');
   let selected = highlight || mirrors || null;
-  let mode = prefs.mapMode === '3d' ? '3d' : 'plan';
+  let mode = prefs.mapMode === 'plan' ? 'plan' : '3d'; // la 3D par défaut
   let view3d = null;
   const L = MAP_LABELS[lang()];
   box.innerHTML = `<div class="map-bar"><div class="segmented tiny map-mode" role="tablist">

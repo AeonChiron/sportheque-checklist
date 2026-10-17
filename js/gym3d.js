@@ -176,6 +176,11 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     platform: (g, it) => part(g, 0, 0, it.w, it.h, 1.4, C.wood, { shadow: false }),
     carpet: (g, it) => part(g, 0, 0, it.w, it.h, 0.8, C.carpet, { shadow: false }),
     mirror: (g, it) => part(g, 0, 0, it.w, it.h, 22, C.glass, { y: 1, extra: { metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.75 } }),
+    turf: (g, it) => part(g, 0, 0, it.w, it.h, 0.6, '#4f9a50', { y: 1.5, shadow: false }),
+    sled: (g) => { part(g, 0, 1, 10, 10, 2, C.dark); part(g, -4, -4, 1.2, 1.2, 9, C.metal); part(g, 4, -4, 1.2, 1.2, 9, C.metal); },
+    smith: (g, it) => { for (const dx of [-it.w / 2 + 1, it.w / 2 - 1]) { part(g, dx, -it.h / 2 + 1, 2, 2, 28, C.dark); part(g, dx, it.h / 2 - 1, 2, 2, 28, C.dark); part(g, dx, 0, 1, it.h, 1.2, C.dark, { y: y0 + 28 }); part(g, dx * 0.8, 0, 0.8, 0.8, 26, C.metal); } rod(g, 0, 0, 0.8, it.w + 6, C.metal, { y: y0 + 16, axis: 'x' }); },
+    legpress: (g, it) => { part(g, 0, 0, it.w, it.h, 3, C.metal); const sl = part(g, 0, -it.h / 4, it.w - 4, 10, 2, C.dark, { y: y0 + 8 }); sl.rotation.x = -0.6; part(g, 0, it.h / 2 - 6, it.w - 6, 6, 6, C.dark); part(g, -it.w / 2 + 1, -it.h / 2 + 3, 2, 2, 14, C.dark); part(g, it.w / 2 - 1, -it.h / 2 + 3, 2, 2, 14, C.dark); },
+    pullup: (g, it) => { for (const dx of [-it.w / 2 + 1, it.w / 2 - 1]) part(g, dx, 0, 2, 2, 32, C.dark); part(g, 0, -it.h / 2 + 2, it.w + 4, 1.4, 1.4, C.metal, { y: y0 + 32 }); part(g, 0, 2, 6, 5, 12, C.metal); part(g, 0, 2, 7, 6, 1.5, C.dark, { y: y0 + 12 }); },
     aisle: (g, it) => part(g, 0, 0, it.w, it.h, 0.4, C.rubber, { y: 1.5, shadow: false }),
     window: (g, it) => { part(g, 0, 0, it.w, it.h, 20, C.glass, { y: 2, extra: { metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.45, emissive: C.glass, emissiveIntensity: D ? 0.35 : 0.15 } }); for (let i = 1; i < Math.floor(it.h / 12); i++) part(g, 0, -it.h / 2 + i * 12, it.w + 0.6, 1, 20, C.dark, { y: 2 }); },
     balls: (g) => { for (const [dx, dz, rr, col] of [[-2.5, -2, 2.6, '#3b7fd0'], [2.5, 1, 2.2, '#e0b03a'], [-1, 3.5, 1.8, '#c9533e']]) { const b = new THREE.Mesh(new THREE.SphereGeometry(rr, 16, 12), mat(col)); b.position.set(dx, y0 + rr, dz); b.castShadow = true; g.add(b); } },
@@ -282,7 +287,10 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
   let drag = null;
   let lastMove = performance.now();
   const el = renderer.domElement;
-  el.style.touchAction = 'pan-y';
+  // Les gestes sur la 3D ne font jamais défiler la page (on défile à côté).
+  el.style.touchAction = 'none';
+  el.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  el.addEventListener('gesturestart', (e) => e.preventDefault());
   el.addEventListener('pointerdown', (e) => {
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     drag = { x: e.clientX, y: e.clientY, moved: 0, az: target.az, pol: target.pol, r: target.r, dist: null };
@@ -303,7 +311,6 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     }
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
-    if (drag.moved < 8 && Math.abs(dy) > Math.abs(dx) * 1.3 && e.pointerType === 'touch') { drag = null; return; } // laisse défiler la page
     drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
     if (drag.moved > 6) {
       try { el.setPointerCapture(e.pointerId); } catch { /* rien */ }
