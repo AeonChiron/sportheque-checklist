@@ -14,14 +14,18 @@ d'entretien de la Sporthèque, 2e étage. On l'ouvre dans Safari; rien à instal
    l'horaire standard? Le plan s'adapte sans rien expliquer à l'employé.
 3. **Le couloir** (ligne du temps du quart), la carte **« En cours »**, une
    illustration par tâche. On coche d'un toucher **ou en glissant vers la droite**.
-4. Le détail d'une tâche : illustration ou schéma (carte des zones, postes des
-   télés), étapes numérotées, « Bon à savoir », « Pas pu faire » + raison,
-   remarque, photos. **⚑ Signaler** pour un bris, des fournitures, un danger.
-5. **Terminer** → courriel au superviseur (résumé + bouton « Voir le rapport »,
+4. Le détail d'une tâche : illustration ou schéma (plan du gym, postes des
+   télés), étapes précises **à cocher une par une** (la dernière coche la tâche),
+   « Bon à savoir », « Pas pu faire » + raison, remarque, photos.
+   **⚑ Signaler** pour un bris, des fournitures, un danger.
+5. **Le plan du gym** (d'après le croquis de l'équipe) : zones A/B/C en couleur et
+   pièces 1 à 5. On touche une zone ou une pièce pour voir ce qu'il y a dedans et
+   ce qui est prévu aujourd'hui.
+6. **Terminer** → courriel au superviseur (résumé + bouton « Voir le rapport »,
    photos en pièces jointes), dans sa langue. Les remarques restent telles qu'écrites.
 
 **Pour toute l'équipe : l'Aperçu du gym** (bouton sur l'accueil et dans la checklist)
-- Zones du jour (carte A/B/C), ce qui est au programme, les quarts envoyés,
+- Zones du jour (plan interactif A/B/C + pièces), ce qui est au programme, les quarts envoyés,
   ce qui reste à faire, les problèmes ouverts et de bons trucs du manuel.
 - **Sur GitHub Pages** : mode « plan du jour » (+ les quarts envoyés depuis ce téléphone).
 - **Sur Netlify** : **en direct**, partagé entre tous les téléphones (gratuit,

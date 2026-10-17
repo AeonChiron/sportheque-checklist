@@ -39,6 +39,7 @@
   --il-ink: #0f2a2e; --il-aqua: #2bb3b1; --il-coral: #ff7a59; --il-sun: #ffc94d; --il-steel: #b8c7ca;
   --il-paper: #ffffff; --il-wall: #e3eded; --il-screen: #d4f0ef; --il-glass: #cde7f1; --il-tile: #eef3f3;
   --il-mat: #2b3a3d; --il-floor: #cfdcdc; --il-night: #1d3a52; --il-ok: #6fcf9f; --il-bad: #f2978b;
+  --zA: #fbecc8; --zA-strong: #ffc94d; --zB: #fddcd1; --zB-strong: #ff8a6b; --zC: #cdeeed; --zC-strong: #3cc0bb;
   --il-fill: #ffffff; --il-fill2: #e3e9e8; --il-mid: #b4bfbe; --il-accent: #14a5a0; --il-accent-soft: #c6ebe9; --il-shadow: rgba(31, 35, 35, .10);
 
   --radius: 16px;
@@ -62,7 +63,7 @@
     --env-a: rgba(69, 201, 196, .07);
     --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
     --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
-    --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
+    --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #3d2620; --zB-strong: #c95e45; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
 }
@@ -75,7 +76,7 @@
   --env-a: rgba(69, 201, 196, .07);
   --il-ink: #d4eaea; --il-aqua: #2a9f9c; --il-coral: #e0694c; --il-sun: #e8b443; --il-steel: #5d7377;
   --il-paper: #1b2a2d; --il-wall: #182629; --il-screen: #17393b; --il-glass: #1d3b47; --il-tile: #172426;
-  --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
+  --il-mat: #070d0e; --il-floor: #26383b; --il-night: #0d1a24; --il-ok: #2f8f66; --il-bad: #b5574c; --zA: #3a3220; --zA-strong: #c99a33; --zB: #3d2620; --zB-strong: #c95e45; --zC: #173a39; --zC-strong: #2a9f9c; --il-fill: #1e2627; --il-fill2: #2a3435; --il-mid: #4a5657; --il-accent: #36b8b3; --il-accent-soft: #1d4645; --il-shadow: rgba(0, 0, 0, .35);
   color-scheme: dark;
 }
 
@@ -364,13 +365,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 
 /* Étapes numérotées : c'est une vraie séquence. */
 .steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; counter-reset: step; }
-.steps li { counter-increment: step; position: relative; padding: 10px 0 10px 40px; font-size: 16.5px; line-height: 1.45; border-top: 1px solid var(--line); }
-.steps li:first-child { border-top: 0; padding-top: 2px; }
+.steps li { counter-increment: step; position: relative; border-top: 1px solid var(--line); }
+.steps li:first-child { border-top: 0; }
+.step { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 48px; border: 0; background: none; text-align: left; padding: 10px 0 10px 40px; font-size: 16.5px; line-height: 1.45; color: var(--ink); }
+.step i { flex: none; margin-left: auto; margin-top: 1px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 800; color: transparent; transition: background .2s, border-color .2s, color .2s, transform .25s var(--spring); }
+.step[aria-pressed="true"] i { background: var(--ok); border-color: var(--ok); color: #fff; transform: scale(1.05); }
+.step[aria-pressed="true"] .step-text { color: var(--muted); }
+.steps li:has(.step[aria-pressed="true"])::before { background: var(--ok); }
+.steps-count { font-size: 14px; color: var(--muted); letter-spacing: 0; margin-left: 6px; }
 .steps li::before {
   content: counter(step); position: absolute; left: 0; top: 9px; width: 28px; height: 28px; border-radius: 8px;
   background: var(--accent); color: #fff; font: 700 16px/28px var(--display); text-align: center;
 }
-.steps li:first-child::before { top: 1px; }
+.steps li::before { top: 10px; pointer-events: none; transition: background .2s; }
 
 /* Illustrations : textes et micro-mouvements (seulement dans la feuille). */
 .illus text { fill: var(--il-ink); font-family: var(--display); }
@@ -378,7 +385,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .zm-id { font-size: 22px; font-weight: 700; }
 .zm-label { font-size: 11px; font-weight: 600; }
 .tv-ch { font-size: 19px; font-weight: 700; }
-.zm.done .zm-id::after { content: ""; }
+
 .visual .il-spark, .visual .il-spin, .visual .il-mist, .visual .il-breeze, .visual .il-note, .visual .il-blink { transform-box: fill-box; transform-origin: center; }
 .visual .il-spark { animation: twinkle 3.2s ease-in-out infinite; }
 .visual .il-spark:nth-of-type(2n) { animation-delay: -1.4s; }
@@ -569,3 +576,45 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
   *, *::before, *::after { animation: none !important; transition: none !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
   .env i { transform: none; }
 }
+
+/* ---------- Plan du gym ---------- */
+.floor { width: 100%; display: block; }
+.floor .zm { cursor: pointer; outline: none; }
+.floor .zm-wall { fill: none; stroke: var(--il-mid); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.floor .zm-bg { stroke: var(--il-ink); stroke-width: 1.6; transition: stroke-width .2s, fill .25s; }
+.floor .zA .zm-bg { fill: var(--zA); }
+.floor .zB .zm-bg { fill: var(--zB); }
+.floor .zC .zm-bg { fill: var(--zC); }
+.floor .zA.hot .zm-bg { fill: var(--zA-strong); }
+.floor .zB.hot .zm-bg { fill: var(--zB-strong); }
+.floor .zC.hot .zm-bg { fill: var(--zC-strong); }
+.floor .zm.hot .zm-bg { stroke-width: 3; }
+.floor .zm.sel .zm-bg, .floor .zm.sel .zm-room { stroke-width: 3.2; stroke: var(--ink); }
+.floor .zm:focus-visible .zm-bg, .floor .zm:focus-visible .zm-room { stroke: var(--accent); stroke-width: 3.2; }
+.floor .zm-eq { fill: var(--il-ink); opacity: .13; pointer-events: none; }
+.floor .zm-eq-line { stroke: var(--il-ink); opacity: .22; stroke-width: 2.5; stroke-linecap: round; pointer-events: none; }
+.floor .zm-eq-line.thick { stroke-width: 4.5; opacity: .3; }
+.floor .zm-id { font-size: 26px; font-weight: 700; fill: var(--il-ink); pointer-events: none; }
+.floor .zm-label { font-size: 11px; font-weight: 600; fill: var(--il-ink); pointer-events: none; }
+.floor .zm-badge { font-size: 11px; font-weight: 700; fill: var(--il-ink); pointer-events: none; }
+.floor .zm-mirror { fill: var(--il-glass); stroke: var(--il-ink); stroke-width: 1.2; }
+.floor .zm-room { fill: var(--il-fill); stroke: var(--il-ink); stroke-width: 1.4; transition: stroke-width .2s; }
+.floor .zm-num-bg { fill: var(--il-ink); pointer-events: none; }
+.floor .zm-num { font-size: 10px; font-weight: 700; fill: var(--il-fill); pointer-events: none; }
+.floor .zm-room-label { font-size: 8px; font-weight: 600; fill: var(--il-ink); pointer-events: none; }
+.map-info { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; animation: rise .25s var(--ease) both; }
+.map-info b { font-family: var(--display); font-size: 18px; font-weight: 700; }
+.map-info ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
+.map-info li { margin: 2px 0; }
+.map-today { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--ink); }
+.map-today span { display: inline-block; margin-right: 8px; font-family: var(--display); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.map-hint { margin: 0; color: var(--muted); }
+.ap-zones .map-info { background: var(--sunk); }
+
+.visual.map-visual .illus.floor { max-height: none; }
+.sheet-hero:has(.map-visual) { grid-template-columns: 1fr; }
+.floor .zm-id { font-size: 28px; }
+.floor .zm-label { font-size: 12px; }
+.map-today { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.map-today span { margin-right: 2px; }
+.map-today em { font-style: normal; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--ink); border-radius: 7px; padding: 2px 8px; }

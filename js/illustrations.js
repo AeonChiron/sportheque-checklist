@@ -193,39 +193,60 @@ ART['bureaux-entraineurs'] = ART.bureaux;
 
 // Petite carte des zones au même plan, la zone du jour en aqua.
 const miniZone = (z) => () => `${shadow(30)}
-    <rect x="14" y="14" width="32" height="38" rx="5" fill="var(${z === 'C' ? '--il-accent' : '--il-fill2'})" ${S}/>
-    <rect x="50" y="14" width="32" height="38" rx="5" fill="var(${z === 'B' ? '--il-accent' : '--il-fill2'})" ${S}/>
-    <rect x="14" y="56" width="68" height="26" rx="5" fill="var(${z === 'A' ? '--il-accent' : '--il-fill2'})" ${S}/>
+    <rect x="14" y="14" width="32" height="38" rx="5" fill="var(${z === 'C' ? '--zC-strong' : '--il-fill2'})" ${S}/>
+    <rect x="50" y="14" width="32" height="38" rx="5" fill="var(${z === 'B' ? '--zB-strong' : '--il-fill2'})" ${S}/>
+    <rect x="14" y="56" width="68" height="26" rx="5" fill="var(${z === 'A' ? '--zA-strong' : '--il-fill2'})" ${S}/>
     <text x="${z === 'A' ? 48 : z === 'B' ? 66 : 30}" y="${z === 'A' ? 75 : 39}" text-anchor="middle" class="zm-id">${z}</text>`;
 ART['zone-a'] = miniZone('A');
 ART['zone-b'] = miniZone('B');
 ART['zone-c'] = miniZone('C');
 
-// Plan du 2e étage, d'après le croquis de l'équipe : C en haut à gauche,
-// B en haut à droite, A (cardio) en bas sur toute la largeur.
-// highlight : zone en profondeur; mirrors : zone des miroirs du soir;
-// states : { A: 'done' | 'notdone' | 'unchecked' | 'planned' } pour l'Aperçu.
-const STATE_FILL = { done: '--il-ok', notdone: '--il-bad', unchecked: '--il-sun', planned: '--il-accent' };
-export function zoneMap(highlight, { mirrors = null, labels, states = {} } = {}) {
-  const zone = (id, x, y, w, h, detail) => {
-    const on = id === highlight || Boolean(states[id]);
-    const fill = states[id] ? STATE_FILL[states[id]] : on ? '--il-accent' : '--il-fill2';
-    return `<g class="zm ${on ? 'on' : ''} ${states[id] || ''}">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="var(${fill})" ${S} stroke-width="${on ? 2.6 : 1.8}"/>
-      ${detail}
-      <text x="${x + 12}" y="${y + 28}" class="zm-id">${id}</text>
-      ${[].concat(labels[id]).map((l, i) => `<text x="${x + 12}" y="${y + 45 + i * 14}" class="zm-label">${l}</text>`).join('')}
-      ${id === mirrors ? `<rect x="${x + w - 11}" y="${y + 9}" width="4" height="${h - 18}" rx="2" fill="var(--il-glass)" ${T}/>` : ''}
+// Plan du 2e étage, d'après le croquis de l'équipe.
+// C en haut à gauche (haut du corps), B en haut à droite (bas du corps),
+// A en bas (cardio et étirements), pièces numérotées le long des murs.
+// Options : highlight (zone en profondeur), mirrors (zone des miroirs du soir),
+// states { A: 'done' | 'notdone' | 'unchecked' | 'planned' } (Aperçu),
+// selected (zone ou pièce touchée), labels { A, B, C, 1..5 }.
+const BADGE = { done: ['--il-ok', '✓'], notdone: ['--il-bad', '✕'], unchecked: ['--il-sun', '○'], planned: ['--il-mid', '·'] };
+export function zoneMap({ highlight = null, mirrors = null, states = {}, selected = null, labels } = {}) {
+  const zone = (id, x, y, w, h, extra = '') => {
+    const hot = id === highlight;
+    const sel = id === selected;
+    const badge = BADGE[states[id]];
+    return `<g class="zm z${id} ${hot ? 'hot' : ''} ${sel ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" class="zm-bg"/>
+      ${extra}
+      <text x="${x + 10}" y="${y + 30}" class="zm-id">${id}</text>
+      <text x="${x + 10}" y="${y + 44}" class="zm-label">${labels[id]}</text>
+      ${badge ? `<g><circle cx="${x + w - 14}" cy="${y + 14}" r="9" fill="var(${badge[0]})" stroke="var(--il-ink)" stroke-width="1.5"/><text x="${x + w - 14}" y="${y + 18}" text-anchor="middle" class="zm-badge">${badge[1]}</text></g>` : ''}
+      ${id === mirrors ? `<rect x="${x + 4}" y="${y + h - 9}" width="${w - 8}" height="4" rx="2" class="zm-mirror"/>` : ''}
     </g>`;
   };
-  // Petits repères d'équipement, discrets : bancs en haut, rangées de cardio en bas.
-  const benches = (x, y) => [0, 1, 2].map((i) => `<rect x="${x + i * 26}" y="${y}" width="16" height="7" rx="2" fill="var(--il-ink)" opacity=".18"/>`).join('');
-  const cardio = [0, 1, 2, 3, 4, 5].map((i) => `<rect x="${150 + i * 22}" y="132" width="12" height="40" rx="3" fill="var(--il-ink)" opacity=".16"/>`).join('');
-  return `<svg viewBox="0 0 300 200" role="img" aria-label="Zones A B C" class="illus map">
-    <rect x="2" y="2" width="296" height="196" rx="10" fill="none" stroke="var(--il-mid)" stroke-width="1.5" stroke-dasharray="3 5"/>
-    ${zone('C', 8, 8, 138, 104, benches(54, 92))}
-    ${zone('B', 154, 8, 138, 104, benches(200, 92))}
-    ${zone('A', 8, 120, 284, 72, cardio)}
+  const room = (id, x, y, w, h) => `<g class="zm room ${id === selected ? 'sel' : ''}" data-area="${id}" role="button" tabindex="0" aria-label="${labels[id]}">
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" class="zm-room"/>
+      <circle cx="${x + w / 2}" cy="${y + h / 2 - (h > 30 ? 5 : 0)}" r="7" class="zm-num-bg"/>
+      <text x="${x + w / 2}" y="${y + h / 2 + 3.5 - (h > 30 ? 5 : 0)}" text-anchor="middle" class="zm-num">${id}</text>
+      ${h > 30 && w > 34 ? `<text x="${x + w / 2}" y="${y + h - 6}" text-anchor="middle" class="zm-room-label">${labels[`r${id}`] || ''}</text>` : ''}
+    </g>`;
+  // Repères d'équipement (décor discret, non cliquable).
+  const eq = (x, y, w, h, r = 2) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" class="zm-eq"/>`;
+  const rackRow = (x, y, n, gap = 15) => Array.from({ length: n }, (_, i) => eq(x + i * gap, y, 10, 6)).join('');
+  return `<svg viewBox="0 0 360 300" class="illus map floor" aria-label="Plan du 2e étage">
+    <rect x="3" y="3" width="354" height="294" rx="12" class="zm-wall"/>
+    ${zone('C', 28, 10, 150, 116, rackRow(40, 16, 8) + eq(60, 70, 34, 8, 3) + eq(108, 86, 34, 8, 3) + eq(70, 100, 24, 6))}
+    ${zone('B', 184, 10, 166, 116, rackRow(196, 16, 9) + eq(190, 62, 18, 30, 3) + eq(212, 62, 18, 30, 3) + eq(250, 74, 34, 8, 3) + eq(298, 90, 34, 8, 3) + eq(336, 40, 8, 54, 2))}
+    ${zone('A', 28, 132, 322, 112,
+      eq(36, 158, 112, 34, 4) // tapis roulants et escaliers
+      + [0, 1, 2, 3, 4, 5].map((i) => `<path d="M${44 + i * 18} 162v26" class="zm-eq-line"/>`).join('')
+      + `<path d="M70 200v24M90 200v24" class="zm-eq-line thick"/>` // 2 rameurs
+      + `<path d="M168 212v22M188 212v22" class="zm-eq-line thick"/>` // 2 appareils de cardio
+      + eq(212, 140, 132, 46, 4) // bloc à droite
+      + eq(212, 196, 86, 42, 4))} 
+    ${room('1', 3, 168, 22, 60)}
+    ${room('5', 3, 250, 46, 44)}
+    ${room('2', 136, 250, 70, 44)}
+    ${room('3', 270, 262, 36, 32)}
+    ${room('4', 314, 226, 40, 36)}
   </svg>`;
 }
 

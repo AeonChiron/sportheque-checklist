@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
-import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2 } from './manual.js';
+import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, FLOOR } from './manual.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration } from './planner.js';
 import { buildReport, renderReportText, reportSubject, FLAG_CATEGORIES, SKIP_REASONS, encodeReport, decodeReport, reportGlance, REVIEW, reportLabels } from './report.js';
 import { MAX_PHOTOS, putPhoto, getPhoto, deletePhoto, clearPhotos, shrink, blobToBase64 } from './photos.js';
@@ -272,6 +272,7 @@ function taskRow(it, { extra = false } = {}) {
   if (isNow) tags.push(`<span class="tag now">${t('now')}</span>`);
   for (const r of it.reminders || []) tags.push(`<span class="tag time">${f(r.at)} · ${esc(r.label)}</span>`);
   if (e.skipped && !e.done) tags.push(`<span class="tag bad">${t('notDone')}${e.reason ? ` · ${esc(SKIP_REASONS[e.reason]?.[lang()] || e.reason)}` : ''}</span>`);
+  if (!e.done && e.steps?.length) tags.push(`<span class="tag note num">${e.steps.length}/${it.steps.length} ${t('stepsShort')}</span>`);
   if (e.remark) tags.push(`<span class="tag note">${t('remark')}</span>`);
   if (e.photos?.length) tags.push(`<span class="tag note">${t('photos')} · ${e.photos.length}</span>`);
   const time = extra
@@ -581,18 +582,55 @@ function mountPhotos(root, ids, onChange, pending = []) {
   draw();
 }
 
-// ---------- Détail d'une tâche ----------
+// ---------- Plan du gym (interactif) ----------
 const MAP_LABELS = {
-  fr: { A: 'Cardio · étirements', B: ['Musculation', 'côté droit'], C: ['Musculation', 'côté gauche'] },
-  en: { A: 'Cardio · stretching', B: ['Weights', 'right side'], C: ['Weights', 'left side'] },
+  fr: { A: 'Cardio', B: 'Bas du corps', C: 'Haut du corps', 1: 'Porte du gym', 2: 'Évier', 3: 'Vestiaire femmes', 4: 'Studio de spinning', 5: 'Vestiaire hommes', r2: 'Évier', r3: 'Femmes', r4: 'Spin', r5: 'Hommes' },
+  en: { A: 'Cardio', B: 'Lower body', C: 'Upper body', 1: 'Gym door', 2: 'Sink', 3: 'Women’s locker room', 4: 'Spin studio', 5: 'Men’s locker room', r2: 'Sink', r3: 'Women', r4: 'Spin', r5: 'Men' },
 };
 
+// Ce qui se passe aujourd'hui dans une zone ou une pièce (selon le plan du jour).
+function todayIn(area, day) {
+  const out = [];
+  if (day.zones[1] === area) out.push(`${t('morning')} · ${t('deepClean')}`);
+  if (day.zones[2] === area) out.push(`${t('evening')} · ${t('deepClean')}`);
+  if (day.surfaces === 'miroirs' && day.zones.third === area) out.push(`${t('evening')} · ${t('mirrorsOf')}`);
+  if (area === '3' || area === '5') out.push(t('roomTrash'));
+  if (area === '4') out.push(`${t('morning')} · ${t('spinRoom')}`);
+  if (area === '2') out.push(t('roomSink'));
+  if (area === 'A') out.push(`${t('morning')} · ${t('cardioVac')}`);
+  if (area === 'B' || area === 'C') out.push(`${t('morning')} · ${t('blackMats')}`);
+  return out;
+}
+
+// Monte le plan dans un conteneur : toucher une zone ou une pièce montre ce
+// qu'il y a dedans et ce qui est prévu aujourd'hui.
+function mountMap(box, { highlight = null, mirrors = null, states = {}, date = todayISO() } = {}) {
+  const day = dayInfo(date);
+  let selected = highlight || mirrors || null;
+  const draw = () => {
+    const info = selected ? FLOOR[selected][lang()] : null;
+    const today = selected ? todayIn(selected, day) : [];
+    box.innerHTML = `${zoneMap({ highlight, mirrors, states, selected, labels: MAP_LABELS[lang()] })}
+      <div class="map-info" aria-live="polite">${info
+        ? `<b>${esc(info.name)}</b><ul>${info.what.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>${today.length ? `<p class="map-today"><span>${t('today')}</span>${today.map((x) => `<em>${esc(x)}</em>`).join('')}</p>` : ''}`
+        : `<p class="map-hint">${t('mapHint')}</p>`}</div>`;
+  };
+  const pick = (el) => {
+    const area = el?.closest('[data-area]')?.dataset.area;
+    if (!area) return;
+    selected = selected === area && !highlight ? null : area;
+    draw();
+    box.querySelector(`[data-area="${area}"]`)?.focus({ preventScroll: true });
+  };
+  box.addEventListener('click', (e) => pick(e.target));
+  box.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e.target); } });
+  draw();
+}
+
+// ---------- Détail d'une tâche ----------
 function taskVisual(it) {
-  if (it.deep) {
-    return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption>${zoneMap(it.zone, { labels: MAP_LABELS[lang()] })}</figure>`;
-  }
-  if (it.zone && it.photo === 'miroirs') {
-    return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption>${zoneMap(null, { mirrors: it.zone, labels: MAP_LABELS[lang()] })}</figure>`;
+  if (it.deep || (it.zone && it.photo === 'miroirs')) {
+    return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption><div data-map></div></figure>`;
   }
   return `<figure class="visual">${illustration(it.photo, it.title)}</figure>`;
 }
@@ -626,7 +664,9 @@ function openTask(id) {
         <div class="meta-row">${pills}</div>
       </div>
     </div>
-    <div><p class="block-label">${t('steps')}</p><ol class="steps">${it.steps.map((s) => `<li>${md(s)}</li>`).join('')}</ol></div>
+    <div><p class="block-label">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span></p>
+      <ol class="steps">${it.steps.map((s, i) => `<li><button type="button" class="step" data-step="${i}" aria-pressed="${Boolean(e.done || (e.steps || []).includes(i))}"><span class="step-text">${md(s)}</span><i aria-hidden="true">✓</i></button></li>`).join('')}</ol>
+      <p class="hint">${t('stepsHint')}</p></div>
     ${tv}
     ${clockBox}
     ${tips}
@@ -642,6 +682,23 @@ function openTask(id) {
     <div class="sheet-actions"><button class="btn primary" data-close>${t('close')}</button></div>
   `, (root) => {
     root.querySelector('[data-close]').onclick = closeSheet;
+    const mapBox = root.querySelector('[data-map]');
+    if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: state.date } : { mirrors: it.zone, date: state.date });
+    // Étapes : chaque toucher coche une étape; toutes faites = tâche cochée.
+    for (const b of root.querySelectorAll('[data-step]')) {
+      b.onclick = () => {
+        const i = Number(b.dataset.step);
+        const set = new Set(e.steps || []);
+        if (set.has(i)) set.delete(i); else set.add(i);
+        e.steps = [...set].sort((x, y) => x - y);
+        b.setAttribute('aria-pressed', String(set.has(i)));
+        root.querySelector('.steps-count').textContent = `${set.size}/${it.steps.length}`;
+        save();
+        if (set.size === it.steps.length && !e.done) {
+          setTimeout(() => { closeSheet(); toggleDone(id); }, 450);
+        } else renderChecklist();
+      };
+    }
     root.querySelector('#remark').addEventListener('input', (ev) => { e.remark = ev.target.value; save(); renderChecklist(); });
     e.photos ||= [];
     mountPhotos(root, e.photos, () => { save(); renderChecklist(); });
@@ -1080,7 +1137,7 @@ async function openApercu() {
     <section class="ap-grid">
       <div class="panel ap-zones">
         <h3>${t('zonesToday')}</h3>
-        ${zoneMap(null, { labels: MAP_LABELS[L], states: mapStates, mirrors: day.surfaces === 'miroirs' ? day.zones.third : null })}
+        <div data-map></div>
         <div class="legend">${['done', 'planned', 'unchecked', 'notdone'].map((k) => `<span><i class="sw ${k}"></i>${esc(t('legend')[k])}</span>`).join('')}${day.surfaces === 'miroirs' ? `<span><i class="sw mirror"></i>${esc(t('legend').mirrors)}</span>` : ''}</div>
         <ul class="ap-list">${zoneRows.map(row).join('')}</ul>
       </div>
@@ -1111,6 +1168,7 @@ async function openApercu() {
     </section>
     ${live ? '' : `<p class="section-note">${esc(t('planOnlyNote'))}</p>`}
     <button class="btn primary big" type="button" data-go="${state ? 'shift' : 'home'}">${esc(state ? t('backToShift') : t('startShift'))}</button>`;
+  mountMap($('#apercuBody [data-map]'), { states: mapStates, mirrors: day.surfaces === 'miroirs' ? day.zones.third : null, date });
 }
 
 const TIP_ICONS = { gym: 'points-contact', cardio: 'desinfection', zone: 'inspection', surfaces: 'miroirs', bureaux: 'bureaux', muscu: 'aspirateur', buanderie: 'guenilles', dechets: 'poubelles' };
