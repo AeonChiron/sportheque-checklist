@@ -23,6 +23,7 @@
   <!-- Fond vivant : lumière de piscine, très lente. -->
   <div class="env" aria-hidden="true"><i></i></div>
 
+  <main id="app">
   <!-- 0. Connexion (une fois : le téléphone s'en souvient) -->
   <section id="auth" class="screen" hidden>
     <div class="setup-top">
@@ -167,7 +168,7 @@
         <span class="mark" data-mark aria-hidden="true"></span>
         <div class="topbar-id">
           <p class="eyebrow" id="cEyebrow"></p>
-          <h2 id="cTitle"></h2>
+          <h1 id="cTitle"></h1>
         </div>
         <div class="topbar-actions">
           <button class="pill-btn" type="button" data-go="apercu">
@@ -188,7 +189,7 @@
     </header>
 
     <div id="nowCard"></div>
-    <div class="list-head"><h3 data-t="yourTasks"></h3><span class="num" id="listCount"></span></div>
+    <div class="list-head"><h2 data-t="yourTasks"></h2><span class="num" id="listCount"></span></div>
     <p class="hint" id="swipeHint" hidden></p>
 
     <ol class="tasks" id="taskList"></ol>
@@ -206,7 +207,7 @@
   <section id="finish" class="screen" hidden>
     <header class="topbar plain">
       <button class="back" id="backBtn">‹ <span data-t="back"></span></button>
-      <h2 data-t="endTitle"></h2>
+      <h1 data-t="endTitle"></h1>
     </header>
     <div id="finishSummary"></div>
     <div class="panel">
@@ -225,7 +226,7 @@
   <!-- 4. Quart enregistré -->
   <section id="sent" class="screen center" hidden>
     <div class="done-badge" aria-hidden="true">✓</div>
-    <h2 data-t="savedTitle"></h2>
+    <h1 data-t="savedTitle"></h1>
     <p class="lede" id="sentText"></p>
     <p class="win-line" id="sentWin"></p>
     <button class="btn primary big" id="newShiftBtn" data-t="newShift"></button>
@@ -306,19 +307,21 @@
     <div class="bottom-spacer small"></div>
   </section>
 
+  <button type="button" class="shift-pill" id="shiftPill" hidden>
+    <span class="sp-ring" aria-hidden="true"></span>
+    <span data-t="myTasks"></span><b class="num"></b>
+  </button>
+  </main>
+
   <!-- Feuille du bas (détails, signalement, options) -->
   <div class="sheet-backdrop" id="backdrop" hidden></div>
-  <div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
     <div class="sheet-handle" aria-hidden="true"></div>
     <button type="button" class="sheet-x" id="sheetX" data-label="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <div class="sheet-body" id="sheetBody"></div>
     <div class="sheet-foot" id="sheetFoot" hidden></div>
   </div>
 
-  <button type="button" class="shift-pill" id="shiftPill" hidden>
-    <span class="sp-ring" aria-hidden="true"></span>
-    <span data-t="myTasks"></span><b class="num"></b>
-  </button>
   <div class="toast" id="toast" role="status" hidden></div>
   <div class="burst" id="burst" aria-hidden="true"></div>
 

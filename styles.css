@@ -144,7 +144,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- Formulaire ---------- */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-.panel h3 { font-size: 21px; margin-bottom: 10px; }
+.panel :is(h2, h3) { font-size: 21px; margin-bottom: 10px; }
 .form { display: flex; flex-direction: column; gap: 14px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .row2 > * { min-width: 0; }
@@ -224,8 +224,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .topbar-row .topbar-id { flex: 1; }
 .topbar-id { min-width: 0; }
 .topbar-actions { display: flex; gap: 8px; }
-.topbar h2 { font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.topbar.plain h2 { font-size: 34px; text-transform: uppercase; }
+.topbar h1 { font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar.plain h1 { font-size: 34px; text-transform: uppercase; }
 .back { border: 0; background: none; color: var(--ink); font-weight: 650; padding: 8px 0; min-height: 40px; align-self: flex-start; font-size: 16px; }
 
 /* Le couloir : segments proportionnels, câbles de couloir, nageur = maintenant. */
@@ -259,7 +259,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .remain { font-size: 15px; color: var(--muted); }
 .now-main { display: flex; gap: 12px; align-items: center; }
 .now-main .t-icon { width: 54px; height: 54px; }
-.now-card h3 { font-size: 24px; line-height: 1.1; }
+.now-card :is(h2, h3) { font-size: 24px; line-height: 1.1; }
 .now-card .sum { margin: 3px 0 0; font-size: 14px; color: var(--muted); }
 .now-bar { height: 4px; border-radius: 2px; background: var(--sunk); overflow: hidden; }
 .now-bar::before { content: ""; display: block; height: 100%; width: var(--p); background: var(--accent); border-radius: 2px; }
@@ -330,7 +330,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .break.slack { background: transparent; border: 1.5px dashed var(--line); }
 
 .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 24px 2px 8px; }
-.section-head h3 { font-size: 21px; }
+.section-head :is(h2, h3) { font-size: 21px; }
 .section-head span { font-size: 15px; color: var(--muted); }
 .section-note { margin: -2px 2px 12px; font-size: 13.5px; color: var(--muted); }
 .notice { border-radius: 12px; padding: 12px 14px; font-size: 14px; margin: 0 0 12px; }
@@ -374,7 +374,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .visual .illus { display: block; width: 100%; max-height: 180px; }
 .visual.map-visual { padding: 12px; }
 .visual.map-visual .block-label { margin: 0 0 8px; }
-.sheet-head h3 { font-size: 30px; line-height: 1.05; margin-top: 3px; }
+.sheet-head :is(h2, h3) { font-size: 30px; line-height: 1.05; margin-top: 3px; }
 .meta-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .pill { display: inline-flex; align-items: center; gap: 5px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; font-size: 13px; font-weight: 650; color: var(--ink); }
 .pill.num { font-size: 16px; }
@@ -458,7 +458,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .photo-count { margin: -4px 2px 12px; font-size: 14px; color: var(--muted); }
 .done-badge { width: 84px; height: 84px; border-radius: 50%; background: var(--ok); color: #fff; font-size: 42px; display: grid; place-items: center; animation: badge .55s var(--spring) both; }
 @keyframes badge { from { transform: scale(.3); opacity: 0; } }
-#sent h2 { font-size: 38px; text-transform: uppercase; }
+#sent h1 { font-size: 38px; text-transform: uppercase; }
 #sent .btn { max-width: 420px; }
 
 /* ---------- Rapport (vue superviseur) ---------- */
@@ -824,7 +824,7 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 @keyframes panel-in { from { opacity: 0; transform: translateX(calc(var(--dir, 0) * 22px)) translateY(calc((1 - var(--dir, 0) * var(--dir, 0)) * 8px)); } }
 
 .ap-dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.ap-dayhead h3 { margin: 0; }
+.ap-dayhead :is(h2, h3) { margin: 0; }
 .ap-dayhead .pill { font-family: var(--display); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .ap-mapcard .map-info { background: var(--sunk); }
 .ap-cards { display: grid; gap: 0; }
@@ -861,6 +861,8 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .rp-card.bad { border-left: 4px solid var(--bad); } .rp-card.warn { border-left: 4px solid var(--warn); } .rp-card.ok { border-left: 4px solid var(--ok); }
 .rv-ring.small { width: 52px; height: 52px; }
 .rp-card.warn .rv-ring { --c: var(--warn); } .rp-card.bad .rv-ring { --c: var(--bad); }
+/* L'anneau parle des tâches, le bord de la carte parle des problèmes. */
+.rp-card .rv-ring.r-ok { --c: var(--ok); } .rp-card .rv-ring.r-warn { --c: var(--warn); }
 .rv-ring.small span { font-size: 14px; }
 .rp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .rp-main b { font-family: var(--display); font-size: 20px; line-height: 1.1; }
@@ -1010,7 +1012,7 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .pill-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pill-btn:active { transform: scale(.95); }
 .topbar-row .topbar-id { min-width: 0; }
-.topbar h2 { font-size: 26px; }
+.topbar h1 { font-size: 26px; }
 @media (max-width: 370px) { .pill-btn span { display: none; } .pill-btn { padding: 0 11px; } }
 
 /* Accueil : texte plus grand (Aa) à côté de la langue; heures et date simplifiées. */
@@ -1031,7 +1033,7 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 
 /* Checklist : un seul titre au-dessus de la liste. */
 .list-head { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 2px 10px; }
-.list-head h3 { font-size: 22px; }
+.list-head :is(h2, h3) { font-size: 22px; }
 .list-head .num { font-size: 16px; color: var(--muted); }
 
 /* Feuille : un X toujours visible, et les actions fixées en bas. */
@@ -1078,7 +1080,7 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .sw.unchecked { background: var(--surface); border-style: dashed; border-color: var(--muted); }
 
 /* Protocole : la journée entière, matin et soir. */
-.proto-glance h3 { margin-bottom: 8px; }
+.proto-glance :is(h2, h3) { margin-bottom: 8px; }
 .proto-glance .facts { display: flex; flex-wrap: wrap; gap: 6px; }
 .proto-glance .fact { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
 .proto-list { list-style: none; margin: 8px 0 0; padding: 0; }
@@ -1116,7 +1118,7 @@ html.large .home-links { grid-template-columns: 1fr; }
 .hi-stats .ok b { color: var(--ok); }
 .hi-day { margin-bottom: 6px; }
 .hi-dayhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 16px 2px 8px; }
-.hi-dayhead h3 { font-size: 19px; }
+.hi-dayhead :is(h2, h3) { font-size: 19px; }
 .hi-dayhead .num { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .hi-day .rp-card + .rp-card { margin-top: 8px; }
 .hi-card { background: var(--surface); }
@@ -1306,23 +1308,24 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -2; pointer-even
 
 /* Filets de lumière qui glissent le long des barres du haut et du bas. */
 .topbar::after, .bottombar::before {
-  content: ""; position: absolute; left: 0; right: 0; height: 1px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 80%, transparent), transparent) no-repeat;
-  background-size: 35% 100%; animation: edge-run 8s ease-in-out infinite;
+  content: ""; position: absolute; left: 0; width: 35%; height: 1px; pointer-events: none; will-change: transform;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 80%, transparent), transparent);
+  transform: translateX(-110%); animation: edge-run 8s ease-in-out infinite;
 }
 .topbar::after { bottom: -1px; }
 .bottombar::before { top: -1px; animation-delay: -4s; }
-@keyframes edge-run { 0% { background-position: -60% 0; } 55%, 100% { background-position: 160% 0; } }
+/* Glissement en transform (carte graphique), pas en background-position (processeur). */
+@keyframes edge-run { 0% { transform: translateX(-110%); } 55%, 100% { transform: translateX(300%); } }
 /* La feuille du bas : un reflet traverse son bord quand elle s'ouvre. */
-.sheet::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 3; pointer-events: none; background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat; background-size: 40% 100%; background-position: -60% 0; }
+.sheet::before { content: ""; position: absolute; left: 0; width: 40%; top: 0; height: 2px; z-index: 3; pointer-events: none; background: linear-gradient(90deg, transparent, var(--accent), transparent); transform: translateX(-110%); }
 .sheet.open::before { animation: edge-run 1.6s var(--ease) .15s 1 both; }
 /* « Annuler » : une barre montre le temps qu'il reste pour changer d'idée. */
 .toast.in.has-undo { overflow: hidden; }
 .toast.in.has-undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); transform-origin: left; animation: undo-clock 4.5s linear both; }
 @keyframes undo-clock { to { transform: scaleX(0); } }
 /* Titres de section : un petit trait qui se trace à l'arrivée. */
-.list-head h3, .hi-dayhead h3 { position: relative; }
-.list-head h3::after, .hi-dayhead h3::after { content: ""; position: absolute; left: 0; bottom: -4px; height: 3px; width: 28px; border-radius: 2px; background: var(--accent); transform-origin: left; animation: draw-in .7s var(--ease) .2s both; }
+.list-head :is(h2, h3), .hi-dayhead :is(h2, h3) { position: relative; }
+.list-head :is(h2, h3)::after, .hi-dayhead :is(h2, h3)::after { content: ""; position: absolute; left: 0; bottom: -4px; height: 3px; width: 28px; border-radius: 2px; background: var(--accent); transform-origin: left; animation: draw-in .7s var(--ease) .2s both; }
 @keyframes draw-in { from { transform: scaleX(0); } }
 
 /* ---------- Clair / sombre : le soleil devient lune ---------- */
@@ -1344,7 +1347,7 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
 
 /* Réduire les animations : la lumière reste, mais ne bouge plus. */
 @media (prefers-reduced-motion: reduce) {
-  .env::before, .now-card::after, .task-inner::before, .shift-pill::after, #finishBtn.ready, #finishBtn.ready::after, .panel.form::after, .pb-card.bad::after, .topbar::after, .bottombar::before, .list-head h3::after, .hi-dayhead h3::after { animation: none !important; }
+  .env::before, .now-card::after, .task-inner::before, .shift-pill::after, #finishBtn.ready, #finishBtn.ready::after, .panel.form::after, .pb-card.bad::after, .topbar::after, .bottombar::before, .list-head :is(h2, h3)::after, .hi-dayhead :is(h2, h3)::after { animation: none !important; }
   .hi-card.ok::after, .sheet::before, .toast.in.has-undo::after { display: none; }
 }
 
@@ -1405,7 +1408,7 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
 
 /* Tendances : une barre par ligne, une seule couleur; les chiffres restent en texte. */
 .boss-tabs button { font-size: 14.5px; padding-left: 4px; padding-right: 4px; }
-.trend h3 { margin-bottom: 4px; }
+.trend :is(h2, h3) { margin-bottom: 4px; }
 .trend .section-note { margin: 0 0 10px; }
 .tr-row { padding: 10px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .tr-row:first-of-type { border-top: 0; }
@@ -1452,3 +1455,9 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
 .it-text { display: flex; flex-direction: column; gap: 3px; font-size: 14.5px; }
 .it-text b { font-size: 16px; }
 .it-acts { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.pill.is-live, .map-today > span { color: var(--link); }
+
+/* Calme : après 12 s sans toucher, les lumières décoratives se figent là où elles
+   sont (batterie, téléphones lents); elles repartent au premier toucher. Mesuré sur un
+   Android d'entrée de gamme : environ 2 s de travail du processeur toutes les 4 s → presque rien. */
+body.calm *::before, body.calm *::after, body.calm .env i, body.calm .alive * { animation-play-state: paused !important; }

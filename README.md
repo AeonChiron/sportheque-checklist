@@ -71,8 +71,13 @@ Mot de passe oublié : un superviseur en donne un nouveau dans l'Espace supervis
   tous les téléphones** (gratuit, voir plus bas). Rien à changer dans le code.
 - Sans réseau, le quart est gardé sur le téléphone et part tout seul au retour du réseau.
 
-Français québécois ou anglais au choix sur chaque téléphone. Mode sombre automatique.
+Français québécois ou anglais au choix sur chaque téléphone. Mode sombre automatique,
+ou clair / sombre d'un toucher (soleil / lune en haut de l'accueil).
 « Réduire les animations » (iPhone : Réglages → Accessibilité) est respecté à 100 %.
+Après 12 secondes sans toucher l'écran, les animations décoratives s'arrêtent
+(batterie); elles reprennent au premier toucher. Sur un vieux téléphone ou un réseau
+lent, le plan du gym s'ouvre à plat (la 3D reste à un toucher). Vérifié avec axe-core :
+0 problème d'accessibilité sur 13 écrans, en clair et en sombre.
 Tout reste enregistré sur le téléphone pendant le quart, même si Safari se recharge.
 
 ## Logique de planification (`js/planner.js`)

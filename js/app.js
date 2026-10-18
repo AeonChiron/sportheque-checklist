@@ -175,7 +175,7 @@ function paintStatic() {
   document.documentElement.lang = lang() === 'en' ? 'en-CA' : 'fr-CA';
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
   for (const el of document.querySelectorAll('[data-ph]')) el.placeholder = t(el.dataset.ph);
-  for (const el of document.querySelectorAll('[data-label]')) el.setAttribute('aria-label', t(el.dataset.label));
+  for (const el of document.querySelectorAll('[data-label]')) { el.setAttribute('aria-label', t(el.dataset.label)); el.title = t(el.dataset.label); }
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
   for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(Boolean(prefs.large)));
   paintThemeButtons();
@@ -193,6 +193,7 @@ function paintThemeButtons() {
   for (const b of document.querySelectorAll('[data-theme-btn]')) {
     b.setAttribute('aria-pressed', String(dark));
     b.setAttribute('aria-label', t(dark ? 'toLight' : 'toDark'));
+    b.title = t(dark ? 'toLight' : 'toDark');
   }
 }
 function applyTheme() {
@@ -510,12 +511,12 @@ function renderNow() {
   const bar = `<div class="now-bar" style="--p:${pct}%"></div>`;
   if (cur.kind !== 'task') {
     box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
-      <h3>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h3>${bar}${next}${catchUp}</div>`;
+      <h2>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h2>${bar}${next}${catchUp}</div>`;
     return;
   }
   const e = state.tasks[cur.id] || {};
   box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
-    <div class="now-main alive">${icon(cur)}<div><h3>${esc(cur.title)}</h3>${cur.summary ? `<p class="sum">${esc(cur.summary)}</p>` : ''}</div></div>
+    <div class="now-main alive">${icon(cur)}<div><h2>${esc(cur.title)}</h2>${cur.summary ? `<p class="sum">${esc(cur.summary)}</p>` : ''}</div></div>
     ${bar}
     <div class="acts" data-id="${esc(cur.id)}">
       <button class="btn ${e.done ? 'ghost' : 'primary'} small" data-act="toggle">${e.done ? '✓ ' : ''}${t('markDone')}</button>
@@ -557,12 +558,12 @@ function renderChecklist() {
   $('#taskList').innerHTML = html;
 
   $('#overflowBlock').innerHTML = plan.overflow.length
-    ? `<div class="section-head"><h3>${t('extra')}</h3></div><p class="section-note">${t('extraNote')}</p>
+    ? `<div class="section-head"><h2>${t('extra')}</h2></div><p class="section-note">${t('extraNote')}</p>
        <ol class="tasks">${plan.overflow.map((it) => taskRow(it, { extra: true })).join('')}</ol>`
     : '';
 
   $('#flagsBlock').innerHTML = state.flags.length
-    ? `<div class="section-head"><h3>${t('flags')}</h3><span class="num">${state.flags.length}</span></div>
+    ? `<div class="section-head"><h2>${t('flags')}</h2><span class="num">${state.flags.length}</span></div>
        ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}">${catIcon(fl.category)}<div><b>${esc(catName(fl.category))}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${fl.text ? `${esc(fl.text)}<br>` : ''}<small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
     : '';
 }
@@ -692,6 +693,10 @@ function openSheet(html, onMount, foot = '') {
   }
   $('#sheetBody').innerHTML = html;
   $('#sheetBody').scrollTop = 0;
+  // Lecteur d'écran : la feuille porte le nom de son titre.
+  const head = $('#sheetBody').querySelector('h1, h2, h3');
+  if (head) { head.id = 'sheetTitle'; $('#sheet').setAttribute('aria-labelledby', 'sheetTitle'); $('#sheet').removeAttribute('aria-label'); }
+  else { $('#sheet').removeAttribute('aria-labelledby'); $('#sheet').setAttribute('aria-label', t('details')); }
   $('#sheetFoot').innerHTML = foot;
   $('#sheetFoot').hidden = !foot;
   $('#sheet').classList.toggle('has-foot', Boolean(foot));
@@ -802,6 +807,20 @@ function todayIn(area, day) {
 
 // Monte le plan dans un conteneur : toucher une zone ou une pièce montre ce
 // qu'il y a dedans et ce qui est prévu aujourd'hui.
+// La 3D pèse ~650 Ko : sur un vieux téléphone ou un réseau lent, on commence
+// par le plan (on peut toujours toucher « 3D »), et on ne la charge qu'en vue.
+const lowPower = () => {
+  const c = navigator.connection;
+  return Boolean(c?.saveData || /(^|-)2g|3g/.test(c?.effectiveType || '') || (navigator.deviceMemory && navigator.deviceMemory < 4));
+};
+const nearView = (el) => new Promise((resolve) => {
+  if (!('IntersectionObserver' in window)) return resolve();
+  const io = new IntersectionObserver((es) => {
+    if (es.some((e) => e.isIntersecting) || !el.isConnected) { io.disconnect(); resolve(); }
+  }, { rootMargin: '200px' });
+  io.observe(el);
+});
+
 function mountMap(box, { highlight = null, mirrors = null, states = {}, date = todayISO(), dayLabel = t('today') } = {}) {
   const day = dayInfo(date);
   // Étiquettes du jour sur les zones : profondeur du matin, du soir, miroirs.
@@ -810,7 +829,7 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
   tag(day.zones[1], t('morning'), states[1] || 'planned');
   tag(day.zones[2], t('evening'), states[2] || 'planned');
   let selected = highlight || mirrors || null;
-  let mode = prefs.mapMode === 'plan' ? 'plan' : '3d'; // la 3D par défaut
+  let mode = prefs.mapMode === 'plan' || (!prefs.mapMode && lowPower()) ? 'plan' : '3d'; // la 3D par défaut
   let view3d = null;
   const L = MAP_LABELS[lang()];
   box.innerHTML = `<div class="map-bar"><div class="segmented tiny map-mode" role="tablist">
@@ -842,6 +861,8 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
     stage.className = 'map-stage is-3d loading';
     stage.innerHTML = '<div class="gym3d"></div>';
     try {
+      await nearView(stage);
+      if (mode !== '3d' || !stage.isConnected) return;
       const { mountGym3D } = await import('./gym3d.js');
       if (mode !== '3d' || !stage.isConnected) return;
       view3d = mountGym3D(stage.firstElementChild, { highlight, selected, tags, labels: L, onPick: (a) => pick(a) });
@@ -911,7 +932,7 @@ function openTask(id) {
       ${taskVisual(it)}
       <div class="sheet-head">
         <p class="eyebrow">${esc(AREAS[it.area]?.[lang()] || '')}</p>
-        <h3>${esc(it.title)}</h3>
+        <h2>${esc(it.title)}</h2>
         <div class="meta-row">${pills}</div>
       </div>
     </div>
@@ -1012,7 +1033,7 @@ function openFlag({ where = '' } = {}) {
   openSheet(`
     <div class="sheet-head">
       <p class="eyebrow danger">${ICON.flag}${t('flag')}</p>
-      <h3>${t('flagTitle')}</h3>
+      <h2>${t('flagTitle')}</h2>
     </div>
     <div class="cat-grid">${Object.entries(CATEGORIES).map(([k, v]) => `<button type="button" data-cat="${k}" aria-pressed="false">${catIcon(k)}<span>${esc(v[lang()])}</span></button>`).join('')}</div>
     <div class="flag-more" hidden>
@@ -1157,11 +1178,11 @@ async function sendFlagEmail(fl, s) {
 
 // ---------- Menu ----------
 // Tout ce qui sert moins souvent, en mots clairs (pas d'icône à deviner).
-const switchRow = (id, label, on) => `<div class="inline-choice"><span>${esc(label)}</span>
-  <button type="button" class="switch" role="switch" id="${id}" aria-checked="${on}"><i></i></button></div>`;
+const switchRow = (id, label, on) => `<div class="inline-choice"><span id="${id}-label">${esc(label)}</span>
+  <button type="button" class="switch" role="switch" id="${id}" aria-checked="${on}" aria-labelledby="${id}-label"><i></i></button></div>`;
 $('#menuBtn').addEventListener('click', () => {
   openSheet(`
-    <div class="sheet-head"><h3>${t('menu')}</h3></div>
+    <div class="sheet-head"><h2>${t('menu')}</h2></div>
     <div class="menu-group">
       <div class="inline-choice"><span>${t('language')}</span>
         <div class="segmented tiny" role="radiogroup">
@@ -1247,7 +1268,7 @@ function openFinish() {
       <div class="stat warn"><b class="num" data-count>${state.flags.length}</b><span>${t('statFlags', state.flags.length)}</span></div>
     </div>
     ${open.length ? `<div class="panel">
-      <div class="section-head" style="margin-top:0"><h3>${t('pending')}</h3><span class="num">${open.length}</span></div>
+      <div class="section-head" style="margin-top:0"><h2>${t('pending')}</h2><span class="num">${open.length}</span></div>
       <p class="section-note">${t('finishHint')}</p>
       ${open.map((x) => `<div class="pending" data-id="${esc(x.id)}">${icon(x)}<div class="t">${esc(x.title)}<small class="num">${f(x.start)} – ${f(x.end)}</small></div>
         <button class="btn small ghost" data-act="done" aria-label="${esc(t('done'))}">✓</button><button class="btn small flag" data-act="skip" aria-label="${esc(t('notDone'))}">✕</button></div>`).join('')}
@@ -1411,11 +1432,11 @@ function openReview(r, opts = {}) {
         <span class="num">${r.completion.done}/${r.completion.total} ${esc(T.done)}</span>
       </div>
     </div>
-    ${attention.length ? `<div class="section-head"><h3>${esc(R.attention)}</h3><span class="num">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
-    ${r.notes ? `<div class="section-head"><h3>${esc(T.notes)}</h3></div><div class="panel rv-notes">${esc(r.notes)}</div>` : ''}
-    <div class="section-head"><h3>${esc(R.full)}</h3><span class="num">${r.completion.done}/${r.completion.total}</span></div>
+    ${attention.length ? `<div class="section-head"><h2>${esc(R.attention)}</h2><span class="num">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
+    ${r.notes ? `<div class="section-head"><h2>${esc(T.notes)}</h2></div><div class="panel rv-notes">${esc(r.notes)}</div>` : ''}
+    <div class="section-head"><h2>${esc(R.full)}</h2><span class="num">${r.completion.done}/${r.completion.total}</span></div>
     <ul class="rv-list">${r.items.map(row).join('')}</ul>
-    ${r.overflow.length ? `<div class="section-head"><h3>${esc(T.overflow)}</h3></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
+    ${r.overflow.length ? `<div class="section-head"><h2>${esc(T.overflow)}</h2></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
     ${r.outOfRange.length ? `<p class="section-note">${esc(T.fixed)} : ${esc(r.outOfRange.join(', '))}</p>` : ''}
     ${nPhotos ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}
     ${from ? '' : `<button class="btn ghost big overview-link" type="button" data-go="history">${esc(t('seeHistory'))}</button>`}`;
@@ -1638,15 +1659,15 @@ function dayPanel() {
 
   return `
     <div class="panel ap-mapcard">
-      <div class="ap-dayhead"><h3>${esc(longDay(d))}</h3>${d === today ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</div>
+      <div class="ap-dayhead"><h2>${esc(longDay(d))}</h2>${d === today ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</div>
       <div data-map></div>
       <div class="legend">${['done', 'planned', 'unchecked', 'notdone'].map((k) => `<span><i class="sw ${k}"></i>${esc(t('legend')[k])}</span>`).join('')}</div>
     </div>
     <div class="ap-cards">${card(1)}${card(2)}</div>
-    ${left.length ? `<div class="panel"><div class="ap-card-head"><h3>${t('stillToDo')}</h3><span class="num">${left.length}</span></div>
+    ${left.length ? `<div class="panel"><div class="ap-card-head"><h2>${t('stillToDo')}</h2><span class="num">${left.length}</span></div>
       ${left.some((l) => l.kind === 'notdone') ? `<ul class="ap-list">${left.filter((l) => l.kind === 'notdone').map((l) => `<li class="ap-row"><span class="ap-who">${esc(SHIFTS[l.shift][L].short)}</span><span class="ap-what">${esc(l.title)}</span><span class="st bad">✕ ${esc(SKIP_REASONS[l.reason]?.[L] || t('notDone'))}</span></li>`).join('')}</ul>` : ''}
       ${left.some((l) => l.kind !== 'notdone') ? `<p class="block-label left-label">○ ${esc(t('notChecked'))}</p><div class="left-chips">${left.filter((l) => l.kind !== 'notdone').map((l) => `<span>${esc(l.title)}</span>`).join('')}</div>` : ''}</div>` : ''}
-    ${flags.length ? `<div class="panel"><h3>${t('flags')}</h3>${flags.map((fl) => `<div class="flag-item">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[L] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${esc(fl.by)}${fl.at ? ` · ${clock(fl.at)}` : ''}</small></div></div>`).join('')}</div>` : ''}`;
+    ${flags.length ? `<div class="panel"><h2>${t('flags')}</h2>${flags.map((fl) => `<div class="flag-item">${ICON.flag}<div><b>${esc(FLAG_CATEGORIES[fl.category]?.[L] || fl.category)}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${esc(fl.text)}<br><small class="num">${esc(fl.by)}${fl.at ? ` · ${clock(fl.at)}` : ''}</small></div></div>`).join('')}</div>` : ''}`;
 }
 
 // Le protocole : toute la journée, matin et soir, tel que le manuel le prévoit
@@ -1677,9 +1698,9 @@ function protocolPanel() {
     info.weekday === 2 ? t('compostWed') : t('compost'),
   ];
   return `<p class="section-note">${esc(t('protoLede'))}</p>
-    <div class="panel proto-glance"><h3>${esc(longDay(d))}</h3><div class="facts">${glance.map((g) => `<span class="fact">${esc(g)}</span>`).join('')}</div></div>
+    <div class="panel proto-glance"><h2>${esc(longDay(d))}</h2><div class="facts">${glance.map((g) => `<span class="fact">${esc(g)}</span>`).join('')}</div></div>
     <div class="ap-cards">${col(1)}${col(2)}</div>
-    <div class="panel"><h3>${esc(t('protoRules'))}</h3><ul class="proto-rules">${t('protoRuleList').map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    <div class="panel"><h2>${esc(t('protoRules'))}</h2><ul class="proto-rules">${t('protoRuleList').map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
     <div class="callout tip"><div class="c-head">${ICON.info}${t('priorities')}</div>${PRIORITY_ORDER[L].map((x, i) => `<p><b class="num">${i + 1}.</b> ${esc(x)}</p>`).join('')}</div>`;
 }
 
@@ -1693,7 +1714,7 @@ function tipList(shift) {
   const L = lang();
   if (shift === 3) {
     return `<div class="callout tip"><div class="c-head">${ICON.info}${t('priorities')}</div>${PRIORITY_ORDER[L].map((p, i) => `<p><b class="num">${i + 1}.</b> ${esc(p)}</p>`).join('')}</div>
-      <div class="panel ap-tips"><h3>${t('techniques')}</h3>
+      <div class="panel ap-tips"><h2>${t('techniques')}</h2>
         ${[...TECHNIQUES[L], { area: 'bureaux', text: WALL_TECHNIQUE[L] }].filter((x) => x.key !== 'murs').map((tip) => `<div class="tip-row">${illustration(tipIcon(tip.area, tip.key))}<p>${md(tip.text)}</p></div>`).join('')}
       </div>`;
   }
@@ -1725,7 +1746,7 @@ function openTaskInfo(shift, id) {
       ${taskVisual(it)}
       <div class="sheet-head">
         <p class="eyebrow">${esc(SHIFTS[shift][L].short)} · ${esc(AREAS[it.area]?.[L] || '')}</p>
-        <h3>${esc(it.title)}</h3>
+        <h2>${esc(it.title)}</h2>
         <div class="meta-row"><span class="pill num">${f(it.start)} – ${f(it.end)}</span><span class="pill num">${it.minutes} min</span>${it.zone ? `<span class="pill">Zone ${it.zone}</span>` : ''}</div>
       </div>
     </div>
@@ -1888,7 +1909,7 @@ function histCard(s, i) {
     s.notes || s.items.some((x) => x.remark) ? `<span class="tag note">${esc(t('remarks'))}</span>` : '',
   ].join('');
   return `<button type="button" class="rp-card hi-card ${tone(m)}" data-hi="${i}" style="--k:${Math.min(i, 8)}">
-    <span class="rv-ring small" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>
+    <span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>
     <span class="rp-main">
       <span class="hi-top"><b>${esc(s.name)}</b><span class="hi-meta num">${esc(SHIFTS[s.shift][L].short)}${s.start ? ` · ${hhmm(s.start)} – ${hhmm(s.end)}` : ''}</span></span>
       <span class="hi-result ${all ? 'ok' : ''}">${all ? '✓ ' : ''}${esc(t('tasksDone', m.done, m.total))}</span>
@@ -1924,7 +1945,7 @@ function renderHistory({ animate = true } = {}) {
 
   let k = 0;
   const groups = dates.map((d) => `<section class="hi-day">
-      <div class="hi-dayhead"><h3>${esc(dayTitle(d))}</h3><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
+      <div class="hi-dayhead"><h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
       ${byDate.get(d).map((s) => histCard(s, k++)).join('')}
     </section>`).join('');
 
@@ -2212,7 +2233,7 @@ $('#bossBody').addEventListener('click', async (ev) => {
   } else if (ds.reset !== undefined) {
     const email = el.closest('[data-email]').dataset.email;
     const u = boss.team.find((x) => x.email === email);
-    openSheet(`<div class="sheet-head"><h3>${esc(t('newPasswordFor', u?.name || email))}</h3><p class="lede">${esc(t('newPasswordLede'))}</p></div>
+    openSheet(`<div class="sheet-head"><h2>${esc(t('newPasswordFor', u?.name || email))}</h2><p class="lede">${esc(t('newPasswordLede'))}</p></div>
       <label class="field"><span>${t('password')}</span><input id="npw" type="text" autocomplete="off" minlength="6"></label>`, (root) => {
       const input = root.querySelector('#npw');
       const ok = root.querySelector('#npwSave');
@@ -2360,7 +2381,7 @@ function trendsPanel() {
       <div><b class="num" data-count>${avg}%</b><span>${esc(t('statAvgDone'))}</span></div>
     </div>
     <div class="panel trend">
-      <h3>${esc(t('slipTitle'))}</h3>
+      <h2>${esc(t('slipTitle'))}</h2>
       <p class="section-note">${esc(t('slipNote'))}</p>
       ${slipping.length ? slipping.map((r) => {
         const top = Object.entries(r.reasons).sort((a, b) => b[1] - a[1])[0];
@@ -2372,7 +2393,7 @@ function trendsPanel() {
       }).join('') : `<p class="tr-good">✓ ${esc(t('nothingSlips'))}</p>`}
     </div>
     <div class="panel trend">
-      <h3>${esc(t('problemsByCat'))}</h3>
+      <h2>${esc(t('problemsByCat'))}</h2>
       ${byCat.length ? byCat.map(([k, n]) => `<div class="tr-row">
           <div class="tr-top"><span class="tr-cat">${catIcon(k)}<b>${esc(catName(k))}</b></span><span class="num">${n}</span></div>
           ${meter((100 * n) / maxCat)}
@@ -2512,6 +2533,16 @@ document.querySelectorAll(THUMBS).forEach(syncThumb);
 
 // iPhone : sans écouteur touchstart, Safari n'affiche pas l'état « appuyé ».
 document.addEventListener('touchstart', () => {}, { passive: true });
+
+// Calme après 12 s sans toucher : les lumières décoratives se figent; un toucher les relance.
+let calmTimer = null;
+const wake = () => {
+  if (document.body.classList.contains('calm')) document.body.classList.remove('calm');
+  clearTimeout(calmTimer);
+  calmTimer = setTimeout(() => document.body.classList.add('calm'), 12_000);
+};
+for (const ev of ['pointerdown', 'keydown', 'scroll', 'touchstart']) addEventListener(ev, wake, { passive: true, capture: true });
+wake();
 
 // Animations en pause quand l'onglet est caché (batterie).
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('paused', document.hidden));
