@@ -19,9 +19,9 @@ function labelTexture(lines, { bg, fg, pad = 18, size = 44 }) {
   const ctx = c.getContext('2d');
   const font = (w, s) => `${w} ${s}px "Barlow Condensed", "Arial Narrow", sans-serif`;
   ctx.font = font(700, size);
-  const widths = lines.map((l, i) => { ctx.font = font(i ? 600 : 700, i ? size * 0.62 : size); return ctx.measureText(l.text).width; });
+  const widths = lines.map((l, i) => { ctx.font = font(i ? 600 : 700, i ? size * 0.9 : size); return ctx.measureText(l.text).width; });
   const w = Math.ceil(Math.max(...widths) + pad * 2);
-  const h = Math.ceil(size * 1.25 + (lines.length - 1) * size * 0.8 + pad);
+  const h = Math.ceil(size * 1.25 + (lines.length - 1) * size * 1.05 + pad);
   c.width = w * 2; c.height = h * 2;
   ctx.scale(2, 2);
   if (bg) {
@@ -31,10 +31,10 @@ function labelTexture(lines, { bg, fg, pad = 18, size = 44 }) {
     ctx.fill();
   }
   lines.forEach((l, i) => {
-    ctx.font = font(i ? 600 : 700, i ? size * 0.62 : size);
+    ctx.font = font(700, i ? size * 0.9 : size);
     ctx.fillStyle = l.color || fg;
     ctx.textBaseline = 'top';
-    ctx.fillText(l.text, pad, pad * 0.55 + (i ? size * 1.05 + (i - 1) * size * 0.8 : 0));
+    ctx.fillText(l.text, pad, pad * 0.55 + (i ? size * 1.1 + (i - 1) * size * 1.05 : 0));
   });
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;

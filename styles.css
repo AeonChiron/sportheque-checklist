@@ -413,7 +413,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: var(--safe
 .callout p + p { padding-top: 6px; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
 .callout.tip { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 24%, transparent); }
 .callout.tip .c-head { color: var(--accent); }
-.callout.tip .c-head .ico { background: var(--accent); color: #fff; border-radius: 6px; padding: 2px; stroke-width: 2.6; }
+.callout.tip .c-head .ico { color: var(--accent); stroke-width: 2.2; }
+.callout .c-note { margin-left: auto; font: 500 13px/1 var(--font); letter-spacing: 0; text-transform: none; color: var(--muted); }
+.callout.tip p { padding-left: 14px; position: relative; }
+.callout.tip p::before { content: ""; position: absolute; left: 0; top: .6em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.callout.tip p + p::before { top: calc(.6em + 6px); }
 .callout.clock { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
 .callout.clock .c-head { color: var(--warn); }
 

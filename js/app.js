@@ -153,6 +153,7 @@ const ICON = {
   flag: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
   clock: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>',
   info: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+  bulb: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
   clip: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7"/></svg>',
   mail: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg>',
 };
@@ -444,7 +445,7 @@ function taskRow(it, { extra = false } = {}) {
   if (isNow) tags.push(`<span class="tag now">${t('now')}</span>`);
   for (const r of it.reminders || []) tags.push(`<span class="tag time">${f(r.at)} · ${esc(r.label)}</span>`);
   if (e.skipped && !e.done) tags.push(`<span class="tag bad">${t('notDone')}${e.reason ? ` · ${esc(SKIP_REASONS[e.reason]?.[lang()] || e.reason)}` : ''}</span>`);
-  if (!e.done && e.steps?.length) tags.push(`<span class="tag note num">${e.steps.length}/${it.steps.length} ${t('stepsShort')}</span>`);
+  if (!e.done && e.steps?.length) tags.push(`<span class="tag note num">${Math.min(e.steps.length, it.steps.length)}/${it.steps.length} ${t('stepsShort')}</span>`);
   if (e.remark) tags.push(`<span class="tag note">${t('remark')}</span>`);
   const time = extra
     ? `<span class="t-time num">+<small>${it.minutes} min</small></span>`
@@ -826,8 +827,15 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
   // Étiquettes du jour sur les zones : profondeur du matin, du soir, miroirs.
   const tags = {};
   const tag = (z, text, state) => (tags[z] ||= []).push({ text, state });
-  tag(day.zones[1], t('morning'), states[1] || 'planned');
-  tag(day.zones[2], t('evening'), states[2] || 'planned');
+  // L'heure réelle du nettoyage en profondeur : celle de mon quart s'il est ce
+  // jour-là, sinon celle de l'horaire de référence.
+  const deepAt = (shift) => {
+    const p = plan && plan.shift === shift && state?.date === date ? plan : refPlan(date, shift);
+    const it = p.items.find((x) => x.deep);
+    return it ? ` · ${f(it.start)}` : '';
+  };
+  tag(day.zones[1], t('morning') + deepAt(1), states[1] || 'planned');
+  tag(day.zones[2], t('evening') + deepAt(2), states[2] || 'planned');
   let selected = highlight || mirrors || null;
   let mode = prefs.mapMode === 'plan' || (!prefs.mapMode && lowPower()) ? 'plan' : '3d'; // la 3D par défaut
   let view3d = null;
@@ -912,6 +920,7 @@ function taskVisual(it) {
 function openTask(id) {
   const it = findTask(id);
   const e = entry(id);
+  if (e.steps) e.steps = e.steps.filter((i) => i < it.steps.length); // étapes d'une ancienne version du manuel
   const extra = plan.overflow.includes(it);
   const pills = [
     extra ? '' : `<span class="pill num">${f(it.start)} – ${f(it.end)}</span>`,
@@ -1488,11 +1497,11 @@ function refPlan(date, shift) {
 const TIP_AREAS = { buanderie: ['buanderie'], gym: ['gym'], cardio: ['cardio'], muscu: ['muscu'], zone: ['zone', 'gym'], surfaces: ['surfaces'], dechets: ['dechets'], spinning: ['gym'] };
 function tipsOf(it) {
   const extra = TECHNIQUES[lang()].filter((x) => (TIP_AREAS[it.area] || []).includes(x.area) && (!x.key || x.key === it.photo)).map((x) => x.text);
-  return [...new Set([...(it.tips || []), ...extra])];
+  return [...new Set([...(it.tips || []), ...extra])].slice(0, 3); // pas plus de 3 : un truc, pas un cours
 }
 const tipsCallout = (it) => {
   const tips = tipsOf(it);
-  return tips.length ? `<div class="callout tip"><div class="c-head">${ICON.info}${t('goodToKnow')}</div>${tips.map((x) => `<p>${md(x)}</p>`).join('')}</div>` : '';
+  return tips.length ? `<div class="callout tip"><div class="c-head">${ICON.bulb}${t('goodToKnow')}<span class="c-note">${t('tipsNote')}</span></div>${tips.map((x) => `<p>${md(x)}</p>`).join('')}</div>` : '';
 };
 
 // Statut d'une tâche dans les quarts envoyés : fait l'emporte, puis pas fait.
