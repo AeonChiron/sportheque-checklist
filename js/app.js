@@ -435,7 +435,10 @@ function nowMinutes() {
   return m;
 }
 
-const icon = (it) => `<span class="t-icon" aria-hidden="true">${illustration(it.photo)}</span>`;
+// Chaque type de tâche a la couleur d'un disque olympique (rouge, bleu, jaune, vert…).
+const PLATE = { accueil: 'r', fermeture: 'r', buanderie: 'b', spinning: 'b', dechets: 'y', gym: 'g', zone: 'g', surfaces: 'g', cardio: 'w', muscu: 'w', bureaux: 'k' };
+const plateOf = (it) => PLATE[it?.area] || 'k';
+const icon = (it) => `<span class="t-icon" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${illustration(it.photo)}</span>`;
 
 function taskRow(it, { extra = false } = {}) {
   const e = state.tasks[it.id] || {};
@@ -477,18 +480,93 @@ function breakRow(it) {
   return `<li class="break"><span class="ico num">${f(it.start)}</span><span><b>${esc(it.title)}</b> <small>· ${sub}</small>${rem}</span><span class="t num">${it.minutes} min</span></li>`;
 }
 
-// Le « couloir » : la ligne du temps du quart, comme un couloir de piscine.
+// La barre : chaque tâche finie charge un disque de sa couleur, à gauche puis à
+// droite, comme au gym. Barre pleine = quart fini.
+let landId = null; // la tâche qui vient d'être cochée : son disque arrive en glissant
+let liftNext = false;
+function barbellSVG(plates, total, { land = -1, mini = false } = {}) {
+  const W = mini ? 120 : 340, H = mini ? 30 : 72, mid = W / 2;
+  const collar = mini ? 12 : 56, sleeve = mid - collar - (mini ? 6 : 10);
+  const per = Math.max(1, Math.ceil(total / 2));
+  const w = Math.max(mini ? 4 : 6, Math.min(mini ? 8 : 14, Math.floor(sleeve / per) - 2));
+  const ph = mini ? 22 : 60, py = (H - ph) / 2;
+  const slot = (j) => {
+    const side = j % 2 ? 1 : -1, k = Math.floor(j / 2);
+    const x = side < 0 ? mid - collar - 4 - k * (w + 2) - w : mid + collar + 4 + k * (w + 2);
+    return { x, side };
+  };
+  let out = '';
+  for (let j = 0; j < total; j++) {
+    const { x, side } = slot(j);
+    const p = plates[j];
+    if (!p) { out += `<rect class="ghost" x="${x}" y="${py}" width="${w}" height="${ph}" rx="${mini ? 1.5 : 3}"/>`; continue; }
+    out += `<g class="plate${j === land ? ' land' : ''}" style="--dir:${side};--pc:var(--plate-${p})"><rect x="${x}" y="${py}" width="${w}" height="${ph}" rx="${mini ? 1.5 : 3}"/>${mini ? '' : `<rect class="hub" x="${x + w / 2 - 1}" y="${H / 2 - 9}" width="2" height="18" rx="1"/>`}</g>`;
+  }
+  const bh = mini ? 3 : 6;
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <rect class="bar" x="2" y="${(H - bh) / 2}" width="${W - 4}" height="${bh}" rx="${bh / 2}"/>
+    ${mini ? '' : `<rect class="grip" x="${mid - 44}" y="${(H - bh) / 2 - 1}" width="88" height="${bh + 2}" rx="2"/>`}
+    <rect class="collar" x="${mid - collar - 3}" y="${H / 2 - (mini ? 6 : 12)}" width="${mini ? 3 : 7}" height="${mini ? 12 : 24}" rx="1.5"/>
+    <rect class="collar" x="${mid + collar - (mini ? 0 : 4)}" y="${H / 2 - (mini ? 6 : 12)}" width="${mini ? 3 : 7}" height="${mini ? 12 : 24}" rx="1.5"/>
+    ${out}</svg>`;
+}
 function renderTimeline() {
-  const now = nowMinutes();
-  const segs = plan.items.map((it) => {
-    const e = state.tasks[it.id] || {};
-    const cls = it.kind !== 'task' ? 'rest' : e.done ? 'done' : e.skipped ? 'skipped' : '';
-    const cur = now !== null && it.start <= now && now < it.end ? ' current' : '';
-    return `<span class="seg ${cls}${cur}" style="--w:${it.minutes}"></span>`;
-  });
-  const swimmer = now !== null && now >= plan.start && now <= plan.end
-    ? `<span class="swimmer" style="--x:${(100 * (now - plan.start)) / (plan.end - plan.start)}%"></span>` : '';
-  $('#timeline').innerHTML = segs.join('') + swimmer;
+  const tasks = planTasks();
+  const done = tasks.filter((it) => state.tasks[it.id]?.done)
+    .sort((a, b) => String(state.tasks[a.id].doneAt || '').localeCompare(String(state.tasks[b.id].doneAt || '')));
+  const land = landId ? done.findIndex((it) => it.id === landId) : -1;
+  const box = $('#timeline');
+  box.innerHTML = barbellSVG(done.map(plateOf), tasks.length, { land });
+  box.setAttribute('aria-label', t('barLabel', done.length, tasks.length));
+  box.classList.toggle('full', tasks.length > 0 && done.length === tasks.length);
+  if (land >= 0 && !reducedMotion()) { box.classList.remove('clank'); void box.offsetWidth; box.classList.add('clank'); }
+  if (liftNext && !reducedMotion()) { box.classList.remove('lift'); void box.offsetWidth; box.classList.add('lift'); }
+  landId = null;
+  liftNext = false;
+}
+
+// Le son du disque qui tombe sur la barre (court, discret; coupé dans le Menu).
+let audio = null;
+function clank(kind = 'plate') {
+  if (prefs.sound === false) return;
+  try {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    const t0 = audio.currentTime + (kind === 'plate' && !reducedMotion() ? 0.24 : 0);
+    const out = audio.createGain();
+    out.gain.value = kind === 'step' ? 0.1 : kind === 'lift' ? 0.16 : 0.2;
+    out.connect(audio.destination);
+    const tones = kind === 'step' ? [[1760, 0.12], [2640, 0.08]] : kind === 'lift' ? [[523, 0.5], [659, 0.5], [784, 0.7]] : [[380, 0.22], [1090, 0.2], [2310, 0.12]];
+    tones.forEach(([fq, d], n) => {
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      const s0 = t0 + (kind === 'lift' ? n * 0.09 : 0);
+      o.type = kind === 'lift' ? 'triangle' : 'sine';
+      o.frequency.value = fq;
+      g.gain.setValueAtTime(0.0001, s0);
+      g.gain.exponentialRampToValueAtTime(0.7, s0 + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, s0 + d);
+      o.connect(g).connect(out);
+      o.start(s0);
+      o.stop(s0 + d + 0.03);
+    });
+    if (kind === 'plate') {
+      const len = Math.floor(audio.sampleRate * 0.07);
+      const buf = audio.createBuffer(1, len, audio.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let n = 0; n < len; n++) ch[n] = (Math.random() * 2 - 1) * (1 - n / len) ** 3;
+      const src = audio.createBufferSource();
+      const lp = audio.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 700;
+      src.buffer = buf;
+      src.connect(lp).connect(out);
+      src.start(t0);
+    }
+  } catch { /* pas de son ici : tant pis */ }
+}
+function buzz(kind) {
+  try { navigator.vibrate?.(kind === 'step' ? 8 : kind === 'lift' ? [20, 40, 20, 40, 60] : [10, 40, 22]); } catch { /* iPhone : pas de vibration */ }
 }
 
 // Carte « En cours » : ce qu'il faut faire maintenant, en un toucher.
@@ -517,7 +595,7 @@ function renderNow() {
     return;
   }
   const e = state.tasks[cur.id] || {};
-  box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
+  box.innerHTML = `<div class="now-card" data-plate="${plateOf(cur)}" style="--pc:var(--plate-${plateOf(cur)})"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
     <div class="now-main alive">${icon(cur)}<div><h2>${esc(cur.title)}</h2>${cur.summary ? `<p class="sum">${esc(cur.summary)}</p>` : ''}</div></div>
     ${bar}
     <div class="acts" data-id="${esc(cur.id)}">
@@ -578,9 +656,12 @@ function toggleDone(id) {
   e.done = !e.done;
   if (e.done) { e.skipped = false; delete e.reason; e.doneAt = new Date().toISOString(); } else delete e.doneAt;
   save();
+  if (e.done) landId = id;
+  if (!wasAll && allDone()) liftNext = true;
   renderChecklist();
+  if (e.done) { clank('plate'); buzz('plate'); }
+  if (!wasAll && allDone()) setTimeout(() => { clank('lift'); buzz('lift'); }, reducedMotion() ? 0 : 650);
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
-  try { if (e.done) navigator.vibrate?.(12); } catch { /* iPhone : pas de vibration */ }
   const tasks = planTasks();
   const left = tasks.filter((x) => !state.tasks[x.id]?.done).length;
   const half = Math.ceil(tasks.length / 2);
@@ -946,7 +1027,7 @@ function openTask(id) {
         <div class="meta-row">${pills}</div>
       </div>
     </div>
-    <div><p class="block-label">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span></p>
+    <div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span><span class="mini-bar">${barbellSVG((e.steps || []).map(() => plateOf(it)), it.steps.length, { mini: true })}</span></p>
       <ol class="steps">${it.steps.map((s, i) => `<li><button type="button" class="step" data-step="${i}" aria-pressed="${Boolean(e.done || (e.steps || []).includes(i))}"><span class="step-text">${md(s)}</span><i aria-hidden="true">✓</i></button></li>`).join('')}</ol>
       <p class="hint">${t('stepsHint')}</p></div>
     ${tv}
@@ -969,6 +1050,9 @@ function openTask(id) {
         e.steps = [...set].sort((x, y) => x - y);
         b.setAttribute('aria-pressed', String(set.has(i)));
         root.querySelector('.steps-count').textContent = `${set.size}/${it.steps.length}`;
+        const added = set.has(i);
+        root.querySelector('.mini-bar').innerHTML = barbellSVG([...set].map(() => plateOf(it)), it.steps.length, { mini: true, land: added ? set.size - 1 : -1 });
+        if (added) { clank('step'); buzz('step'); }
         save();
         if (set.size === it.steps.length && !e.done) {
           setTimeout(() => { closeSheet(); toggleDone(id); }, 450);
@@ -1206,6 +1290,7 @@ $('#menuBtn').addEventListener('click', () => {
         </div>
       </div>
       ${switchRow('mLarge', t('largeText'), Boolean(prefs.large))}
+      ${switchRow('mSound', t('sounds'), prefs.sound !== false)}
       <div class="inline-choice"><span>${t('listOrder')}</span>
         <div class="segmented tiny" role="radiogroup">
           <button type="button" role="radio" data-mview="time" aria-checked="${state.view !== 'zone'}">${t('byTime')}</button>
@@ -1223,6 +1308,12 @@ $('#menuBtn').addEventListener('click', () => {
       b.onclick = () => { closeSheet(); setLang(b.dataset.mlang); };
     }
     root.querySelector('#mLarge').onclick = (ev) => setLarge(!prefs.large, ev.currentTarget);
+    root.querySelector('#mSound').onclick = (ev) => {
+      prefs.sound = prefs.sound === false;
+      savePrefs();
+      ev.currentTarget.setAttribute('aria-checked', String(prefs.sound));
+      if (prefs.sound) clank('step');
+    };
     for (const b of root.querySelectorAll('[data-mtheme]')) {
       b.onclick = () => {
         for (const o of root.querySelectorAll('[data-mtheme]')) o.setAttribute('aria-checked', String(o === b));

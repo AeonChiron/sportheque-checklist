@@ -12,41 +12,42 @@
 @font-face { font-family: 'Saira Semi Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/saira-semi-condensed-latin-700-normal.woff2') format('woff2'); }
 
 :root {
-  --bg: #f4f6fb;
-  --surface: #ffffff;
-  --sunk: #edf0f7;
-  --ink: #0b1020;
-  --muted: #4b5468;
-  --faint: #596278;
-  --line: #e1e6f0;
-  --brand: #0b1020;
+  --bg: #e9e7e1;
+  --surface: #f8f7f3;
+  --sunk: #efede7;
+  --ink: #1a1c19;
+  --muted: #555850;
+  --faint: #5c5f58;
+  --line: #d8d5cc;
+  --brand: #161816;
   --brand-ink: #ffffff;
-  --brand-soft: #eceefe;
-  --accent: #4f46e5;
-  --accent-soft: #ecebfe;
-  --grid: rgba(79, 70, 229, .045);
-  --aqua: #06b6d4;
-  --coral: #ff5a5f;
-  --sun: #c8f031;
-  --ok: #0a774e;
-  --ok-soft: #dcf6ea;
-  --warn: #9a5800;
-  --warn-soft: #fff1d6;
-  --bad: #c81e1e;
-  --bad-soft: #feecec;
-  --break: #eef0f6;
-  --toast: #0b1020;
+  --brand-soft: #e5e3dc;
+  --accent: #1f5cc4;
+  --accent-soft: #e2eaf8;
+  --grid: rgba(22, 24, 22, .03);
+  --aqua: #1f5cc4;
+  --coral: #d3242c;
+  --sun: #f0b400;
+  --ok: #17703f;
+  --ok-soft: #dff0e5;
+  --warn: #855600;
+  --warn-soft: #fbefd3;
+  --bad: #b3191f;
+  --bad-soft: #fbe5e4;
+  --break: #ebe8e0;
+  --toast: #161816;
   --toast-ink: #ffffff;
-  --env-a: rgba(79, 70, 229, .16);
-  --env-b: rgba(6, 182, 212, .14);
-  --env-c: rgba(200, 240, 49, .16);
-  --grad: linear-gradient(120deg, #5b5bf6 0%, #4f46e5 45%, #7c3aed 100%);
+  --env-a: rgba(31, 92, 196, .07);
+  --env-b: rgba(240, 180, 0, .07);
+  --env-c: rgba(29, 138, 74, .06);
+  /* Disques olympiques : la couleur de chaque type de tâche. */
+  --plate-r: #d3242c; --plate-b: #1f5cc4; --plate-y: #f0b400; --plate-g: #1d8a4a; --plate-w: #e4e2dc; --plate-k: #2b2d2a;
   /* Illustrations */
   --il-ink: #0f2a2e; --il-aqua: #2bb3b1; --il-coral: #ff7a59; --il-sun: #ffc94d; --il-steel: #b8c7ca;
   --il-paper: #ffffff; --il-wall: #e3eded; --il-screen: #d4f0ef; --il-glass: #cde7f1; --il-tile: #eef3f3;
   --il-mat: #2b3a3d; --il-floor: #cfdcdc; --il-night: #1d3a52; --il-ok: #6fcf9f; --il-bad: #f2978b;
-  --zA: #dff6fb; --zA-strong: #06b6d4; --zB: #ebe8ff; --zB-strong: #7c6cf6; --zC: #effbd3; --zC-strong: #8acb14;
-  --il-fill: #ffffff; --il-fill2: #e8ecf5; --il-mid: #b7bfd0; --il-accent: #5b5bf6; --il-accent-soft: #dedcff; --il-shadow: rgba(11, 16, 32, .10);
+  --zA: #fcefc6; --zA-strong: #f0b400; --zB: #e0e9f9; --zB-strong: #1f5cc4; --zC: #dcefe2; --zC-strong: #1d8a4a;
+  --il-fill: #ffffff; --il-fill2: #e9e7e0; --il-mid: #b9b6ad; --il-accent: #1f5cc4; --il-accent-soft: #d6e2f7; --il-shadow: rgba(22, 24, 22, .10);
 
   --radius: 16px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
@@ -1396,7 +1397,7 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
    Lisibilité (audit) : contraste AA partout, texte de 14 px et plus pour
    ce qu'on doit lire, et des cibles d'au moins 44 px pour ce qu'on touche.
    ===================================================================== */
-:root { --link: #4338ca; }
+:root { --link: #1a4fa8; }
 :root[data-theme="dark"] { --link: var(--accent); }
 .link, .preview .link, .ap-weekmid .link, .tc-body .link, .account-line .link, .team-acts .link, .mail-line .link { color: var(--link); min-height: 44px; display: inline-flex; align-items: center; }
 .date-line .link { min-height: 44px; padding: 0 2px; }
@@ -1483,17 +1484,59 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .eyebrow, .block-label, .callout .c-head { font-weight: 600; }
 
 :root:not([data-theme="dark"]) {
-  --cta-shadow: 0 12px 28px -12px rgba(79, 70, 229, .65), inset 0 1px 0 rgba(255, 255, 255, .28);
-  --card-shadow: 0 1px 2px rgba(11, 16, 32, .04), 0 12px 28px -22px rgba(30, 27, 110, .35);
+  --cta-shadow: 0 10px 22px -14px rgba(0, 0, 0, .7);
+  --card-shadow: 0 1px 2px rgba(22, 24, 22, .05), 0 12px 26px -22px rgba(22, 24, 22, .45);
 }
+/* Le tapis : surface mate, fines nervures, presque rien. */
 :root:not([data-theme="dark"]) body { background: var(--bg); }
 :root:not([data-theme="dark"]) .env { background:
+  repeating-linear-gradient(0deg, rgba(22, 24, 22, .022) 0 1px, transparent 1px 4px),
   radial-gradient(60vmax 45vmax at 108% -8%, var(--env-a), transparent 70%),
-  radial-gradient(50vmax 40vmax at -12% 30%, var(--env-b), transparent 70%),
-  radial-gradient(45vmax 35vmax at 95% 105%, var(--env-c), transparent 70%); }
-/* Les boutons d'action : indigo électrique, texte blanc, lueur. */
-:root:not([data-theme="dark"]) .btn.primary { background: var(--grad); background-size: 140% 100%; color: #fff; border: 0; }
-:root:not([data-theme="dark"]) .btn.primary:active { background-position: 100% 0; }
+  radial-gradient(45vmax 35vmax at -10% 40%, var(--env-b), transparent 70%); }
 :root:not([data-theme="dark"]) .hero h1 { color: var(--ink); }
-:root:not([data-theme="dark"]) .hero h1::after { content: ""; display: block; width: 76px; height: 5px; margin-top: 12px; border-radius: 3px; background: linear-gradient(90deg, #4f46e5, #06b6d4 60%, #c8f031); }
-:root:not([data-theme="dark"]) .lane::before, :root:not([data-theme="dark"]) .lane::after { --coral: #8b84ff; }
+/* Ruban de sécurité jaune et noir sous le titre. */
+:root:not([data-theme="dark"]) .hero h1::after { content: ""; display: block; width: 84px; height: 7px; margin-top: 12px; border-radius: 2px; background: repeating-linear-gradient(-45deg, var(--plate-y) 0 7px, var(--plate-k) 7px 14px); }
+
+/* La carte « En cours » prend la couleur du disque de sa tâche (mode clair). */
+:root:not([data-theme="dark"]) .now-card[data-plate] { --surface: var(--pc); --ink: #fff; --muted: rgba(255, 255, 255, .84); --line: rgba(255, 255, 255, .26); --sunk: rgba(255, 255, 255, .14); --brand: #fff; --brand-ink: var(--pc); --accent: #fff; --link: #fff; border-color: transparent; color: var(--ink); box-shadow: 0 16px 30px -18px color-mix(in srgb, var(--pc) 80%, transparent); }
+:root:not([data-theme="dark"]) .now-card[data-plate="y"] { --ink: #1a1c19; --muted: rgba(26, 28, 25, .78); --line: rgba(26, 28, 25, .2); --sunk: rgba(26, 28, 25, .08); --brand: #1a1c19; --brand-ink: #fff; --accent: #1a1c19; --link: #1a1c19; }
+:root:not([data-theme="dark"]) .now-card[data-plate="w"] { --surface: var(--surface-w, #fff); --ink: #1a1c19; --muted: #555850; --line: #d8d5cc; --sunk: #efede7; --brand: #161816; --brand-ink: #fff; --accent: #1f5cc4; --link: #1a4fa8; }
+:root:not([data-theme="dark"]) .now-card[data-plate] .catch-up { --ink: #1a1c19; color: #1a1c19; }
+:root:not([data-theme="dark"]) .now-card[data-plate] .catch-up .btn.ghost { --surface: #fff; --line: #d8d5cc; }
+:root:not([data-theme="dark"]) .now-card[data-plate] .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+:root:not([data-theme="dark"]) .now-card[data-plate] .it-icon, :root:not([data-theme="dark"]) .now-card[data-plate] .ill { --surface: #fff; }
+
+/* =====================================================================
+   La barre : un disque par tâche finie. Il glisse, cogne, la barre plie.
+   ===================================================================== */
+:root[data-theme="dark"] { --plate-k: #4a4d49; --plate-w: #d9d7d0; }
+.barbell { margin: 12px 0 0; }
+.barbell svg { display: block; width: 100%; height: 54px; overflow: visible; }
+.barbell .bar, .mini-bar .bar { fill: #8f9297; }
+.barbell .grip { fill: #7a7d82; }
+.barbell .collar, .mini-bar .collar { fill: #6c6f74; }
+.barbell .hub { fill: rgba(255, 255, 255, .45); }
+.barbell .ghost, .mini-bar .ghost { fill: none; stroke: color-mix(in srgb, var(--muted) 45%, transparent); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.barbell .plate rect:first-child, .mini-bar .plate rect { fill: var(--pc); stroke: rgba(0, 0, 0, .22); stroke-width: 1; }
+:root[data-theme="dark"] :is(.barbell, .mini-bar) .plate rect:first-child { stroke: rgba(255, 255, 255, .16); }
+.barbell .plate, .mini-bar .plate { transform-box: fill-box; transform-origin: center; }
+.plate.land { animation: plate-land .46s cubic-bezier(.25, 1.45, .5, 1) both; }
+@keyframes plate-land {
+  0% { transform: translateX(calc(var(--dir) * 80px)) rotate(calc(var(--dir) * 10deg)); opacity: 0; }
+  50% { transform: translateX(calc(var(--dir) * -5px)); opacity: 1; }
+  72% { transform: translateX(calc(var(--dir) * 2px)); }
+  100% { transform: none; }
+}
+.barbell.clank svg { animation: bar-dip .5s ease .24s; }
+@keyframes bar-dip { 0% { transform: none; } 30% { transform: translateY(3px); } 62% { transform: translateY(-1px); } 100% { transform: none; } }
+.barbell.lift svg { animation: bar-lift 1.2s cubic-bezier(.3, 1.3, .5, 1) .55s; }
+@keyframes bar-lift { 0% { transform: none; } 30% { transform: translateY(-16px) scale(1.05); } 70% { transform: translateY(-16px) scale(1.05); } 100% { transform: none; } }
+.barbell.full .plate rect:first-child { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--pc) 70%, transparent)); }
+.steps-head { display: flex; align-items: center; gap: 8px; }
+.mini-bar { margin-left: auto; display: inline-flex; }
+.mini-bar svg { display: block; width: 120px; height: 30px; overflow: visible; }
+/* L'icône de chaque tâche porte l'anneau de son disque. */
+.t-icon[data-plate] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 75%, transparent); }
+@media (prefers-reduced-motion: reduce) {
+  .plate.land, .barbell.clank svg, .barbell.lift svg { animation: none !important; }
+}

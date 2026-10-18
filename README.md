@@ -71,8 +71,9 @@ Mot de passe oublié : un superviseur en donne un nouveau dans l'Espace supervis
   tous les téléphones** (gratuit, voir plus bas). Rien à changer dans le code.
 - Sans réseau, le quart est gardé sur le téléphone et part tout seul au retour du réseau.
 
-Français québécois ou anglais au choix sur chaque téléphone. Clair par défaut (indigo électrique,
-marine et touches de cyan et de vert lime; polices Fraunces et Saira comme les affiches du club); sombre
+Français québécois ou anglais au choix sur chaque téléphone. Clair par défaut (« tapis + disques » : surface de tapis mate, couleurs
+des disques olympiques par type de tâche; polices Fraunces et Saira comme les affiches du club).
+La progression est une barre : chaque tâche finie y charge son disque (son et vibration, coupables dans le Menu); sombre
 d'un toucher (soleil / lune en haut de l'accueil), ou « Auto » dans le Menu.
 « Réduire les animations » (iPhone : Réglages → Accessibilité) est respecté à 100 %.
 Après 12 secondes sans toucher l'écran, les animations décoratives s'arrêtent
