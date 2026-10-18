@@ -55,7 +55,7 @@ const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 // Changement d'écran : glissement doux (View Transitions quand Safari les
 // offre), vers la droite pour avancer, vers la gauche pour revenir.
 let current = null;
-const RANK = { auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, boss: 5, problem: 6, review: 7 };
+const RANK = { poster: 6, auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, boss: 5, problem: 6, review: 7 };
 function show(id) {
   const prev = current;
   current = id;
@@ -333,6 +333,7 @@ function setupScreen() {
   paintDate();
   paintEditToday();
   manualShift = null;
+  setTimeout(paintInstallTip, 0); // après show('setup')
   editing = false;
   paintStatic();
   updatePreview();
@@ -500,11 +501,16 @@ function renderNow() {
   const nextIt = plan.items.find((it) => it.start >= cur.end && it.kind === 'task' && !state.tasks[it.id]?.done);
   const next = nextIt ? `<div class="next"><span>${t('next')}</span><span class="num">${f(nextIt.start)}</span><b>${esc(nextIt.title)}</b></div>` : '';
   const pct = Math.round((100 * (now - cur.start)) / (cur.end - cur.start));
+  // Une tâche dont l'heure est passée et pas encore cochée : un toucher pour rattraper
+  // (on coche au fil du quart plutôt que tout à la fin, et l'historique reste juste).
+  const missed = [...plan.items].reverse().find((it) => it.kind === 'task' && it.end <= now && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped);
+  const catchUp = missed ? `<div class="catch-up" data-id="${esc(missed.id)}"><span>${esc(t('catchUp', missed.title))}</span>
+      <button class="btn small ghost" data-act="toggle">✓ ${t('catchYes')}</button><button class="btn small ghost cu-open" data-act="open" aria-label="${esc(t('details'))}">…</button></div>` : '';
   const remain = `<span class="remain num">${t('left', cur.end - now)}</span>`;
   const bar = `<div class="now-bar" style="--p:${pct}%"></div>`;
   if (cur.kind !== 'task') {
     box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
-      <h3>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h3>${bar}${next}</div>`;
+      <h3>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h3>${bar}${next}${catchUp}</div>`;
     return;
   }
   const e = state.tasks[cur.id] || {};
@@ -514,7 +520,7 @@ function renderNow() {
     <div class="acts" data-id="${esc(cur.id)}">
       <button class="btn ${e.done ? 'ghost' : 'primary'} small" data-act="toggle">${e.done ? '✓ ' : ''}${t('markDone')}</button>
       <button class="btn ghost small" data-act="open">${t('details')}</button>
-    </div>${next}</div>`;
+    </div>${next}${catchUp}</div>`;
 }
 
 function renderChecklist() {
@@ -989,7 +995,7 @@ const catName = (k, L = lang()) => FLAG_CATEGORIES[k]?.[L] || k;
 // qui s'y abonnent (mis à jour depuis le serveur après la connexion).
 let alertTo = (CONFIG.supervisors || []).filter((x) => x.alerts).map((x) => ({ name: x.name, email: x.email || '' }));
 const listNames = (a) => (a.length < 2 ? a[0] || '' : `${a.slice(0, -1).join(', ')} ${t('and')} ${a.at(-1)}`);
-const alertNames = () => listNames(alertTo.map((x) => x.name)) || t('theSupervisor');
+const alertNames = () => listNames([...new Set(alertTo.map((x) => x.name))]) || t('theSupervisor');
 async function refreshAlerts() {
   try { alertTo = await alertRecipients(); } catch { /* on garde la liste connue */ }
 }
@@ -1970,6 +1976,7 @@ const authUI = { tab: 'login', role: 'employee' };
 const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing' };
 
 function openAuth() {
+  if (location.hash.startsWith('#probleme=')) authUI.role = 'boss'; // le lien d'un courriel va aux superviseurs
   paintAuth();
   $('#authError').innerHTML = '';
   show('auth');
@@ -1986,6 +1993,11 @@ function paintAuth() {
   $('#aShow').textContent = t($('#aPass').type === 'password' ? 'show' : 'hide');
   $('#authSubmit').textContent = t(up ? 'signupBtn' : 'loginBtn');
   $('#authNote').textContent = session.mode === 'demo' ? t('authDemo') : t(up ? 'authNoteUp' : 'authNoteIn');
+  $('#authForgot').hidden = up;
+  // Arrivé par le lien d'un courriel : on dit pourquoi il faut se connecter.
+  const fromLink = location.hash.startsWith('#probleme=');
+  $('#authContext').hidden = !fromLink;
+  if (fromLink) $('#authContext').textContent = t('authFromLink');
   if (!$('#aName').value && prefs.name) $('#aName').value = prefs.name;
 }
 for (const b of document.querySelectorAll('[data-authtab]')) {
@@ -2091,11 +2103,17 @@ function openBoss({ keep = false } = {}) {
 async function refreshBoss() {
   const tab = boss.tab;
   try {
-    if (tab === 'team') { boss.team = await listTeam(); boss.teamLoaded = true; } else { boss.problems = await listProblems(); boss.loaded = true; }
+    if (tab === 'team') { boss.team = await listTeam(); boss.teamLoaded = true; }
+    else if (tab === 'trends') {
+      const [{ shifts }, problems] = await Promise.all([loadRecent(120), listProblems().catch(() => boss.problems)]);
+      boss.trendShifts = shifts;
+      boss.problems = problems;
+      boss.trendLoaded = true;
+    } else { boss.problems = await listProblems(); boss.loaded = true; }
     boss.error = '';
   } catch (err) {
     boss.error = err.status === 0 ? 'errNetwork' : 'errServer';
-    if (tab === 'team') boss.teamLoaded = true; else boss.loaded = true;
+    if (tab === 'team') boss.teamLoaded = true; else if (tab === 'trends') boss.trendLoaded = true; else boss.loaded = true;
   }
   paintBossCount();
   if (current === 'boss' && boss.tab === tab) renderBoss({ animate: false });
@@ -2122,7 +2140,8 @@ function renderBoss({ animate = true } = {}) {
   $('#bossEyebrow').textContent = [CONFIG.gymName, session.user?.name].filter(Boolean).join(' · ');
   const n = openCount();
   let panel = '';
-  if (boss.tab === 'team') {
+  if (boss.tab === 'trends') panel = boss.trendLoaded ? trendsPanel() : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>';
+  else if (boss.tab === 'team') {
     panel = !boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
       : `<p class="section-note">${esc(t('teamHint'))}</p>
         <div class="panel team-list">${boss.team.map((u) => `<div class="team-row" data-email="${esc(u.email)}">
@@ -2147,9 +2166,14 @@ function renderBoss({ animate = true } = {}) {
       <span class="pb-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg></span>
       <span class="rp-main"><b>${esc(t('shiftsHistory'))}</b><span class="hi-meta">${esc(t('shiftsHistorySub'))}</span></span>${CHEV_R}
     </button>
+    <button type="button" class="rp-card boss-hist" data-go="poster">
+      <span class="pb-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/></svg></span>
+      <span class="rp-main"><b>${esc(t('posterCard'))}</b><span class="hi-meta">${esc(t('posterCardSub'))}</span></span>${CHEV_R}
+    </button>
     <div class="panel alerts-row">${switchRow('bAlerts', t('alertsMe'), Boolean(session.user?.alerts))}<p class="section-note">${esc(t('alertsMeSub', alertNames()))}</p></div>
     <div class="segmented boss-tabs" role="tablist">
       <button type="button" role="tab" data-btab="problems" aria-selected="${boss.tab === 'problems'}">${esc(t('tabProblems'))}</button>
+      <button type="button" role="tab" data-btab="trends" aria-selected="${boss.tab === 'trends'}">${esc(t('tabTrends'))}</button>
       <button type="button" role="tab" data-btab="team" aria-selected="${boss.tab === 'team'}">${esc(t('tabTeam'))}</button>
     </div>
     ${boss.error ? `<div class="notice bad">${esc(t(boss.error))}</div>` : ''}
@@ -2287,6 +2311,123 @@ function renderProblem(p) {
   }
 }
 
+// ---------- Tendances (superviseur) : ce qui glisse, sans rien envoyer ----------
+// 30 derniers jours, calculé à partir de l'historique : quarts complets, tâches
+// le plus souvent pas faites (et pourquoi), problèmes par catégorie. Pas de
+// classement des employés : on regarde le travail, pas les personnes.
+const trendPlans = new Map();
+function trendPlan(s) {
+  const k = `${s.date}|${s.shift}|${s.start}|${s.end}|${lang()}`;
+  if (!trendPlans.has(k)) trendPlans.set(k, buildPlan({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, lang: lang() }));
+  return trendPlans.get(k);
+}
+function trendsPanel() {
+  const L = lang();
+  const since = addDays(todayISO(), -29);
+  const shifts = (boss.trendShifts || []).filter((s) => s.date >= since);
+  if (!shifts.length) return `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t('trendEmpty'))}</p></div>`;
+  const ms = shifts.map(metrics);
+  const complete = ms.filter((m) => m.total && m.done === m.total).length;
+  const avg = Math.round(ms.reduce((a, m) => a + m.pct, 0) / ms.length);
+  // Tâches qui glissent : par tâche du plan (le titre sans la zone du jour).
+  const tasks = new Map();
+  for (const s of shifts) {
+    const p = trendPlan(s);
+    const st = new Map(s.items.map((i) => [i.id, i]));
+    for (const it of p.items.filter((x) => x.kind === 'task')) {
+      const label = it.title.split(' — ')[0];
+      const row = tasks.get(label) || { label, planned: 0, missed: 0, reasons: {} };
+      row.planned += 1;
+      const x = st.get(it.id);
+      if (!x || x.status !== 'done') {
+        row.missed += 1;
+        const why = x?.status === 'notdone' ? (SKIP_REASONS[x.reason]?.[L] || t('notDone')) : t('notChecked');
+        row.reasons[why] = (row.reasons[why] || 0) + 1;
+      }
+      tasks.set(label, row);
+    }
+  }
+  const slipping = [...tasks.values()].filter((r) => r.missed).sort((a, b) => b.missed / b.planned - a.missed / a.planned || b.missed - a.missed).slice(0, 6);
+  const problems = (boss.problems || []).filter((x) => x.at && isoOf(new Date(x.at)) >= since);
+  const byCat = Object.entries(problems.reduce((acc, x) => ({ ...acc, [x.category]: (acc[x.category] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
+  const maxCat = Math.max(1, ...byCat.map(([, n]) => n));
+  const meter = (pct) => `<span class="tr-bar" aria-hidden="true"><i style="--w:${Math.max(4, Math.round(pct))}%"></i></span>`;
+  return `
+    <p class="block-label hi-span">${esc(t('last30'))}</p>
+    <div class="ap-stats">
+      <div><b class="num" data-count>${shifts.length}</b><span>${esc(t('statShifts', shifts.length))}</span></div>
+      <div class="${complete === shifts.length ? 'ok' : ''}"><b class="num">${complete}/${shifts.length}</b><span>${esc(t('statComplete'))}</span></div>
+      <div><b class="num" data-count>${avg}%</b><span>${esc(t('statAvgDone'))}</span></div>
+    </div>
+    <div class="panel trend">
+      <h3>${esc(t('slipTitle'))}</h3>
+      <p class="section-note">${esc(t('slipNote'))}</p>
+      ${slipping.length ? slipping.map((r) => {
+        const top = Object.entries(r.reasons).sort((a, b) => b[1] - a[1])[0];
+        return `<div class="tr-row">
+          <div class="tr-top"><b>${esc(r.label)}</b><span class="num">${esc(t('missedOf', r.missed, r.planned))}</span></div>
+          ${meter((100 * r.missed) / r.planned)}
+          <small>${esc(t('mostlyBecause', top[0], top[1]))}</small>
+        </div>`;
+      }).join('') : `<p class="tr-good">✓ ${esc(t('nothingSlips'))}</p>`}
+    </div>
+    <div class="panel trend">
+      <h3>${esc(t('problemsByCat'))}</h3>
+      ${byCat.length ? byCat.map(([k, n]) => `<div class="tr-row">
+          <div class="tr-top"><span class="tr-cat">${catIcon(k)}<b>${esc(catName(k))}</b></span><span class="num">${n}</span></div>
+          ${meter((100 * n) / maxCat)}
+        </div>`).join('') : `<p class="tr-good">✓ ${esc(t('noProblems30'))}</p>`}
+    </div>`;
+}
+
+// ---------- Affiche : le chemin vers le site, à coller dans le local d'entretien ----------
+async function openPoster() {
+  paintStatic();
+  const url = `${location.origin}${location.pathname}`;
+  $('#posterUrl').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  show('poster');
+  try {
+    const { default: qrcode } = await import('../vendor/qrcode.js');
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    const n = qr.getModuleCount();
+    let d = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
+    $('#posterQr').innerHTML = `<svg viewBox="-2 -2 ${n + 4} ${n + 4}" role="img" aria-label="QR code : ${esc(url)}" shape-rendering="crispEdges"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
+  } catch {
+    $('#posterQr').innerHTML = '';
+  }
+}
+$('#posterPrint').addEventListener('click', () => window.print());
+
+// ---------- « Ajoute-le à ton écran d'accueil » (une seule fois) ----------
+// Sans ça, l'employé cherche le lien à chaque quart. iPhone : Partager → Écran
+// d'accueil. Android : le navigateur peut installer d'un toucher.
+let installEvent = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; paintInstallTip(); });
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function paintInstallTip() {
+  const box = $('#installTip');
+  const visible = Boolean(session.user || session.mode === 'none') && !standalone() && !prefs.installSeen && current === 'setup';
+  box.hidden = !visible;
+  if (!visible) return;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  box.innerHTML = `<div class="it-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/><path d="M12 7v6M9.5 10.5L12 13l2.5-2.5"/></svg></div>
+    <div class="it-text"><b>${esc(t('installTitle'))}</b><span>${esc(t(ios ? 'installIos' : installEvent ? 'installAndroid' : 'installOther'))}</span></div>
+    <div class="it-acts">${installEvent ? `<button type="button" class="btn primary small" data-install>${esc(t('installBtn'))}</button>` : ''}<button type="button" class="link" data-install-ok>${esc(t('installOk'))}</button></div>`;
+}
+$('#installTip').addEventListener('click', async (ev) => {
+  if (ev.target.closest('[data-install]') && installEvent) {
+    installEvent.prompt();
+    await installEvent.userChoice.catch(() => null);
+    installEvent = null;
+  } else if (!ev.target.closest('[data-install-ok]')) return;
+  prefs.installSeen = true;
+  savePrefs();
+  paintInstallTip();
+});
+
 // ---------- Confort : texte plus grand ----------
 function setLarge(on, sw) {
   prefs.large = on;
@@ -2320,6 +2461,7 @@ document.addEventListener('click', (ev) => {
     if (location.hash === '#patron') openBoss(); else location.hash = 'patron';
     return;
   }
+  if (go.dataset.go === 'poster') { location.hash = 'affiche'; return; }
   if (go.dataset.go === 'problem') { location.hash = `probleme=${go.dataset.id}`; return; }
   if (go.dataset.go === 'history') {
     if (location.hash === '#historique') openHistory(); else location.hash = 'historique';
@@ -2339,6 +2481,7 @@ function route() {
   if (accounts() && !session.user) return openAuth(); // le lien demandé s'ouvre après la connexion
   if (h.startsWith('#probleme=')) return openProblem(decodeURIComponent(h.slice(10)));
   if (h === '#patron') return openBoss();
+  if (h === '#affiche') return openPoster();
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();
   if (state?.name && state?.date) return openChecklist();

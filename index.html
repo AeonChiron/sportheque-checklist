@@ -9,6 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Quart gym">
+  <meta name="robots" content="noindex, nofollow">
   <meta name="description" content="Checklist de quart de l’équipe d’entretien du gym, 2e étage.">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" href="icons/icon-180.png" type="image/png">
@@ -40,6 +41,7 @@
       <h1 data-t="welcome"></h1>
       <p class="lede" data-t="authLede"></p>
     </header>
+    <div class="notice ok auth-context" id="authContext" hidden></div>
     <div class="segmented auth-tabs" role="tablist">
       <button type="button" role="tab" data-authtab="login" aria-selected="true" data-t="login"></button>
       <button type="button" role="tab" data-authtab="signup" aria-selected="false" data-t="signup"></button>
@@ -74,6 +76,7 @@
       <button class="btn primary big" type="submit" id="authSubmit"></button>
     </form>
     <p class="fineprint" id="authNote"></p>
+    <p class="auth-forgot" id="authForgot" data-t="forgotHelp"></p>
   </section>
 
   <!-- 1. Début de quart -->
@@ -97,6 +100,7 @@
       <p class="lede" data-t="lede"></p>
       <p class="account-line" id="accountLine" hidden></p>
     </header>
+    <div class="install-tip" id="installTip" hidden></div>
     <button class="btn ghost big edit-today" type="button" id="editToday" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg><span></span>
     </button>
@@ -268,6 +272,28 @@
       <h1 data-t="bossSpace"></h1>
     </header>
     <div id="bossBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <!-- 10. Affiche à imprimer : le chemin vers le site (QR) -->
+  <section id="poster" class="screen" hidden>
+    <header class="review-top no-print">
+      <div class="review-nav"><button class="back" data-go="boss-keep">‹ <span data-t="bossSpace"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+    </header>
+    <div class="poster">
+      <div class="brand poster-brand" data-brand></div>
+      <h1 data-t="posterTitle"></h1>
+      <p class="lede" data-t="posterLede"></p>
+      <div class="poster-qr" id="posterQr"></div>
+      <p class="poster-url num" id="posterUrl"></p>
+      <ol class="poster-steps">
+        <li data-t="posterStep1"></li>
+        <li data-t="posterStep2"></li>
+        <li><span data-t="posterStep3"></span> <span class="poster-blank">____________</span></li>
+      </ol>
+    </div>
+    <button class="btn primary big no-print" type="button" id="posterPrint" data-t="posterPrint"></button>
+    <p class="section-note no-print" data-t="posterNote"></p>
     <div class="bottom-spacer small"></div>
   </section>
 
