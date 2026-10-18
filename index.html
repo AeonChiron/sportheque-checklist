@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f1f4f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#fbf7f1" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0a1416" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -14,8 +14,9 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" href="icons/icon-180.png" type="image/png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="preload" href="fonts/barlow-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <script>try{var p=JSON.parse(localStorage.getItem('gym-shift-prefs'))||{};document.documentElement.dataset.theme=p.theme==='light'||p.theme==='dark'?p.theme:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch(e){}</script>
+  <link rel="preload" href="fonts/fraunces-latin-full-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/saira-semi-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try{var p=JSON.parse(localStorage.getItem('gym-shift-prefs'))||{};document.documentElement.dataset.theme=p.theme==='dark'||(p.theme==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}catch(e){}</script>
   <link rel="stylesheet" href="styles.css">
   <title>Quart gym</title>
 </head>

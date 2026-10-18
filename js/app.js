@@ -187,7 +187,8 @@ function paintStatic() {
 // ---------- Thème : suit le téléphone, ou clair / sombre au choix ----------
 // Un toucher sur le soleil / la lune bascule; le Menu offre aussi « Auto ».
 const darkMQ = matchMedia('(prefers-color-scheme: dark)');
-const themePref = () => (prefs.theme === 'light' || prefs.theme === 'dark' ? prefs.theme : 'auto');
+// Clair par défaut (plus lumineux, plus encourageant); « Auto » seulement si on le choisit.
+const themePref = () => (prefs.theme === 'dark' || prefs.theme === 'auto' ? prefs.theme : 'light');
 const resolvedTheme = () => (themePref() === 'auto' ? (darkMQ.matches ? 'dark' : 'light') : themePref());
 function paintThemeButtons() {
   const dark = resolvedTheme() === 'dark';
@@ -200,7 +201,7 @@ function paintThemeButtons() {
 function applyTheme() {
   const th = resolvedTheme();
   document.documentElement.dataset.theme = th;
-  for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = th === 'dark' ? '#050708' : '#f1f4f3';
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = th === 'dark' ? '#050708' : '#fbf7f1';
   paintThemeButtons();
 }
 // La nouvelle couleur s'ouvre en cercle depuis le bouton touché.
@@ -1201,7 +1202,7 @@ $('#menuBtn').addEventListener('click', () => {
       </div>
       <div class="inline-choice"><span>${t('theme')}</span>
         <div class="segmented tiny" role="radiogroup">
-          ${['auto', 'light', 'dark'].map((k) => `<button type="button" role="radio" data-mtheme="${k}" aria-checked="${themePref() === k}">${t(`theme_${k}`)}</button>`).join('')}
+          ${['light', 'dark', 'auto'].map((k) => `<button type="button" role="radio" data-mtheme="${k}" aria-checked="${themePref() === k}">${t(`theme_${k}`)}</button>`).join('')}
         </div>
       </div>
       ${switchRow('mLarge', t('largeText'), Boolean(prefs.large))}

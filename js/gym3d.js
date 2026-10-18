@@ -17,7 +17,7 @@ const dark = () => {
 function labelTexture(lines, { bg, fg, pad = 18, size = 44 }) {
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d');
-  const font = (w, s) => `${w} ${s}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  const font = (w, s) => `${w} ${s}px "Saira Semi Condensed", "Arial Narrow", sans-serif`;
   ctx.font = font(700, size);
   const widths = lines.map((l, i) => { ctx.font = font(i ? 600 : 700, i ? size * 0.9 : size); return ctx.measureText(l.text).width; });
   const w = Math.ceil(Math.max(...widths) + pad * 2);

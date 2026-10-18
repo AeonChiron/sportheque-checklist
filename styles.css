@@ -1,50 +1,57 @@
-/* Sporthèque · Entretien. Monde : la piscine et le plancher du gym.
-   Blanc chlore, sarcelle profonde, aqua; corail et soleil en petites doses.
-   Titres et heures en Barlow Condensed (signalétique sportive), texte en
-   police système. Signature : le « couloir » (ligne du temps en couloir de
-   nage, avec câbles de couloir et nageur). Mouvement : court, utile, coupé
-   si « réduire les animations ». */
+/* Sporthèque · Entretien. Monde : le club depuis 1981 — crème, reflets
+   irisés du logo (rose, lavande, menthe, bleu ciel), encre charbon, et le
+   jaune balle de tennis en petites doses. Titres en Fraunces (serif douce et
+   grasse, comme « tennis » et « sporthèque »), étiquettes et heures en Saira
+   Semi Condensed (comme « ILLIMITÉ · JUIN · JUILLET »), texte en police
+   système. Clair par défaut, optimiste; le sombre reste au choix. */
 
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/barlow-condensed-latin-600-normal.woff2') format('woff2'); }
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/barlow-condensed-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('fonts/fraunces-latin-full-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Saira Semi Condensed'; font-style: normal; font-weight: 300; font-display: swap; src: url('fonts/saira-semi-condensed-latin-300-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Saira Semi Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/saira-semi-condensed-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Saira Semi Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/saira-semi-condensed-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Saira Semi Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/saira-semi-condensed-latin-700-normal.woff2') format('woff2'); }
 
 :root {
-  --bg: #f1f4f3;
+  --bg: #fbf7f1;
   --surface: #ffffff;
-  --sunk: #e9edec;
-  --ink: #1f2323;
-  --muted: #5a6362;
-  --faint: #66706f;
-  --line: #dde3e2;
-  --brand: #2d3131;
-  --brand-ink: #ffffff;
-  --brand-soft: #e8ecec;
-  --accent: #0e9a96;
-  --accent-soft: #ddf1f0;
-  --grid: rgba(45, 49, 49, .055);
-  --aqua: #22b0ad;
-  --coral: #ff7a59;
-  --sun: #ffc94d;
-  --ok: #13795a;
-  --ok-soft: #dcf2e7;
-  --warn: #8a5a00;
-  --warn-soft: #fbefd3;
+  --sunk: #f4eee7;
+  --ink: #2b2830;
+  --muted: #5e5866;
+  --faint: #67616f;
+  --line: #ebe3da;
+  --brand: #2b2830;
+  --brand-ink: #fffaf2;
+  --brand-soft: #f1ebf6;
+  --accent: #23807a;
+  --accent-soft: #e3f3ef;
+  --grid: rgba(43, 40, 48, .035);
+  --aqua: #7fcfc4;
+  --coral: #ee8aa6;
+  --sun: #f2c037;
+  --ok: #17785a;
+  --ok-soft: #def3e8;
+  --warn: #85590a;
+  --warn-soft: #fcf0d2;
   --bad: #b42318;
   --bad-soft: #fdeceb;
-  --break: #efe6d6;
-  --toast: #0d2326;
-  --toast-ink: #ffffff;
-  --env-a: rgba(14, 154, 150, .10);
+  --break: #f4ead9;
+  --toast: #2b2830;
+  --toast-ink: #fffaf2;
+  --env-a: rgba(205, 185, 232, .38);
+  --env-b: rgba(243, 198, 211, .34);
+  --env-c: rgba(169, 220, 211, .36);
+  --iri: linear-gradient(115deg, #fbe9df 0%, #f6cbd7 26%, #d9c6f0 50%, #b5e3da 76%, #c3d6f4 100%);
   /* Illustrations */
   --il-ink: #0f2a2e; --il-aqua: #2bb3b1; --il-coral: #ff7a59; --il-sun: #ffc94d; --il-steel: #b8c7ca;
   --il-paper: #ffffff; --il-wall: #e3eded; --il-screen: #d4f0ef; --il-glass: #cde7f1; --il-tile: #eef3f3;
   --il-mat: #2b3a3d; --il-floor: #cfdcdc; --il-night: #1d3a52; --il-ok: #6fcf9f; --il-bad: #f2978b;
-  --zA: #fbecc8; --zA-strong: #ffc94d; --zB: #e3e1fb; --zB-strong: #8f88f0; --zC: #cdeeed; --zC-strong: #3cc0bb;
-  --il-fill: #ffffff; --il-fill2: #e3e9e8; --il-mid: #b4bfbe; --il-accent: #14a5a0; --il-accent-soft: #c6ebe9; --il-shadow: rgba(31, 35, 35, .10);
+  --zA: #fcefc8; --zA-strong: #f2c037; --zB: #ece2fa; --zB-strong: #a68be2; --zC: #d9f2ec; --zC-strong: #5cc3b6;
+  --il-fill: #ffffff; --il-fill2: #efe8e1; --il-mid: #c3b9c4; --il-accent: #3fb0a5; --il-accent-soft: #cdeee8; --il-shadow: rgba(43, 40, 48, .10);
 
   --radius: 16px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --display: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', var(--font);
+  --display: 'Saira Semi Condensed', 'Arial Narrow', 'Roboto Condensed', var(--font);
+  --serif: 'Fraunces', 'Cooper Black', Georgia, serif;
   --ease: cubic-bezier(.2, .8, .2, 1);
   --spring: cubic-bezier(.25, 1.35, .45, 1);
   --safe-b: env(safe-area-inset-bottom, 0px);
@@ -1389,7 +1396,7 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
    Lisibilité (audit) : contraste AA partout, texte de 14 px et plus pour
    ce qu'on doit lire, et des cibles d'au moins 44 px pour ce qu'on touche.
    ===================================================================== */
-:root { --link: #0a7471; }
+:root { --link: #1d6f69; }
 :root[data-theme="dark"] { --link: var(--accent); }
 .link, .preview .link, .ap-weekmid .link, .tc-body .link, .account-line .link, .team-acts .link, .mail-line .link { color: var(--link); min-height: 44px; display: inline-flex; align-items: center; }
 .date-line .link { min-height: 44px; padding: 0 2px; }
@@ -1465,3 +1472,27 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
    sont (batterie, téléphones lents); elles repartent au premier toucher. Mesuré sur un
    Android d'entrée de gamme : environ 2 s de travail du processeur toutes les 4 s → presque rien. */
 body.calm *::before, body.calm *::after, body.calm .env i, body.calm .alive * { animation-play-state: paused !important; }
+
+
+/* =====================================================================
+   Sporthèque 1981 : titres en serif douce, reflets irisés en mode clair.
+   ===================================================================== */
+h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: 'SOFT' 100, 'WONK' 0, 'opsz' 72; letter-spacing: -.01em; text-transform: none !important; }
+.hero h1 { font-size: 44px; line-height: 1; }
+.topbar.plain h1, #sent h1, .review-top h1, .poster h1 { font-size: 34px; }
+.eyebrow, .block-label, .callout .c-head { font-weight: 600; }
+
+:root:not([data-theme="dark"]) {
+  --cta-shadow: 0 10px 26px -14px rgba(120, 90, 170, .55), inset 0 1px 0 rgba(255, 255, 255, .6);
+  --card-shadow: 0 14px 30px -26px rgba(80, 60, 110, .45);
+}
+:root:not([data-theme="dark"]) body { background: var(--bg); }
+:root:not([data-theme="dark"]) .env { background:
+  radial-gradient(60vmax 45vmax at 105% -5%, var(--env-b), transparent 70%),
+  radial-gradient(55vmax 45vmax at -10% 35%, var(--env-c), transparent 70%),
+  radial-gradient(60vmax 50vmax at 90% 105%, var(--env-a), transparent 70%); }
+/* Le grand bouton : le reflet irisé du logo, texte charbon. */
+:root:not([data-theme="dark"]) .btn.primary { background: var(--iri); background-size: 160% 100%; color: var(--ink); border: 1px solid rgba(43, 40, 48, .10); }
+:root:not([data-theme="dark"]) .btn.primary:active { background-position: 100% 0; }
+:root:not([data-theme="dark"]) .hero h1 { color: var(--ink); }
+:root:not([data-theme="dark"]) .hero h1::after { content: ""; display: block; width: 72px; height: 4px; margin-top: 12px; border-radius: 2px; background: var(--sun); }
