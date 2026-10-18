@@ -201,7 +201,7 @@ function paintThemeButtons() {
 function applyTheme() {
   const th = resolvedTheme();
   document.documentElement.dataset.theme = th;
-  for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = th === 'dark' ? '#050708' : '#fbf7f1';
+  for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = th === 'dark' ? '#050708' : '#f4f6fb';
   paintThemeButtons();
 }
 // La nouvelle couleur s'ouvre en cercle depuis le bouton touché.

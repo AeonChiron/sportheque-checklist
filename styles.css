@@ -12,41 +12,41 @@
 @font-face { font-family: 'Saira Semi Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/saira-semi-condensed-latin-700-normal.woff2') format('woff2'); }
 
 :root {
-  --bg: #fbf7f1;
+  --bg: #f4f6fb;
   --surface: #ffffff;
-  --sunk: #f4eee7;
-  --ink: #2b2830;
-  --muted: #5e5866;
-  --faint: #67616f;
-  --line: #ebe3da;
-  --brand: #2b2830;
-  --brand-ink: #fffaf2;
-  --brand-soft: #f1ebf6;
-  --accent: #23807a;
-  --accent-soft: #e3f3ef;
-  --grid: rgba(43, 40, 48, .035);
-  --aqua: #7fcfc4;
-  --coral: #ee8aa6;
-  --sun: #f2c037;
-  --ok: #17785a;
-  --ok-soft: #def3e8;
-  --warn: #85590a;
-  --warn-soft: #fcf0d2;
-  --bad: #b42318;
-  --bad-soft: #fdeceb;
-  --break: #f4ead9;
-  --toast: #2b2830;
-  --toast-ink: #fffaf2;
-  --env-a: rgba(205, 185, 232, .38);
-  --env-b: rgba(243, 198, 211, .34);
-  --env-c: rgba(169, 220, 211, .36);
-  --iri: linear-gradient(115deg, #fbe9df 0%, #f6cbd7 26%, #d9c6f0 50%, #b5e3da 76%, #c3d6f4 100%);
+  --sunk: #edf0f7;
+  --ink: #0b1020;
+  --muted: #4b5468;
+  --faint: #596278;
+  --line: #e1e6f0;
+  --brand: #0b1020;
+  --brand-ink: #ffffff;
+  --brand-soft: #eceefe;
+  --accent: #4f46e5;
+  --accent-soft: #ecebfe;
+  --grid: rgba(79, 70, 229, .045);
+  --aqua: #06b6d4;
+  --coral: #ff5a5f;
+  --sun: #c8f031;
+  --ok: #0a774e;
+  --ok-soft: #dcf6ea;
+  --warn: #9a5800;
+  --warn-soft: #fff1d6;
+  --bad: #c81e1e;
+  --bad-soft: #feecec;
+  --break: #eef0f6;
+  --toast: #0b1020;
+  --toast-ink: #ffffff;
+  --env-a: rgba(79, 70, 229, .16);
+  --env-b: rgba(6, 182, 212, .14);
+  --env-c: rgba(200, 240, 49, .16);
+  --grad: linear-gradient(120deg, #5b5bf6 0%, #4f46e5 45%, #7c3aed 100%);
   /* Illustrations */
   --il-ink: #0f2a2e; --il-aqua: #2bb3b1; --il-coral: #ff7a59; --il-sun: #ffc94d; --il-steel: #b8c7ca;
   --il-paper: #ffffff; --il-wall: #e3eded; --il-screen: #d4f0ef; --il-glass: #cde7f1; --il-tile: #eef3f3;
   --il-mat: #2b3a3d; --il-floor: #cfdcdc; --il-night: #1d3a52; --il-ok: #6fcf9f; --il-bad: #f2978b;
-  --zA: #fcefc8; --zA-strong: #f2c037; --zB: #ece2fa; --zB-strong: #a68be2; --zC: #d9f2ec; --zC-strong: #5cc3b6;
-  --il-fill: #ffffff; --il-fill2: #efe8e1; --il-mid: #c3b9c4; --il-accent: #3fb0a5; --il-accent-soft: #cdeee8; --il-shadow: rgba(43, 40, 48, .10);
+  --zA: #dff6fb; --zA-strong: #06b6d4; --zB: #ebe8ff; --zB-strong: #7c6cf6; --zC: #effbd3; --zC-strong: #8acb14;
+  --il-fill: #ffffff; --il-fill2: #e8ecf5; --il-mid: #b7bfd0; --il-accent: #5b5bf6; --il-accent-soft: #dedcff; --il-shadow: rgba(11, 16, 32, .10);
 
   --radius: 16px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
@@ -1396,7 +1396,7 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
    Lisibilité (audit) : contraste AA partout, texte de 14 px et plus pour
    ce qu'on doit lire, et des cibles d'au moins 44 px pour ce qu'on touche.
    ===================================================================== */
-:root { --link: #1d6f69; }
+:root { --link: #4338ca; }
 :root[data-theme="dark"] { --link: var(--accent); }
 .link, .preview .link, .ap-weekmid .link, .tc-body .link, .account-line .link, .team-acts .link, .mail-line .link { color: var(--link); min-height: 44px; display: inline-flex; align-items: center; }
 .date-line .link { min-height: 44px; padding: 0 2px; }
@@ -1483,16 +1483,17 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .eyebrow, .block-label, .callout .c-head { font-weight: 600; }
 
 :root:not([data-theme="dark"]) {
-  --cta-shadow: 0 10px 26px -14px rgba(120, 90, 170, .55), inset 0 1px 0 rgba(255, 255, 255, .6);
-  --card-shadow: 0 14px 30px -26px rgba(80, 60, 110, .45);
+  --cta-shadow: 0 12px 28px -12px rgba(79, 70, 229, .65), inset 0 1px 0 rgba(255, 255, 255, .28);
+  --card-shadow: 0 1px 2px rgba(11, 16, 32, .04), 0 12px 28px -22px rgba(30, 27, 110, .35);
 }
 :root:not([data-theme="dark"]) body { background: var(--bg); }
 :root:not([data-theme="dark"]) .env { background:
-  radial-gradient(60vmax 45vmax at 105% -5%, var(--env-b), transparent 70%),
-  radial-gradient(55vmax 45vmax at -10% 35%, var(--env-c), transparent 70%),
-  radial-gradient(60vmax 50vmax at 90% 105%, var(--env-a), transparent 70%); }
-/* Le grand bouton : le reflet irisé du logo, texte charbon. */
-:root:not([data-theme="dark"]) .btn.primary { background: var(--iri); background-size: 160% 100%; color: var(--ink); border: 1px solid rgba(43, 40, 48, .10); }
+  radial-gradient(60vmax 45vmax at 108% -8%, var(--env-a), transparent 70%),
+  radial-gradient(50vmax 40vmax at -12% 30%, var(--env-b), transparent 70%),
+  radial-gradient(45vmax 35vmax at 95% 105%, var(--env-c), transparent 70%); }
+/* Les boutons d'action : indigo électrique, texte blanc, lueur. */
+:root:not([data-theme="dark"]) .btn.primary { background: var(--grad); background-size: 140% 100%; color: #fff; border: 0; }
 :root:not([data-theme="dark"]) .btn.primary:active { background-position: 100% 0; }
 :root:not([data-theme="dark"]) .hero h1 { color: var(--ink); }
-:root:not([data-theme="dark"]) .hero h1::after { content: ""; display: block; width: 72px; height: 4px; margin-top: 12px; border-radius: 2px; background: var(--sun); }
+:root:not([data-theme="dark"]) .hero h1::after { content: ""; display: block; width: 76px; height: 5px; margin-top: 12px; border-radius: 3px; background: linear-gradient(90deg, #4f46e5, #06b6d4 60%, #c8f031); }
+:root:not([data-theme="dark"]) .lane::before, :root:not([data-theme="dark"]) .lane::after { --coral: #8b84ff; }
