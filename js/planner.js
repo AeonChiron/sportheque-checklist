@@ -111,7 +111,7 @@ const P = {
     compostSummary: 'Compost à 19 h. ',
     compostWedSummary: 'Compost à 19 h + bac au chemin. ',
     slackTitle: 'Temps libre',
-    slackSummary: 'Retouches ou une tâche « si tu as du temps ».',
+    slackSummary: 'Retouches au besoin.',
   },
   en: {
     deepTitle: (z) => `Deep clean — Zone ${z}`,
@@ -149,7 +149,7 @@ const P = {
     compostSummary: 'Compost at 7 p.m. ',
     compostWedSummary: 'Compost at 7 p.m. + bin to the curb. ',
     slackTitle: 'Free time',
-    slackSummary: 'Touch-ups or an “if you have time” task.',
+    slackSummary: 'Touch-ups as needed.',
   },
 };
 

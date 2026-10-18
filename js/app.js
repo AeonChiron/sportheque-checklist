@@ -637,10 +637,8 @@ function renderChecklist() {
   }
   $('#taskList').innerHTML = html;
 
-  $('#overflowBlock').innerHTML = plan.overflow.length
-    ? `<div class="section-head"><h2>${t('extra')}</h2></div><p class="section-note">${t('extraNote')}</p>
-       <ol class="tasks">${plan.overflow.map((it) => taskRow(it, { extra: true })).join('')}</ol>`
-    : '';
+  // Les tâches qui n'entrent pas dans les heures : on ne les montre plus (demande de l'équipe).
+  $('#overflowBlock').innerHTML = '';
 
   $('#flagsBlock').innerHTML = state.flags.length
     ? `<div class="section-head"><h2>${t('flags')}</h2><span class="num">${state.flags.length}</span></div>
