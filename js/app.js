@@ -8,7 +8,7 @@ import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } fro
 import { session, accounts, isBoss, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
-import { crew, crewHeads } from './crew.js';
+import { mountPool } from './pool.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport } from './board.js';
 
 const KEY = 'gym-shift-v2';
@@ -63,6 +63,7 @@ function show(id) {
   ensurePlan();
   paintShiftPill();
   const target = document.getElementById(id);
+  if (id === 'auth') pool().start(); else poolCtl?.stop();
   if (!target.hidden) return;
   const swap = () => {
     for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -186,20 +187,51 @@ function paintStatic() {
   paintCrew();
 }
 
-// L'équipe dessinée : le trio du logo à la connexion, quelqu'un qui salue à
-// l'accueil (une personne différente chaque jour), la barre levée au quart fini.
-const CREW_IDS = ['mo', 'ana', 'lea'];
-const crewOf = (key) => CREW_IDS[[...String(key)].reduce((n, ch) => n + ch.charCodeAt(0), 0) % CREW_IDS.length];
-function paintCrew() {
-  const auth = $('#authCrew');
-  if (auth) auth.innerHTML = crewHeads(t('crewTeam'));
-  const home = $('#homeCrew');
-  if (home) home.innerHTML = crew('wave', crewOf(todayISO()), t('crewHello'));
-  const sent = $('#sentCrew');
-  if (sent) sent.innerHTML = crew('lift', crewOf(`${todayISO()}!`), t('crewLift'));
+// Susie, la mascotte : son seau se remplit avec les tâches faites aujourd'hui.
+const SUSIE = (cls = '') => `<img class="susie-img ${cls}" src="icons/susie.webp" alt="" draggable="false">`;
+function todayProgress() {
+  const count = (st) => {
+    try {
+      const p = buildPlan({ shift: st.shift, date: st.date, start: st.start, end: st.end, lang: lang() });
+      const tasks = p.items.filter((it) => it.kind === 'task');
+      return { done: tasks.filter((it) => st.tasks?.[it.id]?.done).length, total: tasks.length };
+    } catch { return null; }
+  };
+  if (state && state.date === todayISO()) return count(state);
+  const last = editableShift();
+  return last ? count(last) : null;
 }
-// Les tâches que l'équipe fait « en personne » dans le détail.
-const CREW_POSE = { poubelles: 'bin', 'aspirateur-muscu': 'vacuum', 'aspirateur-cardio': 'vacuum', 'aspirateur-gym': 'vacuum', desinfection: 'wipe', 'points-contact': 'wipe', guenilles: 'rags' };
+function paintCrew() {
+  const d = new Date();
+  if ($('#homeDate')) $('#homeDate').textContent = d.toLocaleDateString(lang() === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+  const pr = todayProgress();
+  const lvl = pr && pr.total ? Math.max(0.16, pr.done / pr.total) : 0.16;
+  // 0 = seau vide (y 196), 1 = plein (y 8).
+  const lv = $('#bucketLevel');
+  if (lv) lv.style.transform = `translateY(${196 - 188 * lvl}px)`;
+  if ($('#bucketNum')) {
+    $('#bucketNum').textContent = pr ? `${pr.done}/${pr.total}` : '';
+    $('#bucketNum').hidden = !pr;
+    $('#bucketLbl').textContent = t(pr ? (pr.done === pr.total ? 'bucketFull' : 'bucketTasks') : 'bucketReady');
+    $('#bucketArt').setAttribute('aria-label', pr ? t('barLabel', pr.done, pr.total) : t('bucketReady'));
+  }
+  const sent = $('#sentCrew');
+  if (sent) sent.innerHTML = SUSIE('cheer');
+}
+// Toucher Susie : elle saute et dit un mot d'encouragement.
+let sayTimer = 0;
+$('#susieHome')?.addEventListener('click', () => {
+  const btn = $('#susieHome');
+  btn.classList.remove('hop'); void btn.offsetWidth; btn.classList.add('hop');
+  const say = $('#susieSay');
+  const lines = t('susieLines');
+  say.textContent = lines[Math.floor(Math.random() * lines.length)];
+  say.hidden = false;
+  say.classList.remove('pop'); void say.offsetWidth; say.classList.add('pop');
+  clearTimeout(sayTimer);
+  sayTimer = setTimeout(() => { say.hidden = true; }, 2600);
+  try { navigator.vibrate?.(10); } catch { /* iPhone */ }
+});
 
 // ---------- Thème : suit le téléphone, ou clair / sombre au choix ----------
 // Un toucher sur le soleil / la lune bascule; le Menu offre aussi « Auto ».
@@ -1011,7 +1043,6 @@ function taskVisual(it) {
   if (it.deep || (it.zone && it.photo === 'miroirs')) {
     return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption><div data-map></div></figure>`;
   }
-  if (CREW_POSE[it.photo]) return `<figure class="visual alive crew-visual">${crew(CREW_POSE[it.photo], crewOf(it.id), it.title)}</figure>`;
   return `<figure class="visual alive">${illustration(it.photo, it.title)}</figure>`;
 }
 
@@ -2078,7 +2109,7 @@ function renderHistory({ animate = true } = {}) {
     </div>` : ''}
     <div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${strip}${groups || `<div class="folder-empty alive">${crew('rest', 'ana')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+        : `${strip}${groups || `<div class="folder-empty alive">${SUSIE('rest')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
     </div>
     ${ready ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
@@ -2113,12 +2144,35 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cu
 const authUI = { tab: 'login', role: 'employee' };
 const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing' };
 
+// La piscine de Susie (créée au premier affichage de la connexion).
+let poolCtl = null;
+const pool = () => (poolCtl ||= mountPool($('#pool')));
 function openAuth() {
-  if (location.hash.startsWith('#probleme=')) authUI.role = 'boss'; // le lien d'un courriel va aux superviseurs
+  const fromLink = location.hash.startsWith('#probleme=');
+  if (fromLink) authUI.role = 'boss'; // le lien d'un courriel va aux superviseurs
   paintAuth();
   $('#authError').innerHTML = '';
   show('auth');
+  if (fromLink) authSheet(true, 'login');
 }
+// Le formulaire monte par-dessus la piscine, comme une feuille.
+function authSheet(open, tab) {
+  if (tab) { authUI.tab = tab; paintAuth(); }
+  const sheet = $('#authSheet');
+  const back = $('#authBackdrop');
+  if (open) {
+    sheet.hidden = false; back.hidden = false;
+    requestAnimationFrame(() => { sheet.classList.add('up'); back.classList.add('up'); });
+    setTimeout(() => (authUI.tab === 'signup' ? $('#aName') : $('#aEmail')).focus({ preventScroll: true }), 420);
+  } else {
+    sheet.classList.remove('up'); back.classList.remove('up');
+    setTimeout(() => { if (!sheet.classList.contains('up')) { sheet.hidden = true; back.hidden = true; } }, 380);
+  }
+}
+$('#poolStart').addEventListener('click', () => authSheet(true, 'signup'));
+$('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
+$('#authClose').addEventListener('click', () => authSheet(false));
+$('#authBackdrop').addEventListener('click', () => authSheet(false));
 function paintAuth() {
   paintStatic();
   const up = authUI.tab === 'signup';
@@ -2297,7 +2351,7 @@ function renderBoss({ animate = true } = {}) {
           <button type="button" role="tab" data-pfilter="all" aria-selected="${boss.filter === 'all'}">${esc(t('allProblems'))}</button>
         </div>
         <div class="pb-list${animate ? ' cascade' : ''}">${list.length ? list.map(problemCard).join('')
-          : `<div class="folder-empty alive">${crew('rest', 'lea')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
+          : `<div class="folder-empty alive">${SUSIE('rest')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
   }
   $('#bossBody').innerHTML = `
     <button type="button" class="rp-card boss-hist" data-go="history">

@@ -26,22 +26,41 @@
 
   <main id="app">
   <!-- 0. Connexion (une fois : le téléphone s'en souvient) -->
-  <section id="auth" class="screen" hidden>
-    <div class="setup-top">
-      <div class="brand" data-brand></div>
-      <div class="setup-tools">
-        <button type="button" class="theme-btn" data-theme-btn aria-pressed="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><defs><mask id="tmask2"><rect width="24" height="24" fill="#fff"/><circle class="tm-bite" cx="30" cy="4" r="7.5" fill="#000"/></mask></defs><g mask="url(#tmask2)"><circle class="tm-core" cx="12" cy="12" r="5"/></g><g class="tm-rays"><path d="M12 1.8v2.4M12 19.8v2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/></g></svg>
-        </button>
-                <div class="lang-switch" role="group" aria-label="Langue / Language">
-          <button type="button" data-lang="fr">FR</button>
-          <button type="button" data-lang="en">EN</button>
-        </div>
+  <section id="auth" class="screen pool-screen" hidden>
+    <!-- La piscine de Susie (dessinée en code, js/pool.js) -->
+    <div class="pool" id="pool" aria-hidden="true">
+      <canvas></canvas>
+      <div class="susie-float">
+        <svg class="buoy back" viewBox="0 0 200 80"><defs><clipPath id="buoyTop"><rect width="200" height="40"/></clipPath></defs><g clip-path="url(#buoyTop)"><ellipse cx="100" cy="40" rx="96" ry="34" fill="#ff8fb3"/><ellipse cx="100" cy="40" rx="96" ry="34" fill="none" stroke="#fff" stroke-width="10" stroke-dasharray="22 30" opacity=".85"/><ellipse cx="100" cy="40" rx="58" ry="17" fill="#2f8ae6" opacity=".55"/></g></svg>
+        <img src="icons/susie.webp" alt="" draggable="false">
+        <svg class="buoy front" viewBox="0 0 200 80"><defs><clipPath id="buoyBot"><rect y="40" width="200" height="40"/></clipPath><mask id="buoyHole"><rect width="200" height="80" fill="#fff"/><ellipse cx="100" cy="40" rx="58" ry="17" fill="#000"/></mask></defs><g clip-path="url(#buoyBot)" mask="url(#buoyHole)"><ellipse cx="100" cy="40" rx="96" ry="34" fill="#ff8fb3"/><ellipse cx="100" cy="40" rx="96" ry="34" fill="none" stroke="#fff" stroke-width="10" stroke-dasharray="22 30" opacity=".85"/><ellipse cx="100" cy="52" rx="80" ry="18" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="4"/></g></svg>
       </div>
     </div>
+    <div class="pool-ui">
+      <div class="pool-top">
+        <div class="pool-mark"><b data-t="appName"></b><span data-t="floor"></span></div>
+        <div class="setup-tools">
+          <button type="button" class="theme-btn" data-theme-btn aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><defs><mask id="tmask2"><rect width="24" height="24" fill="#fff"/><circle class="tm-bite" cx="30" cy="4" r="7.5" fill="#000"/></mask></defs><g mask="url(#tmask2)"><circle class="tm-core" cx="12" cy="12" r="5"/></g><g class="tm-rays"><path d="M12 1.8v2.4M12 19.8v2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/></g></svg>
+          </button>
+          <div class="lang-switch" role="group" aria-label="Langue / Language">
+            <button type="button" data-lang="fr">FR</button>
+            <button type="button" data-lang="en">EN</button>
+          </div>
+        </div>
+      </div>
+      <div class="pool-bottom">
+        <h1 class="pool-hello"><span data-t="susieHi"></span><small data-t="susieSub"></small></h1>
+        <button type="button" class="pool-cta" id="poolStart" data-t="getStarted"></button>
+        <button type="button" class="pool-login" id="poolLogin" data-t="haveAccount"></button>
+      </div>
+    </div>
+    <div class="auth-backdrop" id="authBackdrop" hidden></div>
+    <div class="auth-sheet" id="authSheet" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden>
+    <span class="sheet-grip" aria-hidden="true"></span>
+    <button type="button" class="sheet-x" id="authClose" data-label="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <header class="hero">
-      <div class="crew-heads" id="authCrew"></div>
-      <h1 data-t="welcome"></h1>
+      <h2 id="authTitle" data-t="welcome"></h2>
       <p class="lede" data-t="authLede"></p>
     </header>
     <div class="notice ok auth-context" id="authContext" hidden></div>
@@ -80,6 +99,7 @@
     </form>
     <p class="fineprint" id="authNote"></p>
     <p class="auth-forgot" id="authForgot" data-t="forgotHelp"></p>
+    </div>
   </section>
 
   <!-- 1. Début de quart -->
@@ -98,9 +118,27 @@
       </div>
     </div>
 
-    <header class="hero">
-      <div class="hero-crew alive" id="homeCrew"></div>
+    <header class="hero home-hero">
+      <p class="home-date" id="homeDate"></p>
       <h1 data-t="hello"></h1>
+      <!-- Le seau de Susie : l'eau monte avec les tâches faites aujourd'hui -->
+      <div class="bucket" id="bucket">
+        <svg class="bucket-water" viewBox="0 0 200 200" role="img" id="bucketArt">
+          <defs><clipPath id="bucketClip"><circle cx="100" cy="100" r="94"/></clipPath></defs>
+          <circle cx="100" cy="100" r="94" class="bucket-bg"/>
+          <g clip-path="url(#bucketClip)">
+            <g class="bucket-level" id="bucketLevel">
+              <path class="wave w2" d="M0 12Q25 0 50 12T100 12T150 12T200 12T250 12T300 12T350 12T400 12V230H0Z"/>
+              <path class="wave w1" d="M0 12Q25 24 50 12T100 12T150 12T200 12T250 12T300 12T350 12T400 12V230H0Z"/>
+            </g>
+            <circle class="bubble b1" cx="60" cy="190" r="3"/><circle class="bubble b2" cx="132" cy="196" r="2.2"/><circle class="bubble b3" cx="98" cy="200" r="2.6"/>
+          </g>
+          <circle cx="100" cy="100" r="94" class="bucket-rim"/>
+        </svg>
+        <button type="button" class="susie-home" id="susieHome" data-label="susieName"><img src="icons/susie.webp" alt="" draggable="false"></button>
+        <p class="susie-say" id="susieSay" aria-live="polite" hidden></p>
+      </div>
+      <div class="bucket-count"><b class="num" id="bucketNum"></b><span id="bucketLbl"></span></div>
       <p class="lede" data-t="lede"></p>
       <p class="account-line" id="accountLine" hidden></p>
     </header>
@@ -148,20 +186,18 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
         <span data-t="reportProblem"></span>
       </button>
-      <button class="btn ghost overview-link hist-link" type="button" data-go="history">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg>
-        <span data-t="history"></span>
-      </button>
-      <button class="btn ghost overview-link" type="button" data-go="apercu">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>
-        <span data-t="overviewShort"></span>
-      </button>
-      <button class="btn ghost overview-link" type="button" data-go="protocol">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg>
-        <span data-t="protocol"></span>
-      </button>
     </div>
     <p class="fineprint" id="manualVersion"></p>
+    <nav class="tabbar" aria-label="Navigation">
+      <button type="button" class="tab on" aria-current="page" id="tabToday">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.5 4.2 6 7.4 6 10.5a6 6 0 0 1-12 0C6 10.4 8.5 7.2 12 3z"/></svg><span data-t="tabToday"></span></button>
+      <button type="button" class="tab" data-go="history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg><span data-t="history"></span></button>
+      <button type="button" class="tab" data-go="apercu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg><span data-t="overviewShort"></span></button>
+      <button type="button" class="tab" data-go="protocol">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg><span data-t="protocol"></span></button>
+    </nav>
   </section>
 
   <!-- 2. Checklist -->
