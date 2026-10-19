@@ -169,7 +169,7 @@ export function renderReportText(r) {
   };
   out.push(t.checklist.toUpperCase());
   for (const i of r.items) {
-    out.push(`${MARK[i.status]} ${i.time}  ${i.title}${i.doneAt ? ` (${t.checkedAt} ${i.doneAt})` : ''}`);
+    out.push(`${MARK[i.status]} ${i.time}  ${i.title}`);
     detail(i);
   }
   if (r.overflow.length) {
@@ -202,7 +202,7 @@ export function renderReportHtml(r, { photoSrc = {} } = {}) {
       <td style="padding:9px 6px;border-bottom:1px solid #eaecf0;color:#667085;font-size:13px;white-space:nowrap;vertical-align:top;font-family:ui-monospace,Menlo,monospace">${esc(i.time || `${i.minutes} min`)}</td>
       <td style="padding:9px 6px;border-bottom:1px solid #eaecf0;font-size:14px;vertical-align:top">
         <span style="${i.status === 'done' ? 'color:#667085' : 'color:#101828;font-weight:600'}">${esc(i.title)}</span>
-        ${i.doneAt ? `<span style="color:#98a2b3;font-size:12px"> · ${esc(i.doneAt)}</span>` : ''}${extra}
+        ${extra}
       </td></tr>`;
   };
   const section = (title, body, color = '#101828') =>
@@ -243,7 +243,7 @@ export function renderReportHtml(r, { photoSrc = {} } = {}) {
   if (r.notes) {
     html += section(esc(t.notes), `<div style="white-space:pre-wrap;font-size:14px;background:#f9fafb;border-radius:8px;padding:12px">${esc(r.notes)}</div>`);
   }
-  const when = new Date(r.submittedAt).toLocaleString(locale(r.lang), { dateStyle: 'long', timeStyle: 'short', timeZone: TZ });
+  const when = new Date(r.submittedAt).toLocaleString(locale(r.lang), { dateStyle: 'long', timeZone: TZ });
   html += `<p style="font-size:12px;color:#98a2b3;margin-top:24px">${esc(t.sent)} ${esc(when)} · ${r.gymName ? `${esc(r.gymName)} · ` : ''}${esc(t.footer)}</p></div>`;
   return html;
 }

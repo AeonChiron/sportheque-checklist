@@ -1583,7 +1583,7 @@ function openReview(r, opts = {}) {
   const row = (i) => `<li class="rv-row ${i.status}">
       <span class="rv-mark">${STATUS_MARK[i.status]}</span>
       <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
-      <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}${i.doneAt ? `<small>✓ ${esc(i.doneAt)}</small>` : ''}</span>
+      <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}</span>
     </li>`;
   const attention = [
     ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span>${fl.text ? `<span class="rv-quote">« ${esc(fl.text)} »</span>` : ''}${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
@@ -1597,7 +1597,7 @@ function openReview(r, opts = {}) {
       <p class="eyebrow">${[r.gymName, R.title].filter(Boolean).map(esc).join(' · ')}</p>
       <h1>${esc(r.name)}</h1>
       <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(dayMonth(r.date))} · <span class="num">${esc(r.hours)}</span></p>
-      ${r.submittedAt ? `<p class="rv-sub">${esc(cap(t('savedAt', clock(r.submittedAt))))}${r.supervisor ? ` · ${esc(t('supShort'))} : ${esc(r.supervisor)}` : ''}</p>` : ''}
+      ${r.supervisor ? `<p class="rv-sub">${esc(t('supShort'))} : ${esc(r.supervisor)}</p>` : ''}
     </div>
     <div class="rv-verdict ${nAttention ? 'warn' : 'ok'}">
       <div class="rv-ring" style="--p:${pct}"><span class="num">${pct}%</span></div>
@@ -1675,7 +1675,7 @@ function statusIn(list, id) {
   for (const s of list) {
     const it = s.items.find((x) => x.id === id);
     if (!it) continue;
-    if (it.status === 'done') return { kind: 'done', by: s.name, at: clock(it.doneAt) };
+    if (it.status === 'done') return { kind: 'done', by: s.name };
     if (it.status === 'notdone') res = { kind: 'notdone', by: s.name, reason: it.reason };
     else res ||= { kind: 'unchecked', by: s.name };
   }
