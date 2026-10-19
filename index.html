@@ -29,7 +29,7 @@
   <section id="auth" class="screen pool-screen" hidden>
     <!-- Le plancher de gym fraîchement lavé (dessiné en code, js/pool.js) -->
     <div class="pool" id="pool" aria-hidden="true">
-      <canvas data-name="CHECKLIST"></canvas>
+      <canvas></canvas>
       <div class="mascot-float"><img src="icons/rabbit.webp" alt="" draggable="false"></div>
     </div>
     <div class="pool-ui">
@@ -49,8 +49,8 @@
         <h1><span class="pool-gym" id="poolGym"></span><span class="pool-app" data-t="appTitle"></span></h1>
       </div>
       <div class="pool-bottom">
-        <p class="pool-cheer" id="poolCheer"></p>
-        <button type="button" class="pool-cta" id="poolStart" data-t="getStarted"></button>
+        <p class="pool-cheer"><strong data-t="thanksTeam"></strong><span id="poolCheer"></span></p>
+        <button type="button" class="pool-cta" id="poolStart"><span class="bb-plates l" aria-hidden="true"><i></i><i></i></span><span data-t="getStarted"></span><span class="bb-plates r" aria-hidden="true"><i></i><i></i></span></button>
         <button type="button" class="pool-login" id="poolLogin" data-t="haveAccount"></button>
       </div>
     </div>

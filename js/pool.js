@@ -56,18 +56,6 @@ export function mountPool(root) {
     g.addColorStop(1, D ? '#0e365f' : '#2a80c8');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // Le nom peint au sol, comme un marquage de terrain, sous le film d'eau.
-    const cy = H * 0.5;
-    ctx.save();
-    ctx.translate(...wobble(W / 2, cy).map((v) => v * 0.6));
-    ctx.strokeStyle = 'rgba(11,58,116,.18)';
-    ctx.lineWidth = 10;
-    ctx.beginPath(); ctx.arc(W / 2, cy, W * 0.42, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = 'rgba(11,58,116,.22)';
-    ctx.font = `900 ${Math.round(W * 0.15)}px 'Saira Semi Condensed', system-ui, sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(ctx.canvas.dataset.name || 'QUART GYM', W / 2, cy);
-    ctx.restore();
     // Joints des tuiles de caoutchouc, qui ondulent sous l'eau.
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const [lw, a] of [[5, 0.14], [1.6, D ? 0.35 : 0.55]]) {
@@ -206,5 +194,10 @@ export function mountPool(root) {
   return {
     start() { requestAnimationFrame(resize); if (!still && !raf) { last = 0; raf = requestAnimationFrame(step); } else requestAnimationFrame(() => { resize(); draw(); }); },
     stop() { cancelAnimationFrame(raf); raf = 0; },
+    cheer() {
+      const img = hero.querySelector('img');
+      img.classList.remove('jump'); void img.offsetWidth; img.classList.add('jump');
+      for (let k = 0; k < 4; k++) setTimeout(() => ripples.push({ x: s.x + (Math.random() - 0.5) * 30, y: s.y + (Math.random() - 0.5) * 10, age: 0, str: 1 - k * 0.15, seed: Math.random() * 6.28 }), 380 + k * 90);
+    },
   };
 }

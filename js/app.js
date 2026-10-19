@@ -2189,7 +2189,15 @@ function authSheet(open, tab) {
     setTimeout(() => { if (!sheet.classList.contains('up')) { sheet.hidden = true; back.hidden = true; } }, 380);
   }
 }
-$('#poolStart').addEventListener('click', () => authSheet(true, 'signup'));
+$('#poolStart').addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  if (btn.classList.contains('lifting')) return;
+  if (reducedMotion()) { authSheet(true, 'signup'); return; }
+  btn.classList.add('lifting');
+  clank('plate'); buzz('plate');
+  setTimeout(() => { clank('lift'); pool().cheer(); }, 380);
+  setTimeout(() => { authSheet(true, 'signup'); btn.classList.remove('lifting'); }, 1150);
+});
 $('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
 $('#authClose').addEventListener('click', () => authSheet(false));
 $('#authBackdrop').addEventListener('click', () => authSheet(false));

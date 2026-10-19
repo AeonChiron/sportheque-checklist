@@ -1724,3 +1724,24 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .pool-head .pool-gym, .pool-head .pool-app { display: block; }
 .pool-head .pool-gym[hidden] { display: none; }
 .pool-bottom .pool-cheer { justify-self: center; }
+
+/* « Commencer » est une barre : les disques claquent, la barre monte, le lapin saute. */
+.pool-cta { position: relative; display: flex; align-items: center; justify-content: center; overflow: visible; }
+.bb-plates { position: absolute; top: 50%; display: flex; align-items: center; gap: 3px; transform: translateY(-50%); transition: transform .28s cubic-bezier(.3, 1.8, .5, 1); }
+.bb-plates.l { left: 16px; flex-direction: row; }
+.bb-plates.r { right: 16px; flex-direction: row-reverse; }
+.bb-plates i { display: block; width: 10px; height: 44px; border-radius: 4px; background: var(--plate-r, #d63a2f); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18); }
+.bb-plates i + i { width: 8px; height: 32px; background: var(--plate-b, #1f5cc4); }
+.bb-plates.l { transform: translate(-6px, -50%); }
+.bb-plates.r { transform: translate(6px, -50%); }
+.pool-cta:not(.lifting) .bb-plates i { animation: plate-nudge 4.5s ease-in-out 2s infinite; }
+@keyframes plate-nudge { 0%, 88%, 100% { transform: none; } 92% { transform: rotate(-6deg); } 96% { transform: rotate(4deg); } }
+.pool-cta.lifting { animation: bar-lift 1s cubic-bezier(.3, 1.2, .5, 1) both; }
+.pool-cta.lifting .bb-plates.l { transform: translate(14px, -50%); }
+.pool-cta.lifting .bb-plates.r { transform: translate(-14px, -50%); }
+@keyframes bar-lift { 0% { transform: none; } 30% { transform: translateY(3px) scaleX(1.01); } 55% { transform: translateY(-16px) scale(1.03); } 75% { transform: translateY(-12px) scale(1.03); } 100% { transform: none; } }
+.mascot-float img.jump { animation: rabbit-jump .7s cubic-bezier(.3, 1.4, .5, 1); transform-origin: 52% 95%; }
+@keyframes rabbit-jump { 0% { transform: none; } 20% { transform: scale(1.08, .9); } 55% { transform: translateY(-38px) scale(.95, 1.06) rotate(-6deg); } 80% { transform: translateY(0) scale(1.06, .93); } 100% { transform: none; } }
+.pool-cheer strong { display: block; font-weight: 700; font-size: 19px; margin-bottom: 4px; }
+.pool-cheer span { display: block; font-size: 16px; opacity: .95; }
+@media (prefers-reduced-motion: reduce) { .pool-cta .bb-plates i, .pool-cta.lifting { animation: none !important; } }
