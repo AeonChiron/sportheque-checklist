@@ -1700,7 +1700,7 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
   background: radial-gradient(120% 80% at 50% 40%, #47a8ea, #1f6db3); color: #fff; text-align: center; opacity: 0; transition: opacity .3s; }
 .moment.on { opacity: 1; }
 .moment-img { width: min(62vw, 260px); height: auto; transform: translateY(40px) scale(.6); opacity: 0; transition: transform .6s cubic-bezier(.25, 1.5, .45, 1), opacity .3s; }
-.moment.on .moment-img { transform: none; opacity: 1; animation: cheer-bounce 1.1s cubic-bezier(.3, 1.4, .5, 1) .6s 2; }
+.moment.on .moment-img { transform: none; opacity: 1; }
 @keyframes cheer-bounce { 0%, 100% { transform: none; } 35% { transform: translateY(-22px) rotate(-4deg); } 65% { transform: translateY(0) rotate(3deg); } }
 .moment-title { margin: 6px 0 0; font: 750 40px/1.05 var(--serif); font-variation-settings: 'SOFT' 100; text-shadow: 0 2px 14px rgba(0, 30, 80, .35); }
 .moment-sub { margin: 0; max-width: 28ch; font-size: 17px; opacity: .95; }
@@ -1745,3 +1745,15 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .pool-cheer strong { display: block; font-weight: 700; font-size: 19px; margin-bottom: 4px; }
 .pool-cheer span { display: block; font-size: 16px; opacity: .95; }
 @media (prefers-reduced-motion: reduce) { .pool-cta .bb-plates i, .pool-cta.lifting { animation: none !important; } }
+
+/* Le lapin reste immobile (les images ne s'animent pas bien). */
+.mascot-home .mascot-img, .mascot-home.hop .mascot-img, .sent-crew .mascot-img, .mascot-float img { animation: none !important; }
+
+/* Accueil + Recommencer : toujours visibles en haut. */
+.quick-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.quick-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: 600 14px/1 var(--font); cursor: pointer; }
+.quick-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.quick-btn:active { transform: scale(.96); }
+#setup > .quick-row { justify-content: flex-start; }
+#restartYes { background: var(--bad); border-color: var(--bad); color: #fff; }
+#sheetFoot:has(#restartYes) { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

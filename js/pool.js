@@ -195,8 +195,6 @@ export function mountPool(root) {
     start() { requestAnimationFrame(resize); if (!still && !raf) { last = 0; raf = requestAnimationFrame(step); } else requestAnimationFrame(() => { resize(); draw(); }); },
     stop() { cancelAnimationFrame(raf); raf = 0; },
     cheer() {
-      const img = hero.querySelector('img');
-      img.classList.remove('jump'); void img.offsetWidth; img.classList.add('jump');
       for (let k = 0; k < 4; k++) setTimeout(() => ripples.push({ x: s.x + (Math.random() - 0.5) * 30, y: s.y + (Math.random() - 0.5) * 10, age: 0, str: 1 - k * 0.15, seed: Math.random() * 6.28 }), 380 + k * 90);
     },
   };

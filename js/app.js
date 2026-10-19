@@ -736,7 +736,7 @@ function hideAllDone() {
   m.classList.remove('on');
   setTimeout(() => { m.hidden = true; }, 300);
 }
-$('#momentClose').addEventListener('click', hideAllDone);
+$('#momentClose').addEventListener('click', () => { hideAllDone(); setTimeout(openFinish, reducedMotion() ? 0 : 250); });
 $('#momentAllDone').addEventListener('click', (e) => { if (e.target.id === 'momentAllDone') hideAllDone(); });
 
 // Un mot différent à chaque tâche cochée (moins robotique).
@@ -2170,6 +2170,8 @@ const pool = () => (poolCtl ||= mountPool($('#pool')));
 function openAuth() {
   const fromLink = location.hash.startsWith('#probleme=');
   if (fromLink) authUI.role = 'boss'; // le lien d'un courriel va aux superviseurs
+  $('#poolStart').querySelector('[data-t]').dataset.t = 'getStarted';
+  $('#poolLogin').hidden = false;
   paintAuth();
   $('#authError').innerHTML = '';
   show('auth');
@@ -2192,13 +2194,32 @@ function authSheet(open, tab) {
 $('#poolStart').addEventListener('click', (e) => {
   const btn = e.currentTarget;
   if (btn.classList.contains('lifting')) return;
-  if (reducedMotion()) { authSheet(true, 'signup'); return; }
+  const go = () => (session.user ? route() : authSheet(true, 'signup'));
+  if (reducedMotion()) { go(); return; }
   btn.classList.add('lifting');
   clank('plate'); buzz('plate');
   setTimeout(() => { clank('lift'); pool().cheer(); }, 380);
-  setTimeout(() => { authSheet(true, 'signup'); btn.classList.remove('lifting'); }, 1150);
+  setTimeout(() => { go(); btn.classList.remove('lifting'); }, 1150);
 });
 $('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
+// « Accueil » : retour à la page du plancher, toujours à portée de pouce.
+function goFront() {
+  const inside = Boolean(session.user);
+  paintStatic();
+  $('#poolStart').querySelector('[data-t]').dataset.t = inside ? 'resumeShift' : 'getStarted';
+  paintStatic();
+  $('#poolLogin').hidden = inside;
+  authSheet(false);
+  show('auth');
+}
+for (const b of document.querySelectorAll('[data-front]')) b.addEventListener('click', goFront);
+// « Recommencer le quart » : on demande une fois avant de tout décocher.
+$('#restartBtn').addEventListener('click', () => {
+  openSheet(`<div class="sheet-head"><h2>${t('restartTitle')}</h2></div><p class="lede">${t('restartBody')}</p>`, (root) => {
+    $('#restartYes').onclick = () => { state.tasks = {}; save(); closeSheet(); renderChecklist(); toast(t('restartShift'), 'muted'); };
+    $('#restartNo').onclick = closeSheet;
+  }, `<button type="button" class="btn ghost" id="restartNo">${t('cancel2')}</button><button type="button" class="btn primary danger" id="restartYes">${t('restartYes')}</button>`);
+});
 $('#authClose').addEventListener('click', () => authSheet(false));
 $('#authBackdrop').addEventListener('click', () => authSheet(false));
 function paintAuth() {
