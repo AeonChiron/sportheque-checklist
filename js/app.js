@@ -630,18 +630,24 @@ function renderNow() {
   const quiet = (msg) => `<div class="now-card quiet">${esc(msg)}</div>`;
   if (now < plan.start) { box.innerHTML = quiet(t('startsAt', f(plan.start))); return; }
   if (now >= plan.end) { box.innerHTML = quiet(t('over')); return; }
-  const cur = plan.items.find((it) => it.start <= now && now < it.end);
+  const open = (it) => it.kind === 'task' && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped;
+  let cur = plan.items.find((it) => it.start <= now && now < it.end);
   if (!cur) { box.innerHTML = ''; return; }
-  const nextIt = plan.items.find((it) => it.start >= cur.end && it.kind === 'task' && !state.tasks[it.id]?.done);
+  // Tâche finie (même en avance) : on passe tout de suite à la suivante.
+  if (cur.kind === 'task' && !open(cur)) {
+    const ahead = plan.items.find((it) => it.start >= cur.start && open(it)) || plan.items.find(open);
+    if (!ahead) { box.innerHTML = quiet(t('allDone')); return; }
+    cur = ahead;
+  }
+  const nextIt = plan.items.find((it) => it !== cur && it.start >= cur.start && open(it));
   const next = nextIt ? `<div class="next"><span>${t('next')}</span><span class="num">${f(nextIt.start)}</span><b>${esc(nextIt.title)}</b></div>` : '';
-  const pct = Math.round((100 * (now - cur.start)) / (cur.end - cur.start));
   // Une tâche dont l'heure est passée et pas encore cochée : un toucher pour rattraper
   // (on coche au fil du quart plutôt que tout à la fin, et l'historique reste juste).
-  const missed = [...plan.items].reverse().find((it) => it.kind === 'task' && it.end <= now && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped);
+  const missed = [...plan.items].reverse().find((it) => it !== cur && it.kind === 'task' && it.end <= now && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped);
   const catchUp = missed ? `<div class="catch-up" data-id="${esc(missed.id)}"><span>${esc(t('catchUp', missed.title))}</span>
       <button class="btn small ghost" data-act="toggle">✓ ${t('catchYes')}</button><button class="btn small ghost cu-open" data-act="open" aria-label="${esc(t('details'))}">…</button></div>` : '';
-  const remain = `<span class="remain num">${t('left', cur.end - now)}</span>`;
-  const bar = `<div class="now-bar" style="--p:${pct}%"></div>`;
+  const remain = '';
+  const bar = '';
   if (cur.kind !== 'task') {
     box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
       <h2>${esc(cur.kind === 'slack' ? cur.title : t('breakNow'))}</h2>${bar}${next}${catchUp}</div>`;
