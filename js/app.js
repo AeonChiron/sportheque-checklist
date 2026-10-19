@@ -188,7 +188,7 @@ function paintStatic() {
 }
 
 // Susie, la mascotte : son seau se remplit avec les tâches faites aujourd'hui.
-const SUSIE = (cls = '') => `<img class="susie-img ${cls}" src="icons/susie.webp" alt="" draggable="false">`;
+const SUSIE = (cls = '') => `<span class="susie susie-img ${cls}"><img src="icons/susie.webp" alt="" draggable="false"><span class="lid r"><i></i></span><span class="lid l"><i></i></span></span>`;
 function todayProgress() {
   const count = (st) => {
     try {
@@ -218,11 +218,28 @@ function paintCrew() {
   const sent = $('#sentCrew');
   if (sent) sent.innerHTML = SUSIE('cheer');
 }
+// Les clignements de Susie : les deux yeux ensemble, à intervalles un peu
+// irréguliers (comme un vrai clignement), parfois deux de suite.
+function blinkNow(el) {
+  if (!el || reducedMotion()) return;
+  el.classList.remove('blink'); void el.offsetWidth; el.classList.add('blink');
+  setTimeout(() => el.classList.remove('blink'), 260);
+}
+(function blinkLoop() {
+  setTimeout(() => {
+    if (!document.hidden) for (const el of document.querySelectorAll('.susie')) if (el.offsetParent) {
+      blinkNow(el);
+      if (Math.random() < 0.22) setTimeout(() => blinkNow(el), 330);
+    }
+    blinkLoop();
+  }, 2600 + Math.random() * 3400);
+})();
 // Toucher Susie : elle saute et dit un mot d'encouragement.
 let sayTimer = 0;
 $('#susieHome')?.addEventListener('click', () => {
   const btn = $('#susieHome');
   btn.classList.remove('hop'); void btn.offsetWidth; btn.classList.add('hop');
+  blinkNow(btn.querySelector('.susie'));
   const say = $('#susieSay');
   const lines = t('susieLines');
   say.textContent = lines[Math.floor(Math.random() * lines.length)];

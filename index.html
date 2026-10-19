@@ -32,7 +32,7 @@
       <canvas></canvas>
       <div class="susie-float">
         <svg class="buoy back" viewBox="0 0 200 80"><defs><clipPath id="buoyTop"><rect width="200" height="40"/></clipPath></defs><g clip-path="url(#buoyTop)"><ellipse cx="100" cy="40" rx="96" ry="34" fill="#ff8fb3"/><ellipse cx="100" cy="40" rx="96" ry="34" fill="none" stroke="#fff" stroke-width="10" stroke-dasharray="22 30" opacity=".85"/><ellipse cx="100" cy="40" rx="58" ry="17" fill="#2f8ae6" opacity=".55"/></g></svg>
-        <img src="icons/susie.webp" alt="" draggable="false">
+        <span class="susie"><img src="icons/susie.webp" alt="" draggable="false"><span class="lid r"><i></i></span><span class="lid l"><i></i></span></span>
         <svg class="buoy front" viewBox="0 0 200 80"><defs><clipPath id="buoyBot"><rect y="40" width="200" height="40"/></clipPath><mask id="buoyHole"><rect width="200" height="80" fill="#fff"/><ellipse cx="100" cy="40" rx="58" ry="17" fill="#000"/></mask></defs><g clip-path="url(#buoyBot)" mask="url(#buoyHole)"><ellipse cx="100" cy="40" rx="96" ry="34" fill="#ff8fb3"/><ellipse cx="100" cy="40" rx="96" ry="34" fill="none" stroke="#fff" stroke-width="10" stroke-dasharray="22 30" opacity=".85"/><ellipse cx="100" cy="52" rx="80" ry="18" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="4"/></g></svg>
       </div>
     </div>
@@ -135,7 +135,7 @@
           </g>
           <circle cx="100" cy="100" r="94" class="bucket-rim"/>
         </svg>
-        <button type="button" class="susie-home" id="susieHome" data-label="susieName"><img src="icons/susie.webp" alt="" draggable="false"></button>
+        <button type="button" class="susie-home" id="susieHome" data-label="susieName"><span class="susie"><img src="icons/susie.webp" alt="" draggable="false"><span class="lid r"><i></i></span><span class="lid l"><i></i></span></span></button>
         <p class="susie-say" id="susieSay" aria-live="polite" hidden></p>
       </div>
       <div class="bucket-count"><b class="num" id="bucketNum"></b><span id="bucketLbl"></span></div>

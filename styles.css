@@ -1577,8 +1577,8 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .pool { position: absolute; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
 .pool canvas { display: block; }
 .susie-float { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
-.susie-float img { position: relative; z-index: 1; display: block; width: 100%; height: auto; animation: susie-bob 3.4s ease-in-out infinite; transition: scale .25s cubic-bezier(.3, 1.6, .5, 1); filter: drop-shadow(0 6px 10px rgba(10, 40, 90, .25)); }
-.susie-float.held img { scale: 1.08; }
+.susie-float .susie { position: relative; z-index: 1; display: block; width: 100%; height: auto; animation: susie-bob 3.4s ease-in-out infinite; transition: scale .25s cubic-bezier(.3, 1.6, .5, 1); filter: drop-shadow(0 6px 10px rgba(10, 40, 90, .25)); }
+.susie-float.held .susie { scale: 1.08; }
 .susie-float .buoy { position: absolute; left: -8%; width: 116%; height: auto; bottom: -6%; pointer-events: none; }
 .susie-float .buoy.back { z-index: 0; }
 .susie-float .buoy.front { z-index: 2; }
@@ -1628,8 +1628,8 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .bubble.b2 { animation-delay: 1.3s; animation-duration: 5s; } .bubble.b3 { animation-delay: 2.4s; }
 @keyframes bubble-up { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .9; } 100% { transform: translateY(-120px); opacity: 0; } }
 .susie-home { position: absolute; left: 50%; bottom: 12%; width: 54%; padding: 0; border: 0; background: none; transform: translateX(-50%); cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.susie-home img { display: block; width: 100%; height: auto; transform-origin: 50% 100%; animation: susie-idle 3.6s ease-in-out infinite; filter: drop-shadow(0 8px 12px rgba(20, 60, 120, .22)); }
-.susie-home.hop img { animation: susie-hop .7s cubic-bezier(.3, 1.5, .5, 1); }
+.susie-home .susie { display: block; width: 100%; height: auto; transform-origin: 50% 100%; animation: susie-idle 3.6s ease-in-out infinite; filter: drop-shadow(0 8px 12px rgba(20, 60, 120, .22)); }
+.susie-home.hop .susie { animation: susie-hop .7s cubic-bezier(.3, 1.5, .5, 1); }
 @keyframes susie-idle { 0%, 100% { transform: translateY(0) rotate(0); } 30% { transform: translateY(-4px) rotate(-1.5deg); } 70% { transform: translateY(-2px) rotate(1.5deg); } }
 @keyframes susie-hop { 0% { transform: translateY(0) scale(1, 1); } 20% { transform: translateY(0) scale(1.08, .9); } 50% { transform: translateY(-34px) scale(.95, 1.06) rotate(-4deg); } 80% { transform: translateY(0) scale(1.06, .94); } 100% { transform: translateY(0) scale(1, 1); } }
 .susie-say { position: absolute; top: 4%; right: -4%; max-width: 62%; margin: 0; padding: 9px 13px; border-radius: 16px 16px 4px 16px; background: var(--ink); color: var(--bg); font: 600 14px/1.3 var(--font); box-shadow: 0 10px 22px -12px rgba(0, 0, 0, .5); }
@@ -1648,11 +1648,11 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .tab.on { color: var(--accent); }
 .tab.on svg { fill: color-mix(in srgb, var(--accent) 20%, transparent); }
 /* Susie ailleurs : quart enregistré (elle saute de joie), écrans vides. */
-.sent-crew .susie-img { display: block; width: 180px; height: auto; margin: 0 auto; transform-origin: 50% 100%; animation: susie-cheer 1.6s cubic-bezier(.3, 1.4, .5, 1) .2s 2 both; }
+.sent-crew .susie-img { display: block; position: relative; width: 180px; height: auto; margin: 0 auto; transform-origin: 50% 100%; animation: susie-cheer 1.6s cubic-bezier(.3, 1.4, .5, 1) .2s 2 both; }
 @keyframes susie-cheer { 0%, 100% { transform: none; } 25% { transform: translateY(-26px) rotate(-6deg); } 50% { transform: none; } 75% { transform: translateY(-14px) rotate(5deg); } }
-.folder-empty .susie-img { width: 110px; height: auto; animation: susie-idle 3.6s ease-in-out infinite; }
+.folder-empty .susie-img { display: block; position: relative; width: 110px; height: auto; animation: susie-idle 3.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .susie-float img, .susie-home img, .wave, .bubble, .sent-crew .susie-img, .folder-empty .susie-img, .pool-hello, .pool-cta, .pool-login { animation: none !important; }
+  .susie-float .susie, .susie-home .susie, .wave, .bubble, .sent-crew .susie-img, .folder-empty .susie-img, .pool-hello, .pool-cta, .pool-login { animation: none !important; }
   .auth-sheet, .bucket-level { transition: none; }
 }
 /* Accueil plus léger, comme une app : petit logo, pas de grand en-tête. */
@@ -1660,3 +1660,23 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 #setup .brand-floor { margin-top: 2px; font-size: 11px; }
 #setup .setup-top { align-items: center; }
 #setup .home-hero h1 { font-size: 34px; }
+
+/* Susie cligne des yeux : des paupières par-dessus chaque verre de lunettes.
+   Fermeture rapide (ease-in), ouverture plus douce (ease-out), bord courbé. */
+.susie { position: relative; display: block; }
+.susie > img { display: block; width: 100%; height: auto; }
+.susie .lid { position: absolute; border-radius: 50%; overflow: hidden; pointer-events: none; }
+.susie .lid.r { left: 57.34%; top: 26.15%; width: 26.56%; height: 25.38%; }
+.susie .lid.l { left: 27.97%; top: 32.88%; width: 21.33%; height: 20.38%; }
+.susie .lid i { position: absolute; inset: -4% -4% -2%; border-radius: 0 0 50% 50% / 0 0 26% 26%;
+  background: linear-gradient(180deg, #2f7fd0 0%, #4a9fe6 60%, #6db6ee 100%);
+  box-shadow: inset 0 -3px 0 #16304f, 0 1px 1px rgba(0, 0, 0, .15);
+  transform: translateY(-104%); }
+.susie.blink .lid i { animation: susie-blink .24s both; }
+@keyframes susie-blink {
+  0% { transform: translateY(-104%); animation-timing-function: cubic-bezier(.55, 0, .9, .45); }
+  38% { transform: translateY(0); }
+  55% { transform: translateY(0); animation-timing-function: cubic-bezier(.1, .55, .45, 1); }
+  100% { transform: translateY(-104%); }
+}
+@media (prefers-reduced-motion: reduce) { .susie.blink .lid i { animation: none; } }
