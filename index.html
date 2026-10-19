@@ -29,12 +29,12 @@
   <section id="auth" class="screen pool-screen" hidden>
     <!-- Le plancher de gym fraîchement lavé (dessiné en code, js/pool.js) -->
     <div class="pool" id="pool" aria-hidden="true">
-      <canvas data-name="QUART GYM"></canvas>
+      <canvas data-name="CHECKLIST"></canvas>
       <div class="mascot-float"><img src="icons/rabbit.webp" alt="" draggable="false"></div>
     </div>
     <div class="pool-ui">
       <div class="pool-top">
-        <h1 class="sr-only" data-t="appName"></h1><span></span>
+        <span></span>
         <div class="setup-tools">
           <button type="button" class="theme-btn" data-theme-btn aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><defs><mask id="tmask2"><rect width="24" height="24" fill="#fff"/><circle class="tm-bite" cx="30" cy="4" r="7.5" fill="#000"/></mask></defs><g mask="url(#tmask2)"><circle class="tm-core" cx="12" cy="12" r="5"/></g><g class="tm-rays"><path d="M12 1.8v2.4M12 19.8v2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/></g></svg>
@@ -45,7 +45,11 @@
           </div>
         </div>
       </div>
+      <div class="pool-head">
+        <h1><span class="pool-gym" id="poolGym"></span><span class="pool-app" data-t="appTitle"></span></h1>
+      </div>
       <div class="pool-bottom">
+        <p class="pool-cheer" id="poolCheer"></p>
         <button type="button" class="pool-cta" id="poolStart" data-t="getStarted"></button>
         <button type="button" class="pool-login" id="poolLogin" data-t="haveAccount"></button>
       </div>

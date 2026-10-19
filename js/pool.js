@@ -18,22 +18,26 @@ export function mountPool(root) {
   const ripples = [];
   const s = { touched: false, x: 0, y: 0, vx: 0, vy: 0, lean: 0, drag: null, size: 150, sq: 0, sqv: 0, sqAxis: 0 };
   const hold = { on: false, x: 0, y: 0 };
+  const edges = { top: 96, bottom: 600 };
   const dark = () => document.documentElement.dataset.theme === 'dark';
 
   function bounds() {
-    const h = s.size * RATIO;
-    return { minX: s.size * FOOT_X + 6, maxX: W - s.size * (1 - FOOT_X) - 6, minY: 96 + h * FOOT_Y, maxY: Math.max(140 + h, H - 210) };
+    const h = s.size * RATIO, top = edges.top + h * FOOT_Y + 8;
+    return { minX: s.size * FOOT_X + 6, maxX: W - s.size * (1 - FOOT_X) - 6, minY: top, maxY: Math.max(top + 10, edges.bottom - 14) };
   }
   function resize() {
     const r = root.getBoundingClientRect();
     dpr = Math.min(2, window.devicePixelRatio || 1);
     W = r.width; H = r.height;
+    const head = root.parentElement.querySelector('.pool-head')?.getBoundingClientRect(), foot = root.parentElement.querySelector('.pool-bottom')?.getBoundingClientRect();
+    edges.top = head?.height ? head.bottom - r.top : 96;
+    edges.bottom = foot?.height ? foot.top - r.top : H - 210;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-    s.size = Math.max(110, Math.min(170, W * 0.38));
+    s.size = Math.max(84, Math.min(170, W * 0.38, (edges.bottom - edges.top - 40) / RATIO));
     hero.style.width = `${s.size}px`;
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
-    if (!s.touched && W > 200) { const b = bounds(); s.x = W * 0.5; s.y = Math.min(b.maxY, Math.max(b.minY, H * 0.36)); }
+    if (!s.touched && W > 200) { const b = bounds(); s.x = W * 0.5; s.y = (b.minY + b.maxY) / 2; }
     if (still) draw();
   }
 

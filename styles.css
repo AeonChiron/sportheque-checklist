@@ -1706,3 +1706,21 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .moment-sub { margin: 0; max-width: 28ch; font-size: 17px; opacity: .95; }
 .moment-btn { width: min(100%, 420px); margin-top: 14px; animation: none; }
 @media (prefers-reduced-motion: reduce) { .moment-img, .moment.on .moment-img, .sent-crew .mascot-img, .mascot-home .mascot-img { animation: none !important; transition: none; } }
+
+/* Connexion : nom du gym + de l'appli en haut, phrase du jour et gros bouton en bas. */
+.pool-head { text-align: center; color: #fff; text-shadow: 0 2px 14px rgba(0, 40, 90, .35); animation: rise-in .8s cubic-bezier(.2, .9, .3, 1.2) .1s both; }
+.pool-gym { margin: 4px 0 0; font: 750 clamp(40px, 12vw, 56px)/1 var(--serif); font-variation-settings: 'SOFT' 100; letter-spacing: -.01em; }
+.pool-app { margin: 8px 0 0; font: 600 15px/1.2 var(--display); letter-spacing: .2em; text-transform: uppercase; opacity: .95; }
+.pool-gym[hidden] + .pool-app { font: 750 clamp(30px, 9vw, 40px)/1.05 var(--serif); font-variation-settings: 'SOFT' 100; letter-spacing: 0; text-transform: none; }
+.pool-bottom { margin-top: auto; gap: 14px; }
+.pool-cheer { margin: 0 auto 6px; max-width: 30ch; color: #fff; font: 500 18px/1.35 var(--font); text-wrap: balance; text-shadow: 0 1px 10px rgba(0, 40, 90, .45); animation: rise-in .8s cubic-bezier(.2, .9, .3, 1.2) .25s both; }
+.pool-cta { min-height: 74px; font: 700 21px/1 var(--font); letter-spacing: .01em; box-shadow: 0 14px 32px -10px rgba(0, 30, 80, .6), inset 0 -3px 0 rgba(0, 0, 0, .07); }
+.pool-ui { justify-content: flex-start; }
+@media (prefers-reduced-motion: reduce) { .pool-head, .pool-cheer { animation: none; } }
+.pool-head .pool-app { text-transform: uppercase; letter-spacing: .18em; }
+.pool-head .pool-gym[hidden] + .pool-app { text-transform: none; letter-spacing: 0; }
+.pool-bottom .pool-cheer { padding: 10px 18px; border-radius: 18px; background: rgba(10, 50, 100, .28); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.pool-head h1 { margin: 0; font: inherit; }
+.pool-head .pool-gym, .pool-head .pool-app { display: block; }
+.pool-head .pool-gym[hidden] { display: none; }
+.pool-bottom .pool-cheer { justify-self: center; }
