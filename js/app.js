@@ -8,6 +8,7 @@ import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } fro
 import { session, accounts, isBoss, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
+import { crew, crewHeads } from './crew.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport } from './board.js';
 
 const KEY = 'gym-shift-v2';
@@ -182,7 +183,23 @@ function paintStatic() {
   paintThemeButtons();
   $('#manualVersion').textContent = [CONFIG.gymName && CONFIG.since ? `${CONFIG.gymName} · ${t('since', CONFIG.since)}` : '', t('manual', MANUAL_VERSION)].filter(Boolean).join(' · ');
   renderBrand();
+  paintCrew();
 }
+
+// L'équipe dessinée : le trio du logo à la connexion, quelqu'un qui salue à
+// l'accueil (une personne différente chaque jour), la barre levée au quart fini.
+const CREW_IDS = ['mo', 'ana', 'lea'];
+const crewOf = (key) => CREW_IDS[[...String(key)].reduce((n, ch) => n + ch.charCodeAt(0), 0) % CREW_IDS.length];
+function paintCrew() {
+  const auth = $('#authCrew');
+  if (auth) auth.innerHTML = crewHeads(t('crewTeam'));
+  const home = $('#homeCrew');
+  if (home) home.innerHTML = crew('wave', crewOf(todayISO()), t('crewHello'));
+  const sent = $('#sentCrew');
+  if (sent) sent.innerHTML = crew('lift', crewOf(`${todayISO()}!`), t('crewLift'));
+}
+// Les tâches que l'équipe fait « en personne » dans le détail.
+const CREW_POSE = { poubelles: 'bin', 'aspirateur-muscu': 'vacuum', 'aspirateur-cardio': 'vacuum', 'aspirateur-gym': 'vacuum', desinfection: 'wipe', 'points-contact': 'wipe', guenilles: 'rags' };
 
 // ---------- Thème : suit le téléphone, ou clair / sombre au choix ----------
 // Un toucher sur le soleil / la lune bascule; le Menu offre aussi « Auto ».
@@ -994,6 +1011,7 @@ function taskVisual(it) {
   if (it.deep || (it.zone && it.photo === 'miroirs')) {
     return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption><div data-map></div></figure>`;
   }
+  if (CREW_POSE[it.photo]) return `<figure class="visual alive crew-visual">${crew(CREW_POSE[it.photo], crewOf(it.id), it.title)}</figure>`;
   return `<figure class="visual alive">${illustration(it.photo, it.title)}</figure>`;
 }
 
@@ -2060,7 +2078,7 @@ function renderHistory({ animate = true } = {}) {
     </div>` : ''}
     <div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${strip}${groups || `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+        : `${strip}${groups || `<div class="folder-empty alive">${crew('rest', 'ana')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
     </div>
     ${ready ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
@@ -2279,7 +2297,7 @@ function renderBoss({ animate = true } = {}) {
           <button type="button" role="tab" data-pfilter="all" aria-selected="${boss.filter === 'all'}">${esc(t('allProblems'))}</button>
         </div>
         <div class="pb-list${animate ? ' cascade' : ''}">${list.length ? list.map(problemCard).join('')
-          : `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
+          : `<div class="folder-empty alive">${crew('rest', 'lea')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
   }
   $('#bossBody').innerHTML = `
     <button type="button" class="rp-card boss-hist" data-go="history">

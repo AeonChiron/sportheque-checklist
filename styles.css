@@ -1540,3 +1540,31 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 @media (prefers-reduced-motion: reduce) {
   .plate.land, .barbell.clank svg, .barbell.lift svg { animation: none !important; }
 }
+
+/* =====================================================================
+   L'équipe d'entretien (js/crew.js) et les motifs Sporthèque 1981.
+   ===================================================================== */
+.crew-heads { width: 128px; margin: 0 0 8px -4px; }
+.crew-heads .illus { display: block; width: 100%; height: auto; }
+.hero-crew { float: right; width: 104px; margin: -10px -8px 0 10px; }
+.hero-crew .illus { display: block; width: 100%; height: auto; }
+.sent-crew { width: 176px; animation: badge .55s var(--spring) both; }
+.sent-crew .illus { display: block; width: 100%; height: auto; }
+.visual.crew-visual .illus { max-height: 200px; }
+.folder-empty .illus.crew { width: 120px; height: 140px; }
+/* Leurs petits gestes (seulement dans un parent .alive, jamais si on réduit les animations). */
+.alive .a-wave { animation: crew-wave 1.6s ease-in-out infinite; }
+@keyframes crew-wave { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-14deg); } }
+.alive .a-lift { animation: crew-lift 2.4s cubic-bezier(.3, 1.3, .5, 1) infinite; }
+@keyframes crew-lift { 0%, 100% { transform: translateY(0); } 40%, 70% { transform: translateY(-5px); } }
+.alive .a-press { animation: crew-press 1.4s ease-in-out infinite; }
+@keyframes crew-press { 0%, 100% { transform: translateY(-3px); opacity: .4; } 50% { transform: translateY(3px); opacity: 1; } }
+.alive .a-rub { animation: crew-rub 1.8s ease-in-out infinite; }
+@keyframes crew-rub { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(3px, -4px); } 75% { transform: translate(-2px, 3px); } }
+/* Motif « bas de sport 1981 » : deux rayures sous les titres de section (mode clair). */
+:root:not([data-theme="dark"]) :is(.list-head, .hi-dayhead) :is(h2, h3)::after { height: 9px; width: 34px; bottom: -8px; border-radius: 0; background:
+  linear-gradient(var(--plate-r) 0 0) top / 100% 3px no-repeat, linear-gradient(var(--plate-b) 0 0) bottom / 100% 3px no-repeat; }
+@media (prefers-reduced-motion: reduce) {
+  .alive :is(.a-wave, .a-lift, .a-press, .a-rub) { animation: none !important; }
+  .sent-crew { animation: none; }
+}
