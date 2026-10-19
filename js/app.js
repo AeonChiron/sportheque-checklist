@@ -187,8 +187,8 @@ function paintStatic() {
   paintCrew();
 }
 
-// Susie, la mascotte : son seau se remplit avec les tâches faites aujourd'hui.
-const SUSIE = (cls = '') => `<span class="susie susie-img ${cls}"><img src="icons/susie.webp" alt="" draggable="false"><span class="lid r"><i></i></span><span class="lid l"><i></i></span></span>`;
+// La mascotte (le lapin) : son seau se remplit avec les tâches faites aujourd'hui.
+
 function todayProgress() {
   const count = (st) => {
     try {
@@ -216,32 +216,15 @@ function paintCrew() {
     $('#bucketArt').setAttribute('aria-label', pr ? t('barLabel', pr.done, pr.total) : t('bucketReady'));
   }
   const sent = $('#sentCrew');
-  if (sent) sent.innerHTML = SUSIE('cheer');
+  if (sent && !sent.firstChild) sent.innerHTML = '<img class="mascot-img rest" src="icons/rabbit-rest.webp" alt="" draggable="false">';
 }
-// Les clignements de Susie : les deux yeux ensemble, à intervalles un peu
-// irréguliers (comme un vrai clignement), parfois deux de suite.
-function blinkNow(el) {
-  if (!el || reducedMotion()) return;
-  el.classList.remove('blink'); void el.offsetWidth; el.classList.add('blink');
-  setTimeout(() => el.classList.remove('blink'), 260);
-}
-(function blinkLoop() {
-  setTimeout(() => {
-    if (!document.hidden) for (const el of document.querySelectorAll('.susie')) if (el.offsetParent) {
-      blinkNow(el);
-      if (Math.random() < 0.22) setTimeout(() => blinkNow(el), 330);
-    }
-    blinkLoop();
-  }, 2600 + Math.random() * 3400);
-})();
-// Toucher Susie : elle saute et dit un mot d'encouragement.
+// Toucher la mascotte : il saute et dit un mot d'encouragement.
 let sayTimer = 0;
-$('#susieHome')?.addEventListener('click', () => {
-  const btn = $('#susieHome');
+$('#mascotHome')?.addEventListener('click', () => {
+  const btn = $('#mascotHome');
   btn.classList.remove('hop'); void btn.offsetWidth; btn.classList.add('hop');
-  blinkNow(btn.querySelector('.susie'));
-  const say = $('#susieSay');
-  const lines = t('susieLines');
+  const say = $('#mascotSay');
+  const lines = t('mascotLines');
   say.textContent = lines[Math.floor(Math.random() * lines.length)];
   say.hidden = false;
   say.classList.remove('pop'); void say.offsetWidth; say.classList.add('pop');
@@ -725,6 +708,7 @@ function toggleDone(id) {
   renderChecklist();
   if (e.done) { clank('plate'); buzz('plate'); }
   if (!wasAll && allDone()) setTimeout(() => { clank('lift'); buzz('lift'); }, reducedMotion() ? 0 : 650);
+  if (!wasAll && allDone()) setTimeout(showAllDone, reducedMotion() ? 0 : 900);
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
   const tasks = planTasks();
   const left = tasks.filter((x) => !state.tasks[x.id]?.done).length;
@@ -735,6 +719,21 @@ function toggleDone(id) {
   else toast(e.done ? pickCheer() : t('unchecked'), e.done ? 'ok' : 'muted', undo);
   bump($('#progressLabel'));
 }
+
+// Moment spécial : la dernière tâche cochée fait sauter la mascotte de joie.
+function showAllDone() {
+  const m = $('#momentAllDone');
+  m.hidden = false;
+  requestAnimationFrame(() => m.classList.add('on'));
+  $('#momentClose').focus({ preventScroll: true });
+}
+function hideAllDone() {
+  const m = $('#momentAllDone');
+  m.classList.remove('on');
+  setTimeout(() => { m.hidden = true; }, 300);
+}
+$('#momentClose').addEventListener('click', hideAllDone);
+$('#momentAllDone').addEventListener('click', (e) => { if (e.target.id === 'momentAllDone') hideAllDone(); });
 
 // Un mot différent à chaque tâche cochée (moins robotique).
 let cheerAt = -1;
@@ -2126,7 +2125,7 @@ function renderHistory({ animate = true } = {}) {
     </div>` : ''}
     <div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${strip}${groups || `<div class="folder-empty alive">${SUSIE('rest')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+        : `${strip}${groups || `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
     </div>
     ${ready ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
@@ -2161,7 +2160,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cu
 const authUI = { tab: 'login', role: 'employee' };
 const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing' };
 
-// La piscine de Susie (créée au premier affichage de la connexion).
+// Le plancher mouillé de la connexion (créé au premier affichage).
 let poolCtl = null;
 const pool = () => (poolCtl ||= mountPool($('#pool')));
 function openAuth() {
@@ -2368,7 +2367,7 @@ function renderBoss({ animate = true } = {}) {
           <button type="button" role="tab" data-pfilter="all" aria-selected="${boss.filter === 'all'}">${esc(t('allProblems'))}</button>
         </div>
         <div class="pb-list${animate ? ' cascade' : ''}">${list.length ? list.map(problemCard).join('')
-          : `<div class="folder-empty alive">${SUSIE('rest')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
+          : `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
   }
   $('#bossBody').innerHTML = `
     <button type="button" class="rp-card boss-hist" data-go="history">
