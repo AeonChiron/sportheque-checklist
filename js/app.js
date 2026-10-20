@@ -2417,7 +2417,8 @@ $('#poolStart').addEventListener('click', (e) => {
     if (state) { route(); return; } // quart en cours : retour aux tâches
     // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
     const nx = nextShift();
-    if (nx) { startScheduled(nx); return; }
+    if (nx?.ready) { startScheduled(nx); return; }
+    if (nx) { openNextOverview(); return; } // trop tôt : l'aperçu, sans pouvoir cocher
     openScheduleSheet({ first: true }); // pas encore d'horaire : on l'entre, une fois
   };
   if (reducedMotion()) { go(); return; }
@@ -2507,13 +2508,13 @@ function dayWord(iso) {
   if (iso === addDays(today, 1)) return t('tomorrow');
   return cap(dateOf(iso).toLocaleDateString(locale(), { weekday: 'long' }));
 }
+function startAt(nx) { const at = dateOf(nx.date); at.setHours(0, toMin(nx.start), 0, 0); return at; }
 function paintNextBox(inside) {
   const box = $('#poolNext');
-  const nx = inside && !state && nextShift();
+  const nx = inside && nextShift();
   box.hidden = !nx;
   if (!nx) return;
-  const at = dateOf(nx.date);
-  at.setHours(0, toMin(nx.start), 0, 0);
+  const at = startAt(nx);
   const left = Math.ceil((at - Date.now()) / 6e4);
   const go = left <= 0;
   box.classList.toggle('ready', nx.ready);
@@ -2524,14 +2525,14 @@ function paintNextBox(inside) {
 }
 // La boîte dorée : l'aperçu du quart en bref, puis « Commencer » ou « Changer l'heure ».
 function openNextOverview() {
-  const nx = !state && nextShift();
+  const nx = nextShift();
   if (!nx) return;
   const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
   const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`).join('');
-  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div><ol class="ov-list">${rows}</ol>`, () => {
-    $('#ovGo').onclick = () => { closeSheet(); startScheduled(nx); };
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${state || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
+    $('#ovGo').onclick = () => { closeSheet(); if (state) openChecklist(); else if (nx.ready) startScheduled(nx); };
     $('#ovTime').onclick = () => { closeSheet(); window.history.replaceState(null, '', location.pathname); setupScreen(); };
-  }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo">${t('ovStart')}</button>`);
+  }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${state || nx.ready ? '' : ' disabled'}>${state ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
 }
 $('#poolNext').addEventListener('click', openNextOverview);
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».

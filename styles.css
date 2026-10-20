@@ -2188,3 +2188,5 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 #sheet .sheet-foot:has(#ovGo) { display: grid; grid-template-columns: 1fr; gap: 8px; }
 #sheet .sheet-foot #ovGo { order: -1; width: 100%; min-height: 56px; font-size: 17px; }
 #sheet .sheet-foot #ovTime { width: 100%; }
+.ov-note { margin: 0 0 8px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, #f5b326 16%, var(--surface)); font-size: 14px; }
+#sheet .sheet-foot #ovGo:disabled { opacity: 1; background: var(--line); color: var(--ink, inherit); box-shadow: none; }
