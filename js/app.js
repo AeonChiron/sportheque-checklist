@@ -546,23 +546,77 @@ function paintSetupSched() {
 // et les trois endroits à connaître.
 function maybeWelcome() {
   const key = session.user?.email;
-  if (!key || prefs.welcomed?.[key] || !$('#sheet').hidden) return;
+  if (!key || prefs.welcomed?.[key] || $('#tour')) return;
+  if (!$('#sheet').hidden) { setTimeout(maybeWelcome, 600); return; } // attend qu'un panneau se ferme
+  if (current === 'auth') startTour();
+}
+// Visite guidée de l'accueil : une lumière sur chaque bouton, une phrase, puis un bravo.
+function startTour() {
+  const key = session.user?.email;
+  if (!key || $('#tour')) return;
+  if (current !== 'auth') goFront();
   prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true };
   savePrefs();
-  const hasSched = Boolean(mySchedule() && Object.keys(mySchedule()).length);
-  const steps = [[true, t('wlAccount')], [hasSched, t('wlSchedule')], [false, t('wlFirst')]];
-  const done = steps.filter((x) => x[0]).length;
-  openSheet(`<div class="sheet-head"><p class="eyebrow">${esc(t('wlEyebrow', done, steps.length))}</p><h2>${esc(t('wlTitle', (session.user.name || '').split(' ')[0]))}</h2></div>
-    <div class="wl-bar" aria-hidden="true"><i style="--w:${Math.round((100 * done) / steps.length)}%"></i></div>
-    <ol class="wl-steps">${steps.map(([ok, label]) => `<li class="${ok ? 'ok' : ''}"><span>${ok ? '✓' : ''}</span>${esc(label)}</li>`).join('')}</ol>
-    <p class="block-label">${esc(t('wlWhere'))}</p>
-    <ul class="wl-map"><li><b>${esc(t('wlCard'))}</b>${esc(t('wlCardSub'))}</li><li><b>${esc(t('dashShifts'))}</b>${esc(t('wlShiftsSub'))}</li><li><b>${esc(t('dashFlag'))}</b>${esc(t('wlFlagSub'))}</li></ul>`,
-  () => {
-    $('#wlGo').onclick = closeSheet;
-    setTimeout(() => sfx('welcome'), 250);
-    $('#wlSched')?.addEventListener('click', () => { closeSheet(); setTimeout(() => openScheduleSheet(), 350); });
-  }, `${hasSched ? '' : `<button type="button" class="btn ghost" id="wlSched">${t('schedSet')}</button>`}<button type="button" class="btn primary" id="wlGo">${t('wlGo')}</button>`);
+  const steps = [
+    ['#poolStart', 'tourStart'],
+    ['#poolDash .dash-shifts', 'tourShifts'],
+    ['#dashFlag', 'tourFlag'],
+    ['#dashBoss', 'tourBoss'],
+    ['#poolAccount', 'tourAccount'],
+  ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
+  const box = document.createElement('div');
+  box.id = 'tour';
+  box.className = 'tour';
+  box.innerHTML = '<div class="tour-hole" aria-hidden="true"></div><div class="tour-tip" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="tourH"></div>';
+  document.body.append(box);
+  const hole = box.querySelector('.tour-hole'), tip = box.querySelector('.tour-tip');
+  let i = 0;
+  const end = () => { box.classList.remove('on'); setTimeout(() => box.remove(), 300); removeEventListener('resize', place); };
+  const finish = () => {
+    hole.style.cssText = `left:${innerWidth / 2}px;top:${innerHeight / 2}px;width:0;height:0`; // tout reste sombre derrière le bravo
+    tip.className = 'tour-tip done';
+    tip.style.cssText = '';
+    const hasSched = Boolean(mySchedule() && Object.keys(mySchedule()).length);
+    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t('tourDoneText'))}</p>
+      <div class="tour-btns">${hasSched ? '' : `<button type="button" class="btn ghost" data-tour="sched">${esc(t('schedSet'))}</button>`}<button type="button" class="btn primary" data-tour="end">${esc(t('tourDoneGo'))}</button></div>`;
+    celebrate(); sfx('full'); buzz('plate');
+    tip.querySelector('[data-tour="end"]').focus({ preventScroll: true });
+  };
+  function place() {
+    if (i >= steps.length) return;
+    const el = $(steps[i][0]);
+    const r = el.getBoundingClientRect(), pad = 8;
+    hole.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px;border-radius:${Math.min(28, r.height / 2 + pad)}px`;
+    const below = r.top + r.height / 2 < innerHeight / 2;
+    tip.style.cssText = below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
+    tip.dataset.side = below ? 'below' : 'above';
+    const tr = tip.getBoundingClientRect();
+    tip.style.setProperty('--ax', `${Math.min(Math.max(r.left + r.width / 2 - tr.left - 8, 18), tr.width - 34)}px`); // la pointe de la bulle vise le bouton
+  }
+  const show = () => {
+    if (i >= steps.length) { finish(); return; }
+    const [, k] = steps[i];
+    tip.className = 'tour-tip';
+    tip.innerHTML = `<p class="tour-count">${i + 1} / ${steps.length}</p><h2 id="tourH">${esc(t(`${k}T`))}</h2><p>${esc(t(k))}</p>
+      <div class="tour-btns"><button type="button" class="link" data-tour="skip">${esc(t('tourSkip'))}</button><button type="button" class="btn primary" data-tour="next">${esc(t(i === steps.length - 1 ? 'tourLast' : 'tourNext'))}</button></div>
+      <div class="tour-dots" aria-hidden="true">${steps.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>`;
+    place();
+    sfx('tick');
+    tip.querySelector('[data-tour="next"]').focus({ preventScroll: true });
+  };
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tour]');
+    const act = b?.dataset.tour || (e.target === hole || e.target === box ? 'next' : '');
+    if (act === 'next') { i += 1; show(); }
+    else if (act === 'skip') { i = steps.length; finish(); }
+    else if (act === 'end') end();
+    else if (act === 'sched') { end(); setTimeout(() => openScheduleSheet(), 320); }
+  });
+  box.addEventListener('keydown', (e) => { if (e.key === 'Escape') end(); });
+  addEventListener('resize', place);
+  requestAnimationFrame(() => { box.classList.add('on'); show(); });
 }
+document.addEventListener('click', (e) => { if (e.target.closest('[data-tour-open]')) { closeSheet(); setTimeout(startTour, 360); } });
 // Carte « Mon horaire » en haut de Mes shifts.
 function schedCard() {
   const sc = mySchedule();
@@ -912,7 +966,8 @@ function renderNow() {
 
 function renderChecklist() {
   const lock = shiftLocked();
-  if (!lock && !state.tasks.pointage?.done) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); setTimeout(() => sfx('punch'), 350); } // pointage dès que le quart est ouvert
+  // Le pointage se coche seulement à l'heure du début du quart (pas avant, même si le quart est ouvert).
+  if (!lock && !state.tasks.pointage?.done && Date.now() >= new Date(`${state.date}T${state.start}`).getTime()) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); setTimeout(() => sfx('punch'), 350); }
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -1103,7 +1158,11 @@ $('#flagsBlock').addEventListener('click', (ev) => {
 });
 
 // « En cours » et le couloir avancent toutes les 30 secondes.
-setInterval(() => { if (current === 'checklist' && plan) { renderTimeline(); renderNow(); } }, 30_000);
+setInterval(() => {
+  if (current !== 'checklist' || !plan) return;
+  if (state && !state.tasks.pointage?.done && Date.now() >= new Date(`${state.date}T${state.start}`).getTime()) { renderChecklist(); return; } // l'heure du début : on pointe
+  renderTimeline(); renderNow();
+}, 30_000);
 
 // ---------- Feuille du bas ----------
 let lastFocus = null;
@@ -2638,6 +2697,7 @@ function paintFront() {
   if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
   $('#poolDash').hidden = !inside;
   $('#poolAccount').hidden = !inside;
+  $('#poolHelp').hidden = !inside;
   if (inside) { $('#poolAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase())); $('#poolAccount').setAttribute('aria-label', t('account')); }
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
@@ -2772,7 +2832,8 @@ $('#authForm').addEventListener('submit', async (ev) => {
     refreshAlerts().then(retryLoose);
     toast(t('welcomeName', user.name));
     route();
-    if (authUI.tab === 'signup' && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 700);
+    // Nouveau compte : l'horaire d'abord; la visite guidée suit quand il se ferme.
+    if (authUI.tab === 'signup' && !mySchedule()) { paintFront.welcomeQueued = true; setTimeout(() => openScheduleSheet({ first: true }), 700); }
   } catch (err) {
     fail(err.status === 0 ? 'errNetwork' : AUTH_ERRORS[err.message] || (session.mode === 'demo' && err.message === 'login' ? 'errLogin' : 'errServer'));
   } finally {
@@ -2853,7 +2914,7 @@ function openAccount() {
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
         <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
-      <button type="button" class="acct-row" id="acTour"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
+      <button type="button" class="acct-row" id="acTour" data-tour-open><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
       <button type="button" class="acct-row" id="acSound"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/>${prefs.sound === false ? '<path d="M17 9l4 6M21 9l-4 6"/>' : '<path d="M17 8a5 5 0 0 1 0 8"/>'}</svg><span>${esc(t(prefs.sound === false ? 'soundOff' : 'soundOn'))}</span></button>
     </div>
     ${admin ? `<p class="block-label">${esc(t('adminTools'))}</p>
@@ -2884,7 +2945,6 @@ function openAccount() {
         sfx('save'); toast(t('codeOk', roleName(session.user.role))); closeSheet(); paintFront(); setTimeout(openAccount, 360);
       } catch (err) { msg.textContent = t(err.status === 429 ? 'codeTries' : err.status === 403 ? 'codeBad' : 'adminCodesLater'); sfx('locked'); }
     });
-    $('#acTour').onclick = () => { delete prefs.welcomed?.[u.email]; savePrefs(); closeSheet(); setTimeout(maybeWelcome, 380); };
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
     $('#acSignOut').onclick = (e) => {
       const b = e.currentTarget;
