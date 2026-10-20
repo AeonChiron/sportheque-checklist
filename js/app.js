@@ -1112,7 +1112,6 @@ function renderChecklist() {
   const lock = shiftLocked();
   // Le pointage se coche seulement à l'heure du début du quart (pas avant, même si le quart est ouvert).
   if (state.tasks.pointage?.done && !state.tasks.pointage.manual && !shiftStarted()) { delete state.tasks.pointage; save(); } // coché trop tôt par une ancienne version
-  if (!lock && !state.tasks.pointage?.done && shiftStarted()) { punchIn(); return; }
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -1175,7 +1174,7 @@ function lockedToast() { const l = shiftLocked(); if (l) { toast(t('ovLocked', c
 function toggleDone(id) {
   if (id === 'pointage') { // le pointage reste coché; l'admin peut pointer d'avance
     if (state.tasks.pointage?.done) return;
-    if (isAdmin()) { punchIn(true); return; }
+    if (isAdmin() || shiftStarted()) { punchIn(true); return; } // on pointe soi-même, jamais automatiquement
     if (lockedToast()) return; // même message et même son que les autres tâches
     toast(t('punchAt', f(toMin(state.start))), 'muted'); sfx('locked');
     return;
@@ -1311,7 +1310,7 @@ $('#flagsBlock').addEventListener('click', (ev) => {
 // « En cours » et le couloir avancent toutes les 30 secondes.
 setInterval(() => {
   if (current !== 'checklist' || !plan) return;
-  if (state && !state.tasks.pointage?.done && shiftStarted()) { renderChecklist(); return; } // l'heure du début : on pointe
+  if (state && !state.tasks.pointage?.done && shiftStarted() && $('#taskList .check-wait')) { renderChecklist(); return; } // l'heure du début : le rond pour pointer apparaît
   renderTimeline(); renderNow();
 }, 30_000);
 
