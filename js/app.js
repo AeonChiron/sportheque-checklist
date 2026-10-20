@@ -2853,6 +2853,7 @@ function openAccount() {
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
         <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
+      <button type="button" class="acct-row" id="acTour"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
       <button type="button" class="acct-row" id="acSound"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/>${prefs.sound === false ? '<path d="M17 9l4 6M21 9l-4 6"/>' : '<path d="M17 8a5 5 0 0 1 0 8"/>'}</svg><span>${esc(t(prefs.sound === false ? 'soundOff' : 'soundOn'))}</span></button>
     </div>
     ${admin ? `<p class="block-label">${esc(t('adminTools'))}</p>
@@ -2862,7 +2863,6 @@ function openAccount() {
       <p class="section-note">${esc(t('adminUnlock'))}</p>
       <div class="acct-btns">
         ${state ? `<button type="button" class="btn ghost" id="acFill">${esc(t('adminFill'))}</button>` : ''}
-        <button type="button" class="btn ghost" id="acWelcome">${esc(t('adminWelcome'))}</button>
         <button type="button" class="btn ghost" id="acWipe">${esc(t('adminWipe'))}</button>
       </div>
     </div>
@@ -2884,6 +2884,7 @@ function openAccount() {
         sfx('save'); toast(t('codeOk', roleName(session.user.role))); closeSheet(); paintFront(); setTimeout(openAccount, 360);
       } catch (err) { msg.textContent = t(err.status === 429 ? 'codeTries' : err.status === 403 ? 'codeBad' : 'adminCodesLater'); sfx('locked'); }
     });
+    $('#acTour').onclick = () => { delete prefs.welcomed?.[u.email]; savePrefs(); closeSheet(); setTimeout(maybeWelcome, 380); };
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
     $('#acSignOut').onclick = (e) => {
       const b = e.currentTarget;
@@ -2895,7 +2896,6 @@ function openAccount() {
     $('#acClockSet').onclick = () => { const v = $('#acClock').value; if (v) setClock(new Date(v).getTime() - (Date.now() - (prefs.clockOffset || 0))); }; // décalage = heure voulue − heure réelle
     $('#acClockReal')?.addEventListener('click', () => setClock(0));
     $('#acFill')?.addEventListener('click', () => { for (const it of planTasks()) state.tasks[it.id] = { ...(state.tasks[it.id] || {}), done: true, skipped: false, doneAt: new Date().toISOString() }; save(); closeSheet(); openChecklist(); sfx('full'); });
-    $('#acWelcome').onclick = () => { delete prefs.welcomed?.[u.email]; savePrefs(); closeSheet(); setTimeout(maybeWelcome, 380); };
     $('#acWipe').onclick = (e) => {
       const b = e.currentTarget;
       if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('adminWipeSure'); return; }
