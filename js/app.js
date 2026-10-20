@@ -1,5 +1,5 @@
 import { simulated } from './clock.js';
-import { MASCOTS, mascotSvg, avatarHTML, shrinkPhoto } from './avatars.js'; // en premier : l'heure simulée de l'admin
+import { MASCOTS, mascotImg, avatarHTML, shrinkPhoto } from './avatars.js'; // en premier : l'heure simulée de l'admin
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS } from './manual.js';
@@ -2993,7 +2993,7 @@ function openAvatarPicker() {
   if (!u) return;
   const cur = u.avatar || '';
   openSheet(`<div class="sheet-head"><h2>${esc(t('picTitle'))}</h2><p class="lede">${esc(t('picLede'))}</p></div>
-    <div class="pic-grid">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotSvg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
+    <div class="pic-grid">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotImg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
     <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
     <p class="section-note" id="picMsg" aria-live="polite"></p>`, (root) => {
     const pick = async (v) => {
