@@ -521,6 +521,13 @@ function openQuickSchedule({ first = false } = {}) {
     });
     $('#qsSave').onclick = () => {
       saveSchedule(Object.fromEntries(Object.entries(pick).filter(([, d]) => d.on).map(([i, d]) => [i, { start: d.start, end: d.end }])));
+      // Un quart en cours aujourd'hui prend les nouvelles heures du jour (les tâches cochées restent).
+      const td = pick[dowOf(todayISO())];
+      if (state && state.date === todayISO() && td.on && (td.start !== state.start || td.end !== state.end)) {
+        state.start = td.start; state.end = td.end; state.shift = detectShift(td.start, td.end);
+        save(); plan = shiftPlan(state);
+        if (current === 'checklist') renderChecklist();
+      }
       closeSheet(); toast(t('qsSaved')); setTimeout(() => sfx('save'), 120);
       if (current === 'auth') paintFront();
       if (current === 'history') renderHistory({ animate: false });
@@ -1891,18 +1898,7 @@ $('#menuBtn').addEventListener('click', () => {
       };
     }
     root.querySelector('#mProto').onclick = () => { closeSheet(); goProtocol(); };
-    root.querySelector('#mEdit').onclick = () => {
-      closeSheet();
-      setupScreen();
-      $('#fName').value = state.name;
-      $('#fDate').value = state.date;
-      $('#fStart').value = state.start;
-      $('#fEnd').value = state.end;
-      showHours(true);
-      manualShift = state.shift;
-      editing = true; // les tâches cochées sont gardées (mêmes identifiants)
-      updatePreview();
-    };
+    root.querySelector('#mEdit').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); };
     const reset = root.querySelector('#mReset');
     reset.onclick = () => {
       if (!reset.dataset.armed) { reset.dataset.armed = '1'; reset.textContent = t('abandonSure'); return; }
@@ -2964,7 +2960,7 @@ function openNextOverview(pick) {
     : `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`)).join('');
   openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))}${nx.date > addDays(todayISO(), 1) ? ` ${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}` : ''} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${live || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
     $('#ovGo').onclick = () => { closeSheet(); if (live) openChecklist(); else if (nx.ready && !state) startScheduled(nx); };
-    $('#ovTime').onclick = () => { closeSheet(); window.history.replaceState(null, '', location.pathname); setupScreen(); };
+    $('#ovTime').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); }; // les heures se changent dans « Quand travailles-tu? »
   }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || (nx.ready && !state) ? '' : ' disabled'}>${live ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
 }
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
