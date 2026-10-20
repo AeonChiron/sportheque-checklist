@@ -1098,7 +1098,8 @@ function renderNow() {
     return;
   }
   const e = state.tasks[cur.id] || {};
-  box.innerHTML = `<div class="now-card" data-plate="${plateOf(cur)}" style="--pc:var(--plate-${plateOf(cur)})"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
+  const np = plateOf(cur) === 'r' ? 'b' : plateOf(cur); // jamais de grande carte rouge : le rouge veut dire « problème »
+  box.innerHTML = `<div class="now-card" data-plate="${np}" style="--pc:var(--plate-${np})"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>
     <div class="now-main alive">${icon(cur)}<div><h2>${esc(cur.title)}</h2>${cur.summary ? `<p class="sum">${esc(cur.summary)}</p>` : ''}</div></div>
     ${bar}
     <div class="acts" data-id="${esc(cur.id)}">
