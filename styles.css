@@ -2206,7 +2206,9 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .up-card svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; opacity: .5; }
 .hi-period { margin: 0 0 10px; }
 #sheet .ov-list li.task { display: block; padding: 0; }
-#sheet .ov-list details summary { display: grid; grid-template-columns: 62px 1fr 16px; gap: 10px; align-items: center; padding: 9px 2px; cursor: pointer; list-style: none; }
+#sheet .ov-list details summary { display: block; padding: 0; cursor: pointer; list-style: none; }
+#sheet .ov-list details summary::marker { content: ''; }
+#sheet .ov-list .ov-row { display: grid; grid-template-columns: 62px 1fr 16px; gap: 10px; align-items: center; padding: 9px 2px; }
 #sheet .ov-list details summary::-webkit-details-marker { display: none; }
 #sheet .ov-list details summary svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; opacity: .5; transition: transform .2s; }
 #sheet .ov-list details[open] summary svg { transform: rotate(90deg); }
