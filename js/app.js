@@ -2321,7 +2321,7 @@ function histCard(s, i) {
 // À venir : les quarts de l'horaire, semaine par semaine, sans fin.
 function upcomingList() {
   const sc = mySchedule();
-  if (!sc || !Object.keys(sc).length) return `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t('upEmpty'))}</p></div>`;
+  if (!sc || !Object.keys(sc).length) return `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('upEmpty'))}</p></div>`;
   const today = todayISO();
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -2390,7 +2390,7 @@ function renderHistory({ animate = true } = {}) {
       <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
     </div><div class="up-list">${upcomingList()}</div>` : `<div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${['week', 'month', 'all'].map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${strip}${groups || `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+        : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${['week', 'month', 'all'].map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${strip}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
     </div>`}
     ${ready && !isUp ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
@@ -2780,7 +2780,7 @@ function renderBoss({ animate = true } = {}) {
           <button type="button" role="tab" data-pfilter="all" aria-selected="${boss.filter === 'all'}">${esc(t('allProblems'))}</button>
         </div>
         <div class="pb-list${animate ? ' cascade' : ''}">${list.length ? list.map(problemCard).join('')
-          : `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
+          : `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
   }
   $('#bossBody').innerHTML = `
     <button type="button" class="rp-card boss-hist" data-go="history">
@@ -2946,7 +2946,7 @@ function trendsPanel() {
   const L = lang();
   const since = addDays(todayISO(), -29);
   const shifts = (boss.trendShifts || []).filter((s) => s.date >= since);
-  if (!shifts.length) return `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t('trendEmpty'))}</p></div>`;
+  if (!shifts.length) return `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('trendEmpty'))}</p></div>`;
   const ms = shifts.map(metrics);
   const complete = ms.filter((m) => m.total && m.done === m.total).length;
   const avg = Math.round(ms.reduce((a, m) => a + m.pct, 0) / ms.length);
