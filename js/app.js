@@ -3210,17 +3210,19 @@ function openAvatarPicker({ after } = {}) {
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
 }
 // Le choix « Voir comme » actuel : nouveau (première visite), employé, superviseur ou admin.
-const curView = () => (prefs.simNew ? 'new' : viewAs() || 'admin');
+const curView = () => (prefs.simNew ? (prefs.simNew.role === 'boss' ? 'newBoss' : 'newEmployee') : viewAs() || 'admin');
 // Revivre la première visite : vu comme un employé, sans horaire, le tutoriel au début.
 // L'horaire réel est gardé de côté; « revenir » le remet.
-function startNewbie() {
+function startNewbie(role = 'employee') {
   const u = session.user;
   if (!u) return;
   if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {} };
+  prefs.simNew.role = role; // nouvel employé ou nouveau superviseur
+  delete prefs.workAsEmp;
   delete prefs.welcomed?.[u.email];
   savePrefs();
   saveSchedule({}, { push: false });
-  setViewAs('employee');
+  setViewAs(role);
   closeSheet(); paintViewAs(); goFront(); paintFront();
   setTimeout(startTour, 420);
 }
@@ -3232,7 +3234,7 @@ function paintViewAs() {
   const fresh = isRealAdmin() && prefs.simNew;
   if (!v && !who && !fresh) { b?.remove(); return; }
   if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); delete prefs.actAs; if (prefs.simNew) { const back = prefs.simNew.sched; delete prefs.simNew; saveSchedule(back, { push: false }); } savePrefs(); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
-  b.textContent = `${[fresh ? t('viewAsNow', t('viewAsNew')) : v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
+  b.textContent = `${[fresh ? t('viewAsNow', t(curView())) : v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
 }
 function openAccount() {
   let pendingView = '';
@@ -3243,7 +3245,7 @@ function openAccount() {
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span>${viewAs() ? ` <span class="pill sim">${esc(t('viewAsNow', roleName(viewAs())))}</span>` : ''}</p></div></div>
-    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="view-as" role="radiogroup">${['employee', 'boss', 'admin', 'new'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${curView() === r}">${esc(r === 'new' ? t('viewAsNew') : roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
+    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="view-as" role="radiogroup">${['employee', 'boss', 'newEmployee', 'newBoss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${curView() === r}"${r === 'admin' ? ' class="va-wide"' : ''}>${esc(r.startsWith('new') ? t(r) : roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
     <label class="field act-as"><span>${esc(t('actAsLabel'))}</span><div class="acct-btns"><input id="acActAs" autocomplete="off" maxlength="40" value="${esc(prefs.actAs || '')}" placeholder="${esc(u.name)}"><button type="button" class="btn ghost" id="acActAsSave">${esc(t('save'))}</button></div></label>
     <p class="section-note">${esc(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsNote'))}</p>` : ''}
     <div class="acct-list">
@@ -3326,7 +3328,7 @@ function openAccount() {
   }, `<button type="button" class="btn ghost danger" id="acSignOut">${t('signOut')}</button><button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', () => {
     if (pendingView && pendingView !== curView()) {
-      if (pendingView === 'new') { startNewbie(); return; } // première visite : employé, sans horaire, tutoriel
+      if (pendingView.startsWith('new')) { startNewbie(pendingView === 'newBoss' ? 'boss' : 'employee'); return; } // première visite : sans horaire, tutoriel du rôle
       if (prefs.simNew) { saveSchedule(prefs.simNew.sched, { push: false }); delete prefs.simNew; savePrefs(); }
       setViewAs(pendingView); sfx('save'); paintViewAs(); closeSheet(); goFront(); paintFront();
       toast(pendingView === 'admin' ? t('viewAsBack') : t('viewAsNow', roleName(pendingView)));
