@@ -1,6 +1,6 @@
 // Garde l'app utilisable sans réseau (sous-sol, Wi-Fi faible).
 // Réseau d'abord, cache en secours; l'API n'est jamais mise en cache.
-const CACHE = 'quart-gym-v50';
+const CACHE = 'quart-gym-v51';
 const SHELL = ['./', 'index.html', 'styles.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/config.js', 'js/manual.js', 'js/planner.js', 'js/report.js', 'js/photos.js', 'js/i18n.js', 'js/illustrations.js', 'js/board.js', 'js/board-shape.js', 'js/auth.js', 'js/problems.js', 'js/problem-shape.js', 'js/pool.js', 'js/fx.js', 'icons/rabbit.webp', 'icons/rabbit-hello.webp', 'icons/rabbit-cheer.webp', 'icons/rabbit-rest.webp', 'js/gym3d.js', 'js/floor-layout.js', 'fonts/fraunces-latin-full-normal.woff2', 'fonts/saira-semi-condensed-latin-300-normal.woff2', 'fonts/saira-semi-condensed-latin-500-normal.woff2', 'fonts/saira-semi-condensed-latin-600-normal.woff2', 'fonts/saira-semi-condensed-latin-700-normal.woff2', 'icons/logo-sportheque.png', 'icons/logo-sportheque-dark.png', 'icons/mark-sportheque.png', 'icons/mark-sportheque-dark.png'];
 

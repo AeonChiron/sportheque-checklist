@@ -56,7 +56,7 @@ export const UI = {
     restartShort: 'Recommencer',
     welcomeBackName: (n) => (n ? `Bon retour, ${n}!` : 'Bon retour!'),
     backHome: 'Retour à l’accueil',
-    dashShifts: 'Mes quarts',
+    dashShifts: 'Mes shifts',
     dashShiftsSub: 'Aujourd’hui + passés',
     dashTips: 'Bons trucs',
     dashTipsSub: 'Tâche par tâche',
