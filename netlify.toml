@@ -1,5 +1,5 @@
 # Hébergement Netlify (gratuit) : site statique + une fonction (comptes, historique, signalements).
-# Variables à ajouter dans Netlify : TEAM_CODE (code d’équipe) et BOSS_CODE (code superviseur).
+# Variables à ajouter dans Netlify : EMPLOYEE_CODE, SUPERVISOR_CODE et ADMIN_CODE.
 [build]
   publish = "."
   functions = "netlify/functions"
