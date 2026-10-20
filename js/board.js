@@ -9,7 +9,7 @@ import { sanitizeShift, mergeShift, combineDay, recentShifts } from './board-sha
 
 const LOCAL = 'gym-board-local';
 const QUEUE = 'gym-board-queue';
-const KEEP_DAYS = 42; // six semaines dans l'historique de ce téléphone
+const KEEP_DAYS = 730; // deux ans dans l'historique de ce téléphone (les résumés sont petits)
 const CODE = /^[A-Za-z0-9_-]{1,40000}$/;
 
 const readJSON = (k, fallback) => { try { return JSON.parse(localStorage.getItem(ns(k))) ?? fallback; } catch { return fallback; } };
