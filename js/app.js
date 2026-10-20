@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
-import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR } from './manual.js';
+import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey } from './manual.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
@@ -1657,14 +1657,14 @@ function refPlan(date, shift) {
 }
 
 // Les trucs d'une tâche : ceux du bloc, plus les techniques du manuel qui vont avec.
-const TIP_AREAS = { buanderie: ['buanderie'], gym: ['gym'], cardio: ['cardio'], muscu: ['muscu'], zone: ['zone', 'gym'], surfaces: ['surfaces'], dechets: ['dechets'], spinning: ['gym'] };
+// Pendant le quart : seulement les trucs essentiels de la tâche (3 au plus).
 function tipsOf(it) {
-  const extra = TECHNIQUES[lang()].filter((x) => (TIP_AREAS[it.area] || []).includes(x.area) && (!x.key || x.key === it.photo)).map((x) => x.text);
-  // Même truc dit deux fois (« Miroirs : … » et « … ») : on le garde une seule fois.
   const key = (x) => x.replace(/\*\*/g, '').replace(/^[^:]{2,28}:\s*/, '').toLowerCase().replace(/[^a-zà-ÿ0-9]/g, '');
   const seen = new Set();
-  return [...(it.tips || []), ...extra].filter((x) => !seen.has(key(x)) && seen.add(key(x))).slice(0, 3); // pas plus de 3 : un truc, pas un cours
+  return (it.tips || []).filter((x) => !seen.has(key(x)) && seen.add(key(x))).slice(0, 3);
 }
+// Onglet « Trucs » : tous les trucs de la tâche (le guide complet).
+const guideOf = (it) => GUIDE[lang()][guideKey(it)] || tipsOf(it);
 const tipsCallout = (it) => {
   const tips = tipsOf(it);
   return tips.length ? `<div class="callout tip"><div class="c-head">${ICON.bulb}${t('goodToKnow')}<span class="c-note">${t('tipsNote')}</span></div>${tips.map((x) => `<p>${md(x)}</p>`).join('')}</div>` : '';
@@ -1894,7 +1894,9 @@ function tipList(shift) {
       </div>`;
   }
   const p = refPlan(ap.day, shift);
-  const tasks = p.items.filter((x) => x.kind === 'task').map((it) => ({ it, tips: tipsOf(it) })).filter((x) => x.tips.length);
+  const seenKey = new Set(); // les guenilles (3 tournées) et les miroirs (2 moitiés) : une seule carte
+  const tasks = p.items.filter((x) => x.kind === 'task' && !seenKey.has(guideKey(x) || x.id) && seenKey.add(guideKey(x) || x.id))
+    .map((it) => ({ it, tips: guideOf(it) })).filter((x) => x.tips.length);
   return `<p class="section-note">${esc(t('tipsLede'))}</p>
     <div class="tipcards">${tasks.map(({ it, tips }) => `
       <div class="tipcard">
@@ -1908,7 +1910,7 @@ function tipList(shift) {
       </div>`).join('')}</div>`;
 }
 
-const TIP_ICONS = { gym: 'points-contact', cardio: 'desinfection', zone: 'inspection', surfaces: 'miroirs', bureaux: 'bureaux', muscu: 'aspirateur', buanderie: 'guenilles', dechets: 'poubelles' };
+const TIP_ICONS = { accueil: 'ouverture', gym: 'points-contact', cardio: 'desinfection', zone: 'inspection', surfaces: 'miroirs', bureaux: 'bureaux', muscu: 'aspirateur', buanderie: 'guenilles', dechets: 'poubelles' };
 const tipIcon = (area, key) => (key === 'tuiles' ? 'tuiles' : TIP_ICONS[area] || 'inspection');
 
 // Consignes d'une tâche, en lecture (depuis l'Aperçu).

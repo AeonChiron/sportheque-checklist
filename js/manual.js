@@ -59,45 +59,236 @@ export const TV_CHANNELS = [
   { key: 'Haut droite', fr: 'Télé en haut à droite', en: 'Top-right TV', ch: '620' },
 ];
 
-// Techniques du manuel + consignes de l'équipe : les « bons trucs » de l'Aperçu.
+// Les bases (onglet « Trucs ») : techniques du manuel + consignes de l'équipe.
 export const TECHNIQUES = {
   fr: [
-    { area: 'cardio', text: '**Poussière : guenille sèche** (ou à peine humide). Trop mouillée, elle étale la poussière au lieu de l’enlever.' },
+    { area: 'gym', text: '**Range au fur et à mesure, pendant tout ton quart** : un poids qui traîne, tu le replaces tout de suite.' },
+    { area: 'gym', text: '**Désinfecter = au moins 30 secondes.** Vaporise toute une rangée, puis reviens à la première et tapote doucement.' },
+    { area: 'cardio', text: '**Écrans : guenille sèche, pas de produit.** Juste enlever les traces de doigts.' },
+    { area: 'cardio', text: '**Poussière : guenille sèche** (ou à peine humide). Trop mouillée, elle étale la poussière.' },
     { area: 'gym', text: '**Traces de doigts et sueur : guenille à peine humide** avec du produit.' },
-    { area: 'cardio', text: 'Le produit va **sur la guenille**, jamais direct sur un écran.' },
-    { area: 'gym', text: 'Même si ça a l’air propre, essuie : poignées, sièges, boutons, tiges de réglage, écrans, logos, panneaux, supports à bouteilles.' },
-    { area: 'gym', text: 'Laisse agir le produit le temps écrit sur l’étiquette.' },
-    { area: 'zone', text: '**Guenille propre** au début du nettoyage en profondeur, **une autre propre** après.' },
-    { area: 'zone', text: 'Repose-pieds : là où vont les souliers d’abord, puis les contours et les bases.' },
-    { area: 'surfaces', key: 'miroirs', text: 'Miroirs : tout le panneau, puis regarde de côté pour voir les traces.' },
-    { area: 'bureaux', key: 'murs', text: 'Murs : petits cercles, doucement. La peinture pâlit? Arrête et signale.' },
-    { area: 'muscu', text: '**Tapis noirs** : les allées d’abord, puis autour des bancs et des supports. Les coins à la fin.' },
-    { area: 'cardio', text: '**Tapis gris** : en dessous des machines où ça se rend, sans déranger ceux qui s’entraînent.' },
-    { area: 'surfaces', key: 'tuiles', text: '**Tuiles** : les saletés sèches d’abord (aspirateur ou balai), la moppe après. Affiche « plancher mouillé ».' },
-    { area: 'buanderie', text: 'Guenilles « clients » et « ménage » : chacune son usage. Pars les brassées tôt.' },
+    { area: 'zone', text: 'La guenille du profondeur **touche jamais** aux poignées ni aux sièges : tu étalerais les microbes.' },
+    { area: 'accueil', text: 'Vaporisateurs : change juste ceux **sous 30 %**, jamais tous en même temps. Remets-les **au-dessus des distributeurs de papier**.' },
+    { area: 'buanderie', text: 'Sécheuse : **15 à 20 min**. Plus de 30 min, les guenilles sont trop sèches et donnent des chocs.' },
     { area: 'dechets', text: '**Une seule grosse poubelle** (à droite du cardio) : après chaque poubelle vidée, **pousse avec son fond** pour tasser.' },
-    { area: 'dechets', text: 'L’extérieur des poubelles se fait pendant le tour des vidanges.' },
+    { area: 'surfaces', key: 'miroirs', text: 'Miroirs : **mousse à l’éponge, puis raclette**. Pas trop de produit : c’est ça qui laisse des marques.' },
+    { area: 'surfaces', key: 'tuiles', text: '**Tuiles** : les saletés sèches d’abord (aspirateur ou balai), la moppe après. Affiche « plancher mouillé ».' },
+    { area: 'muscu', text: '**Tapis noirs** : les allées d’abord, puis autour des bancs et des supports. Les coins à la fin.' },
     { area: 'gym', text: 'Mélange jamais les produits. Chaque outil retourne à sa place.' },
   ],
   en: [
-    { area: 'cardio', text: '**Dust: dry rag** (or barely damp). Too wet, it spreads the dust instead of picking it up.' },
+    { area: 'gym', text: '**Put things away as you go, all shift long**: a weight lying around, put it back right away.' },
+    { area: 'gym', text: '**Disinfecting = at least 30 seconds.** Spray a whole row, then go back to the first and pat gently.' },
+    { area: 'cardio', text: '**Screens: dry rag, no product.** Just wipe off the fingerprints.' },
+    { area: 'cardio', text: '**Dust: dry rag** (or barely damp). Too wet, it spreads the dust.' },
     { area: 'gym', text: '**Fingerprints and sweat: barely damp rag** with product.' },
-    { area: 'cardio', text: 'Product goes **on the rag**, never straight on a screen.' },
-    { area: 'gym', text: 'Even if it looks clean, wipe it: handles, seats, buttons, pins, screens, logos, panels, bottle holders.' },
-    { area: 'gym', text: 'Let the product sit for the time on the label.' },
-    { area: 'zone', text: '**Clean rag** to start the deep clean, **another clean one** after.' },
-    { area: 'zone', text: 'Footrests: where shoes go first, then edges and bases.' },
-    { area: 'surfaces', key: 'miroirs', text: 'Mirrors: the whole panel, then look from the side to spot streaks.' },
-    { area: 'bureaux', key: 'murs', text: 'Walls: small gentle circles. Paint fading? Stop and flag it.' },
-    { area: 'muscu', text: '**Black mats**: aisles first, then around benches and racks. Corners last.' },
-    { area: 'cardio', text: '**Grey mats**: under the machines where you can reach, without bothering anyone training.' },
+    { area: 'zone', text: 'The deep-clean rag **never touches** handles or seats: you’d spread germs.' },
+    { area: 'accueil', text: 'Spray bottles: swap only those **under 30%**, never all at once. Put them back **above the paper towel dispensers**.' },
+    { area: 'buanderie', text: 'Dryer: **15 to 20 min**. Over 30 min, rags get too dry and give shocks.' },
+    { area: 'dechets', text: '**One big trash can** (right of the cardio): after each can, **push down with its bottom** to pack it.' },
+    { area: 'surfaces', key: 'miroirs', text: 'Mirrors: **foam with the sponge, then squeegee**. Not too much product: that’s what leaves marks.' },
     { area: 'surfaces', key: 'tuiles', text: '**Tiles**: dry dirt first (vacuum or broom), mop after. Put out the wet-floor sign.' },
-    { area: 'buanderie', text: '“Member” and “cleaning” rags: each has its own use. Start loads early.' },
-    { area: 'dechets', text: '**One big trash can** (right of the cardio): after each can you empty, **push down with its bottom** to pack it.' },
-    { area: 'dechets', text: 'Wipe the outside of the cans during the trash round.' },
+    { area: 'muscu', text: '**Black mats**: aisles first, then around benches and racks. Corners last.' },
     { area: 'gym', text: 'Never mix products. Every tool goes back in its spot.' },
   ],
 };
+
+// Tous les trucs d'une tâche, pour l'onglet « Trucs » (pendant le quart, la
+// tâche n'en montre que l'essentiel, 3 au plus).
+const TV_LINE = {
+  fr: 'Postes : en bas à droite **619 (TV5)**, en bas à gauche **625**, en haut à gauche **779**, en haut à droite **620**. Tu les mets sur chaque boîtier Vidéotron.',
+  en: 'Channels: bottom right **619 (TV5)**, bottom left **625**, top left **779**, top right **620**. Set them on each Vidéotron box.',
+};
+export const GUIDE = {
+  fr: {
+    start: [
+      '**Commence par les télés** : c’est la première chose que les clients voient.',
+      TV_LINE.fr,
+      'TV5 marche pas? Vérifie que la télé est sur le **619**. Toujours rien? Regarde si le boîtier Vidéotron est allumé, et rallume-le.',
+      'Vaporisateurs (« Daily Usage ») : change juste ceux qui ont **moins de 30 %**. Si tu les prends tous en même temps, personne peut nettoyer sa machine pendant ce temps-là.',
+      'Quand tu les remets, place-les **au-dessus des distributeurs de papier** (essuie-mains).',
+      '**Distributeurs de papier pleins** dès le début du quart.',
+    ],
+    rags: [
+      'Une guenille te donne un **choc** en la sortant? Elle est **trop sèche**.',
+      'Sors-les à environ **90 % sèches**. Sécheuse chaude : **15 à 20 minutes**, c’est parfait.',
+      '**Plus de 30 minutes** : trop chaud, trop sec, et ça donne des chocs.',
+      'Plie-les **bien, toutes pareilles** : c’est plus beau et plus facile à prendre.',
+      'Guenilles « clients » et « ménage » : chacune son usage.',
+      'La laveuse et la sécheuse tournent pendant que tu fais autre chose.',
+    ],
+    disinfect: [
+      '**Écrans : pas besoin de produit.** Une guenille sèche, juste pour enlever les traces de doigts.',
+      'Avec la **même guenille**, va derrière les machines de cardio et frotte jusqu’à ce qu’il reste plus de poussière.',
+      '**Désinfecter, c’est au moins 30 secondes.** Vaporise une machine, puis passe aux autres de la même section (une dizaine).',
+      'Quand t’as fait le tour, ça fait 30 secondes à une minute : **reviens à la première** et tapote **doucement**. Enlève juste un peu de liquide, pas tout.',
+      'Traces de doigts et sueur : guenille à peine humide avec du produit.',
+      'Même si ça a l’air propre, essuie : poignées, sièges, dossiers, boutons, tiges de réglage, supports à bouteilles.',
+      'Guenille trop mouillée = poussière qui s’étale. Pour la poussière, toujours sec.',
+    ],
+    contact: [
+      '**Désinfecter, c’est au moins 30 secondes.** Vaporise une machine, puis passe aux autres de la même rangée.',
+      'Quand t’as fait le tour, **reviens à la première** et tapote **doucement**. Enlève juste un peu de liquide.',
+      'Même si ça a l’air propre, essuie : poignées, sièges, dossiers, boutons, tiges de réglage, supports à bouteilles.',
+      'Traces de doigts et sueur : guenille à peine humide avec du produit.',
+      'Laisse agir le produit le temps écrit sur l’étiquette.',
+    ],
+    tidy: [
+      '**Range au fur et à mesure, pendant tout ton quart**, pas juste à cette tâche-là.',
+      'Des poids oubliés sur une machine? Enlève-les et range-les.',
+      'Une machine pas à sa place? Replace-la. Les **machines de bench** : bien droites, **parallèles et symétriques**.',
+      'Coin d’échauffement (**tapis gris**) : tout bien placé, rien qui traîne.',
+      'Quelque chose par terre (carton, serviette de papier…)? **À la poubelle.**',
+    ],
+    trash: [
+      'Prends la **grosse poubelle à droite du cardio**, près du tapis gris.',
+      'Après chaque poubelle vidée, **pousse avec son fond** pour tasser dans la grosse. Tout le gym rentre en un seul tour.',
+      'Essuie l’extérieur des poubelles au besoin, pendant ce tour, pas pendant le profondeur.',
+      'Le compost, c’est le soir, à 19 h. Mercredi, le bac va au chemin.',
+      'Lave-toi les mains après.',
+    ],
+    vacuum: [
+      'Les grandes surfaces d’abord, les coins difficiles après.',
+      '**Tapis noirs** : les allées d’abord, puis autour des bancs et des supports. Les coins à la fin.',
+      '**Tapis gris** : en dessous des machines où ça se rend, sans déranger ceux qui s’entraînent.',
+      'Déplace pas de machine lourde.',
+      'Le soir : balaie les résidus noirs derrière les tapis roulants.',
+    ],
+    deep: [
+      '**Poussière d’abord, à sec**, avant de commencer.',
+      '**Change de guenille** avant de commencer, et prends-en une propre après.',
+      'Sois **méthodique** : une machine à la fois, de haut en bas.',
+      'Vise les endroits **vraiment sales** : c’est pour eux que t’es là.',
+      'Cette guenille-là **touche jamais** aux surfaces que les clients touchent avec leurs mains : tu étalerais les microbes. Le profondeur, c’est pour les endroits que personne touche mais qui salissent.',
+      'Ta guenille est bien sale à la fin? Bon signe : t’as eu les coins oubliés.',
+      'Machine occupée? Reviens-y plus tard.',
+    ],
+    mirrors: [
+      '**Le mélange** : un peu de nettoyant à vitre et un peu de savon à vaisselle, dans l’eau.',
+      '**Éponge** : mets la mousse sur le miroir et frotte bien.',
+      '**Raclette** ensuite : enlève toute la mousse, doucement.',
+      '**Pas trop de produit** : c’est ça qui laisse des marques.',
+      'Regarde de côté pour voir les traces qui restent.',
+    ],
+    tiles: [
+      'Les saletés sèches d’abord (aspirateur ou balai), la moppe après.',
+      'Coins et bordures compris.',
+      'Affiche « plancher mouillé » et laisse sécher.',
+    ],
+    spin: [
+      'Tous les vélos : guidon, selle, cadre.',
+      '**Désinfecter, c’est au moins 30 secondes** : vaporise plusieurs vélos, puis reviens au premier.',
+      'Le spinning, c’est juste le matin.',
+    ],
+    weekly: [
+      '30 minutes d’un coup, le soir.',
+      'Murs : guenille propre, produit correct pour la peinture, petits cercles. La marque part pas? Arrête et signale-la.',
+      'Du temps en trop le matin? Selon la saison : arrose les fleurs, ou enlève la neige et la glace. Lave les vadrouilles au besoin.',
+    ],
+    closing: [
+      'Laisse les **boîtiers Vidéotron allumés**; seulement les télés s’éteignent.',
+      'Un dernier rangement : poids, bancs, accessoires.',
+      'Quelque chose de pas fini ou de brisé? **⚑ Signale-le.**',
+    ],
+  },
+  en: {
+    start: [
+      '**Start with the TVs**: they’re the first thing members see.',
+      TV_LINE.en,
+      'TV5 not working? Check the TV is on **619**. Still nothing? See if the Vidéotron box is on, and turn it back on.',
+      'Spray bottles (“Daily Usage”): swap only those with **less than 30%**. If you take them all at once, nobody can clean their machine in the meantime.',
+      'When you put them back, place them **above the paper towel dispensers**.',
+      '**Paper dispensers full** at the start of the shift.',
+    ],
+    rags: [
+      'A rag gives you a **shock** when you take it out? It’s **too dry**.',
+      'Take them out about **90% dry**. Hot dryer: **15 to 20 minutes** is perfect.',
+      '**Over 30 minutes**: too hot, too dry, and you get shocks.',
+      'Fold them **neatly, all the same**: looks better and easier to grab.',
+      '“Member” and “cleaning” rags: each has its own use.',
+      'The washer and dryer run while you do something else.',
+    ],
+    disinfect: [
+      '**Screens: no product needed.** A dry rag, just to wipe off fingerprints.',
+      'With the **same rag**, go behind the cardio machines and rub until there’s no dust left.',
+      '**Disinfecting takes at least 30 seconds.** Spray one machine, then move on to the others in the same section (about ten).',
+      'Once you’ve done the round, it’s been 30 seconds to a minute: **go back to the first** and pat **gently**. Take off just a little liquid, not all of it.',
+      'Fingerprints and sweat: barely damp rag with product.',
+      'Even if it looks clean, wipe it: handles, seats, backrests, buttons, pins, bottle holders.',
+      'Rag too wet = dust that smears. For dust, always dry.',
+    ],
+    contact: [
+      '**Disinfecting takes at least 30 seconds.** Spray one machine, then move on to the others in the same row.',
+      'Once you’ve done the round, **go back to the first** and pat **gently**. Take off just a little liquid.',
+      'Even if it looks clean, wipe it: handles, seats, backrests, buttons, pins, bottle holders.',
+      'Fingerprints and sweat: barely damp rag with product.',
+      'Let the product sit for the time on the label.',
+    ],
+    tidy: [
+      '**Put things away as you go, all shift long**, not just during this task.',
+      'Weights left on a machine? Take them off and put them away.',
+      'A machine out of place? Put it back. The **bench machines**: straight, **parallel and symmetrical**.',
+      'Warm-up area (**grey mat**): everything in place, nothing lying around.',
+      'Something on the floor (cardboard, paper towel…)? **In the trash.**',
+    ],
+    trash: [
+      'Take the **big trash can right of the cardio**, by the grey mat.',
+      'After each can, **push down with its bottom** to pack the big one. The whole gym fits in one round.',
+      'Wipe the outside of the cans if needed, during this round, not during the deep clean.',
+      'Compost is the evening shift, at 7 p.m. Wednesday, the bin goes to the curb.',
+      'Wash your hands after.',
+    ],
+    vacuum: [
+      'Big areas first, hard corners after.',
+      '**Black mats**: aisles first, then around benches and racks. Corners last.',
+      '**Grey mats**: under the machines where you can reach, without bothering anyone training.',
+      'Don’t move heavy machines.',
+      'Evening: sweep the black residue behind the treadmills.',
+    ],
+    deep: [
+      '**Dust first, dry**, before you start.',
+      '**Change rags** before you start, and take a clean one after.',
+      'Be **methodical**: one machine at a time, top to bottom.',
+      'Go for the **really dirty** spots: that’s what you’re there for.',
+      'That rag **never touches** surfaces members touch with their hands: you’d spread germs. Deep cleaning is for spots nobody touches but that get dirty.',
+      'Rag really dirty at the end? Good sign: you got the missed spots.',
+      'Machine in use? Come back later.',
+    ],
+    mirrors: [
+      '**The mix**: a little glass cleaner and a little dish soap, in water.',
+      '**Sponge**: put the foam on the mirror and scrub well.',
+      '**Squeegee** after: remove all the foam, gently.',
+      '**Not too much product**: that’s what leaves marks.',
+      'Look from the side to spot any streaks left.',
+    ],
+    tiles: [
+      'Dry dirt first (vacuum or broom), mop after.',
+      'Corners and edges included.',
+      'Put out the wet-floor sign and let it dry.',
+    ],
+    spin: [
+      'Every bike: handlebars, seat, frame.',
+      '**Disinfecting takes at least 30 seconds**: spray several bikes, then go back to the first.',
+      'The spin room is mornings only.',
+    ],
+    weekly: [
+      '30 minutes in one go, in the evening.',
+      'Walls: clean rag, paint-safe product, small circles. Mark won’t come off? Stop and flag it.',
+      'Time left in the morning? Depending on the season: water the flowers, or clear snow and ice. Wash the mops if needed.',
+    ],
+    closing: [
+      'Leave the **Vidéotron boxes on**; only the TVs go off.',
+      'One last tidy: weights, benches, accessories.',
+      'Something not done or broken? **⚑ Flag it.**',
+    ],
+  },
+};
+const GUIDE_KEY = {
+  ouverture: 'start', inspection: 'start', guenilles: 'rags', desinfection: 'disinfect', 'points-contact': 'contact',
+  rangement: 'tidy', 'tour-general': 'tidy', poubelles: 'trash', 'aspirateur-muscu': 'vacuum', 'aspirateur-cardio': 'vacuum', 'aspirateur-gym': 'vacuum',
+  miroirs: 'mirrors', tuiles: 'tiles', spinning: 'spin', hebdo: 'weekly', 'bureaux-patrons': 'weekly', 'bureaux-entraineurs': 'weekly', fermeture: 'closing', 'fin-quart': 'closing',
+};
+export const guideKey = (it) => (it.deep ? 'deep' : GUIDE_KEY[it.photo] || '');
 
 // Jours : 0 = lundi … 6 = dimanche.
 export const WEEKDAYS = {
@@ -162,8 +353,24 @@ export const PRIORITY_ORDER = {
 
 // Petits morceaux réutilisés.
 const DUST = {
-  fr: ['Guenille trop mouillée = poussière qui s’étale. **Sèche d’abord.**', 'Le produit va sur la guenille, jamais direct sur un écran.'],
-  en: ['Rag too wet = dust that smears. **Dry first.**', 'Product goes on the rag, never straight on a screen.'],
+  fr: ['**Écrans : guenille sèche, pas de produit.** Juste enlever les traces de doigts.'],
+  en: ['**Screens: dry rag, no product.** Just wipe off the fingerprints.'],
+};
+const SECONDS30 = {
+  fr: '**Désinfecter = au moins 30 secondes.** Vaporise toute la rangée, puis reviens à la première et tapote doucement.',
+  en: '**Disinfecting = at least 30 seconds.** Spray the whole row, then go back to the first and pat gently.',
+};
+const BOTTLES = {
+  fr: 'Vaporisateurs : change juste ceux **sous 30 %**, et remets-les **au-dessus des distributeurs de papier**.',
+  en: 'Spray bottles: swap only those **under 30%**, and put them back **above the paper towel dispensers**.',
+};
+const DRYER = {
+  fr: 'Sécheuse : **15 à 20 min**. Plus de 30 min, c’est trop sec (ça donne des chocs).',
+  en: 'Dryer: **15 to 20 min**. Over 30 min is too dry (you get shocks).',
+};
+const TIDY = {
+  fr: '**Range au fur et à mesure, pendant tout ton quart**, pas juste à cette tâche-là.',
+  en: '**Put things away as you go, all shift long**, not just during this task.',
 };
 const PACK = {
   fr: 'Après chaque poubelle, **pousse avec son fond** pour tasser dans la grosse. Tout le gym rentre en un seul tour.',
@@ -190,9 +397,9 @@ export const SHIFTS = {
           steps: [
             'Allume les **3 interrupteurs de ventilation** et les **4 télés**. Mets les postes sur chaque boîtier Vidéotron (tableau plus bas).',
             'Vérifie que le son marche et pars la playlist **« Sporthèque Matin »**.',
-            'Tour des studios et du spinning : assez de guenilles propres, vaporisateurs pleins. Comptoir et lavabo près de la fontaine : propres.',
+            'Tour des studios et du spinning : assez de guenilles propres, vaporisateurs et **distributeurs de papier** pleins. Comptoir et lavabo près de la fontaine : propres.',
           ],
-          tips: ['TV5 marche pas? Vérifie que la télé est sur le **619**. Toujours rien? Regarde si le boîtier Vidéotron est allumé et rallume-le.'],
+          tips: ['TV5 marche pas? Vérifie que la télé est sur le **619**. Toujours rien? Regarde si le boîtier Vidéotron est allumé et rallume-le.', BOTTLES.fr],
         },
         en: {
           title: 'Opening',
@@ -200,9 +407,9 @@ export const SHIFTS = {
           steps: [
             'Turn on the **3 ventilation switches** and the **4 TVs**. Set the channels on each Vidéotron box (table below).',
             'Check the sound works and start the **“Sporthèque Matin”** playlist.',
-            'Walk the studios and spin room: enough clean rags, spray bottles full. Counter and sink by the fountain: clean.',
+            'Walk the studios and spin room: enough clean rags, spray bottles and **paper dispensers** full. Counter and sink by the fountain: clean.',
           ],
-          tips: ['TV5 not working? Check the TV is on **619**. Still nothing? See if the Vidéotron box is on and turn it back on.'],
+          tips: ['TV5 not working? Check the TV is on **619**. Still nothing? See if the Vidéotron box is on and turn it back on.', BOTTLES.en],
         },
       },
       {
@@ -215,7 +422,7 @@ export const SHIFTS = {
             'Ramasse les guenilles sales : tous les studios, le spinning et l’étage du bas. Pars une brassée.',
             'Plie les guenilles propres pour les studios.',
           ],
-          tips: ['Peu de guenilles à plier? Passe tout de suite à la tâche suivante.', 'La laveuse et la sécheuse tournent pendant que tu fais autre chose.'],
+          tips: [DRYER.fr, 'Peu de guenilles à plier? Passe tout de suite à la tâche suivante.'],
         },
         en: {
           title: 'Rags: dryer and washing',
@@ -225,7 +432,7 @@ export const SHIFTS = {
             'Collect dirty rags: every studio, the spin room and the lower floor. Start a load.',
             'Fold the clean rags for the studios.',
           ],
-          tips: ['Not many rags to fold? Go straight to the next task.', 'The washer and dryer run while you do something else.'],
+          tips: [DRYER.en, 'Not many rags to fold? Go straight to the next task.'],
         },
       },
       {
@@ -234,8 +441,8 @@ export const SHIFTS = {
           title: 'Désinfection générale',
           summary: 'Cardio, logos, panneaux; remettre en ordre.',
           steps: [
-            '**À sec** : enlève la poussière sur les écrans, le devant du cardio, les logos et les panneaux d’instructions.',
-            'Repasse avec une guenille **à peine humide** et du produit : traces de doigts et de sueur.',
+            'Écrans du cardio : **guenille sèche**, juste pour enlever les traces de doigts. Pas besoin de produit.',
+            'Même guenille : le devant et l’**arrière du cardio**, les logos et les panneaux, jusqu’à ce qu’il reste plus de poussière.',
             'Remets les poids, les accessoires et les bancs à leur place. Ramasse les petits déchets dans les allées.',
           ],
           tips: [...DUST.fr, 'Les poignées et les sièges des autres machines, c’est à 10 h.'],
@@ -244,8 +451,8 @@ export const SHIFTS = {
           title: 'General disinfection',
           summary: 'Cardio, logos, panels; tidy up.',
           steps: [
-            '**Dry**: dust the screens, cardio fronts, logos and instruction panels.',
-            'Go over them with a **barely damp** rag and product: fingerprints and sweat.',
+            'Cardio screens: **dry rag**, just to wipe off fingerprints. No product needed.',
+            'Same rag: the front and **back of the cardio**, logos and panels, until there’s no dust left.',
             'Put weights, accessories and benches back. Pick up small trash in the aisles.',
           ],
           tips: [...DUST.en, 'Handles and seats on the other machines are at 10:00.'],
@@ -307,7 +514,7 @@ export const SHIFTS = {
             'Essuie le bois, le métal, les rebords de fenêtres et les plinthes grises.',
             'Supports à bouteilles et fontaine d’eau : enlève les traces.',
           ],
-          tips: ['Une rangée de machines à la fois.', 'Laisse agir le produit le temps écrit sur l’étiquette.', 'Même si ça a l’air propre, essuie : des mains passent là toute la journée.'],
+          tips: [SECONDS30.fr, 'Même si ça a l’air propre, essuie : des mains passent là toute la journée.'],
         },
         en: {
           title: 'General upkeep',
@@ -317,7 +524,7 @@ export const SHIFTS = {
             'Wipe the wood, metal, window ledges and grey baseboards.',
             'Bottle holders and water fountain: wipe off the marks.',
           ],
-          tips: ['One row of machines at a time.', 'Let the product sit for the time on the label.', 'Even if it looks clean, wipe it: hands touch it all day.'],
+          tips: [SECONDS30.en, 'Even if it looks clean, wipe it: hands touch it all day.'],
         },
       },
       { id: 'q1-pause', kind: 'pause', minutes: 15, fr: { title: 'Pause' }, en: { title: 'Break' } },
@@ -356,7 +563,7 @@ export const SHIFTS = {
             'Fais le tour : poids, bancs et accessoires à leur place, surtout dans la zone d’étirement.',
             'Ramasse ce qui traîne et dégage les allées.',
           ],
-          tips: ['C’est un tour de rangement, pas de désinfection ni de poubelles.'],
+          tips: [TIDY.fr, 'C’est un tour de rangement, pas de désinfection ni de poubelles.'],
         },
         en: {
           title: 'Gym tidy-up',
@@ -365,7 +572,7 @@ export const SHIFTS = {
             'Walk around: weights, benches and accessories in their spot, especially in the stretching area.',
             'Pick up what’s lying around and clear the aisles.',
           ],
-          tips: ['This is a tidy-up round, not disinfection or trash.'],
+          tips: [TIDY.en, 'This is a tidy-up round, not disinfection or trash.'],
         },
       },
       { id: 'q1-diner', kind: 'meal', minutes: 60, fr: { title: 'Dîner' }, en: { title: 'Lunch' } },
@@ -482,18 +689,18 @@ export const SHIFTS = {
           summary: 'Tour du gym, vaporisateurs, guenilles.',
           steps: [
             'Fais le tour du gym : comptoir, lavabo, buvette.',
-            'Remplis les vaporisateurs (spinning compris) avec du **« Daily Usage »** et vérifie le stock de guenilles propres.',
+            'Vaporisateurs (spinning compris) : remplis ceux qui sont bas avec du **« Daily Usage »**. **Distributeurs de papier** pleins, stock de guenilles propres.',
           ],
-          tips: ['Les autres studios, le soir, c’est juste pour les guenilles.'],
+          tips: [BOTTLES.fr, 'Les autres studios, le soir, c’est juste pour les guenilles.'],
         },
         en: {
           title: 'Walkthrough and set-up',
           summary: 'Gym round, spray bottles, rags.',
           steps: [
             'Walk the gym: counter, sink, drinks counter.',
-            'Fill the spray bottles (spin room too) with **“Daily Usage”** and check the clean rag stock.',
+            'Spray bottles (spin room too): refill the low ones with **“Daily Usage”**. **Paper dispensers** full, clean rag stock.',
           ],
-          tips: ['In the evening, other studios are for rags only.'],
+          tips: [BOTTLES.en, 'In the evening, other studios are for rags only.'],
         },
       },
       {
@@ -506,7 +713,7 @@ export const SHIFTS = {
             'Pars les brassées, puis la sécheuse.',
             'Plie et remets des guenilles propres.',
           ],
-          tips: ['Guenilles « clients » et « ménage » : chacune son usage.', 'La laveuse et la sécheuse tournent pendant tes autres tâches.'],
+          tips: [DRYER.fr, 'Guenilles « clients » et « ménage » : chacune son usage.'],
         },
         en: {
           title: 'Rags: collect and wash',
@@ -516,7 +723,7 @@ export const SHIFTS = {
             'Start the loads, then the dryer.',
             'Fold and put clean rags back.',
           ],
-          tips: ['“Member” and “cleaning” rags: each has its own use.', 'The washer and dryer run during your other tasks.'],
+          tips: [DRYER.en, '“Member” and “cleaning” rags: each has its own use.'],
         },
       },
       {
@@ -526,20 +733,20 @@ export const SHIFTS = {
           summary: 'Points de contact, écrans, surfaces.',
           steps: [
             'Points de contact : poignées, sièges, dossiers, **machines de bench**, réglages. Enlève les traces de sueur.',
-            'Écrans et boutons : **à sec** d’abord, puis guenille à peine humide avec du produit.',
+            'Écrans : **guenille sèche**, juste pour les traces de doigts. Pas besoin de produit.',
             'Au besoin : tablettes, thermostats, télés, boîtiers Vidéotron, distributeurs de papier, miroirs.',
           ],
-          tips: [...DUST.fr, 'À faire même si le matin l’a fait.'],
+          tips: [SECONDS30.fr, ...DUST.fr, 'À faire même si le matin l’a fait.'],
         },
         en: {
           title: 'General disinfection',
           summary: 'Touch points, screens, surfaces.',
           steps: [
             'Touch points: handles, seats, backrests, **bench machines**, adjusters. Wipe off sweat.',
-            'Screens and buttons: **dry** first, then a barely damp rag with product.',
+            'Screens: **dry rag**, just for fingerprints. No product needed.',
             'As needed: shelves, thermostats, TVs, Vidéotron boxes, paper dispensers, mirrors.',
           ],
-          tips: [...DUST.en, 'Do it even if the morning shift did.'],
+          tips: [SECONDS30.en, ...DUST.en, 'Do it even if the morning shift did.'],
         },
       },
       {
@@ -551,7 +758,7 @@ export const SHIFTS = {
             'Haltères sur le support. Disques enlevés des barres et rangés.',
             'Bancs et accessoires à leur place. Ramasse ce qui traîne.',
           ],
-          tips: ['Enlève les poids oubliés sur les machines que personne utilise.'],
+          tips: [TIDY.fr, 'Machines de bench : bien droites, **parallèles**.'],
         },
         en: {
           title: 'Put equipment away',
@@ -560,7 +767,7 @@ export const SHIFTS = {
             'Dumbbells on the rack. Plates off the bars and put away.',
             'Benches and accessories in their spot. Pick up what’s lying around.',
           ],
-          tips: ['Take off weights left on machines nobody is using.'],
+          tips: [TIDY.en, 'Bench machines: straight and **parallel**.'],
         },
       },
       { id: 'q2-souper', kind: 'meal', minutes: 60, fr: { title: 'Souper' }, en: { title: 'Dinner' } },

@@ -82,10 +82,10 @@ const P = {
       'Va chercher les coins oubliés : derrière les sièges, autour des supports, les petits creux.',
     ],
     deepEnd: '**Fini? Change ta guenille pour une propre.**',
-    deepMirrors: (z) => `Jour de miroirs : fais aussi les **miroirs de la zone ${z}**.`,
+    deepMirrors: (z) => `Jour de miroirs : fais aussi les **miroirs de la zone ${z}** (mousse à l’éponge, puis raclette).`,
     deepTips: [
-      'Ta guenille est bien sale à la fin? Bon signe : t’as eu les coins oubliés.',
-      '**Sèche d’abord** pour la poussière, le produit ensuite.',
+      '**Poussière d’abord, à sec.** Change de guenille avant de commencer.',
+      'Cette guenille **touche jamais** aux poignées ni aux sièges : tu étalerais les microbes.',
       'Machine occupée? Reviens-y plus tard.',
     ],
     deepMirrorsSummary: (name) => `${name} + miroirs.`,
@@ -95,8 +95,8 @@ const P = {
       { title: 'Tuiles : moppe', summary: 'Moppe sur les tuiles, coins compris.', steps: ['Passe la **moppe sur les tuiles**, coins et bordures compris.', 'Mets l’affiche « plancher mouillé » et laisse sécher.'], tips: [] },
     ],
     mirrors: [
-      { title: (z) => `Miroirs : zone ${z}`, summary: (z) => `Commencer les miroirs de la zone ${z}.`, steps: (z) => [`Commence les miroirs de la **zone ${z}**.`], tips: ['Tout le panneau, puis regarde de côté pour voir les traces.'] },
-      { title: (z) => `Miroirs : finir la zone ${z}`, summary: (z) => `Finir les miroirs de la zone ${z}.`, steps: (z) => [`Finis les miroirs de la **zone ${z}**.`, 'Regarde de côté et retouche les traces.'], tips: ['Pas de produit qui coule sur les rebords.'] },
+      { title: (z) => `Miroirs : zone ${z}`, summary: (z) => `Mousse à l’éponge, zone ${z}.`, steps: (z) => ['Le mélange : un peu de **nettoyant à vitre** et un peu de **savon à vaisselle**, dans l’eau.', `**Éponge** : mets la mousse sur les miroirs de la **zone ${z}** et frotte.`], tips: ['**Pas trop de produit** : c’est ça qui laisse des marques.'] },
+      { title: (z) => `Miroirs : finir la zone ${z}`, summary: (z) => `Raclette, zone ${z}.`, steps: (z) => [`**Raclette** : enlève toute la mousse des miroirs de la **zone ${z}**, doucement.`, 'Regarde de côté et retouche les traces.'], tips: ['**Pas trop de produit** : c’est ça qui laisse des marques.'] },
     ],
     inspect: [
       { title: 'Tuiles et miroirs : coup d’œil', summary: 'Repérer ce qui paraît.', steps: ['Fais le tour des tuiles et des miroirs. Note ce qui paraît.'], tips: [] },
@@ -120,10 +120,10 @@ const P = {
       'Go after the missed spots: behind seats, around racks, the little gaps.',
     ],
     deepEnd: '**Done? Swap your rag for a clean one.**',
-    deepMirrors: (z) => `Mirror day: also do the **mirrors in zone ${z}**.`,
+    deepMirrors: (z) => `Mirror day: also do the **mirrors in zone ${z}** (foam with the sponge, then squeegee).`,
     deepTips: [
-      'Rag really dirty at the end? Good sign: you got the missed spots.',
-      '**Dry first** for dust, product after.',
+      '**Dust first, dry.** Change rags before you start.',
+      'That rag **never touches** handles or seats: you’d spread germs.',
       'Machine in use? Come back later.',
     ],
     deepMirrorsSummary: (name) => `${name} + mirrors.`,
@@ -133,8 +133,8 @@ const P = {
       { title: 'Tiles: mop', summary: 'Mop the tiles, corners included.', steps: ['**Mop the tiles**, corners and edges included.', 'Put out the wet-floor sign and let it dry.'], tips: [] },
     ],
     mirrors: [
-      { title: (z) => `Mirrors: zone ${z}`, summary: (z) => `Start the mirrors in zone ${z}.`, steps: (z) => [`Start the mirrors in **zone ${z}**.`], tips: ['The whole panel, then look from the side to spot streaks.'] },
-      { title: (z) => `Mirrors: finish zone ${z}`, summary: (z) => `Finish the mirrors in zone ${z}.`, steps: (z) => [`Finish the mirrors in **zone ${z}**.`, 'Look from the side and touch up streaks.'], tips: ['Don’t let product drip onto the ledges.'] },
+      { title: (z) => `Mirrors: zone ${z}`, summary: (z) => `Sponge and foam, zone ${z}.`, steps: (z) => ['The mix: a little **glass cleaner** and a little **dish soap**, in water.', `**Sponge**: put the foam on the mirrors in **zone ${z}** and scrub.`], tips: ['**Not too much product**: that’s what leaves marks.'] },
+      { title: (z) => `Mirrors: finish zone ${z}`, summary: (z) => `Squeegee, zone ${z}.`, steps: (z) => [`**Squeegee**: remove all the foam from the mirrors in **zone ${z}**, gently.`, 'Look from the side and touch up streaks.'], tips: ['**Not too much product**: that’s what leaves marks.'] },
     ],
     inspect: [
       { title: 'Tiles & mirrors: quick look', summary: 'Spot what shows.', steps: ['Walk past the tiles and mirrors. Note what shows.'], tips: [] },
