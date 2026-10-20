@@ -897,7 +897,7 @@ function taskRow(it, { extra = false } = {}) {
           ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
         </span>
       </button>
-      ${it.id === 'pointage' && !shiftStarted() && !isAdmin() ? `<span class="check-wait num" aria-label="${esc(t('punchAt', f(toMin(state.start))))}">${nb(f(toMin(state.start)))}</span>` : `<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
+      ${it.id === 'pointage' && !shiftStarted() && !e.done ? `<button type="button" class="check-wait num" data-act="toggle" aria-label="${esc(t('punchAt', f(toMin(state.start))))}">${nb(f(toMin(state.start)))}</button>` : `<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
     </div>
   </li>`;
 }
@@ -1104,7 +1104,13 @@ function shiftLocked() {
 }
 function lockedToast() { const l = shiftLocked(); if (l) { toast(t('ovLocked', countdown(l)), 'muted'); sfx('locked'); } return l; }
 function toggleDone(id) {
-  if (id === 'pointage') { if (isAdmin() && !state.tasks.pointage?.done) punchIn(true); return; } // le pointage reste coché; l'admin peut pointer d'avance
+  if (id === 'pointage') { // le pointage reste coché; l'admin peut pointer d'avance
+    if (state.tasks.pointage?.done) return;
+    if (isAdmin()) { punchIn(true); return; }
+    if (lockedToast()) return; // même message et même son que les autres tâches
+    toast(t('punchAt', f(toMin(state.start))), 'muted'); sfx('locked');
+    return;
+  }
   if (lockedToast()) return;
   const wasAll = allDone();
   const e = entry(id);
@@ -3630,4 +3636,8 @@ window.addEventListener('online', () => {
 // Hors ligne (si le service worker est disponible).
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Une nouvelle version vient de s'installer : on recharge une fois (le quart en cours est déjà enregistré).
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }

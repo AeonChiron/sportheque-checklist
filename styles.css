@@ -2372,3 +2372,4 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 #timeline .glass { width: 86px; }
 #timeline .glass svg { width: 86px; height: 112px; }
 .glass-count b { font-size: 36px; }
+.check-wait { font-family: inherit; cursor: pointer; }
