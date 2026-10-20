@@ -2,6 +2,13 @@
 
 export const UI = {
   fr: {
+    simulationStart: "Démarrer une simulation",
+    simulationSure: "Es-tu sûr·e?",
+    simulationBody: "Ouvre la vraie checklist à l’heure de début de ce quart. Ton quart actuel sera conservé. Les rapports et signalements de simulation ne seront pas envoyés.",
+    simulationYes: "Oui, démarrer",
+    simulationExit: "Quitter la simulation",
+    simulationLocal: "Simulation : rien n’est envoyé à l’équipe.",
+
     floor: 'Entretien',
     hello: 'Bon quart!',
     customTitle: 'Heures de ton quart',
@@ -619,6 +626,13 @@ export const UI = {
     reportBad: 'Ce lien est brisé. Ouvre-le direct dans le courriel.',
   },
   en: {
+    simulationStart: "Start simulation",
+    simulationSure: "Are you sure?",
+    simulationBody: "Open the actual checklist at this shift’s start time. Your current shift will be preserved. Simulation reports and issues will not be sent.",
+    simulationYes: "Yes, start",
+    simulationExit: "Exit simulation",
+    simulationLocal: "Simulation: nothing is sent to the team.",
+
     floor: 'Cleaning',
     hello: 'Have a good shift!',
     customTitle: 'Your shift hours',
