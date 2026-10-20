@@ -757,8 +757,9 @@ document.addEventListener('click', (ev) => {
 function dropStaleShift() {
   const tp = todaySched();
   if (!state || state.date !== todayISO() || !tp?.start) return;
-  if (tp.start === state.start && tp.end === state.end) return;
-  if (Object.values(state.tasks || {}).some((x) => x.done) || state.flags?.length) return;
+  if (tp.start === state.start && tp.end === state.end && state.name === shiftName()) return;
+  // Le pointage seul ne compte pas : avant l'heure, rien n'a vraiment commencé.
+  if (Object.entries(state.tasks || {}).some(([id, x]) => x.done && id !== 'pointage') || state.flags?.length) return;
   state = null; save();
 }
 function startScheduled(p) {
