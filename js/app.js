@@ -644,7 +644,7 @@ document.addEventListener('click', (ev) => {
 // Un jour prévu à l'horaire : le quart part tout seul, avec les bonnes heures.
 function startScheduled(p) {
   state = {
-    name: session.user?.name || prefs.name || '',
+    name: shiftName(),
     supervisor: '',
     date: todayISO(),
     start: p.start,
@@ -747,7 +747,7 @@ $('#setupForm').addEventListener('input', (ev) => {
 
 $('#setupForm').addEventListener('submit', (ev) => {
   ev.preventDefault();
-  const name = session.user?.name || $('#fName').value.trim();
+  const name = session.user ? shiftName() : $('#fName').value.trim();
   if (!name) { $('#fName').focus(); return; }
   if (!$('#fStart').value || !$('#fEnd').value || !$('#fDate').value) return;
   prefs.name = name;
@@ -1533,7 +1533,7 @@ async function refreshAlerts() {
 }
 
 // Hors quart (bouton de l'accueil) : le signalement part seul, sans quart.
-const looseCtx = () => ({ name: session.user?.name || prefs.name, date: todayISO(), shift: null, loose: true });
+const looseCtx = () => ({ name: shiftName(), date: todayISO(), shift: null, loose: true });
 const LOOSE = 'gym-loose-flags';
 const readLoose = () => read(LOOSE, []);
 
@@ -1898,7 +1898,7 @@ $('#editShiftBtn').addEventListener('click', reopenShift);
 const LAST_SHIFT = 'gym-last-shift';
 function editableShift() {
   const last = read(LAST_SHIFT, null);
-  const mine = !session.user || last?.name === session.user.name;
+  const mine = !session.user || last?.name === shiftName();
   return last && mine && last.savedAt && isoOf(new Date(last.savedAt)) === todayISO() ? last : null;
 }
 function paintEditToday() {
@@ -2496,7 +2496,7 @@ function renderHistory({ animate = true } = {}) {
   const ready = isUp || (isWeek ? hist.weekLoaded === hist.week : hist.loaded);
   const today = todayISO();
   const since = hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
-  const me = (session.user?.name || prefs.name || '').trim().toLowerCase();
+  const me = shiftName().trim().toLowerCase();
   // Un employé voit ses quarts; les superviseurs et l'admin voient ceux de toute l'équipe.
   const shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
     .filter((x) => isBoss() || !me || (x.name || '').trim().toLowerCase() === me);
@@ -2693,7 +2693,7 @@ function shiftOver() {
 }
 function paintFront() {
   const inside = Boolean(session.user);
-  const first = (session.user?.name || '').split(' ')[0];
+  const first = shiftName().split(' ')[0];
   const label = $('#poolStartLabel');
   if (inside) {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
@@ -2887,11 +2887,14 @@ function roleKey(k) {
   if (k === 'bossMode' && isAdmin()) return 'roleAdmin';
   return k;
 }
+// Le nom inscrit sur les quarts. L'admin peut faire un quart au nom d'un employé (ex. Esteban)
+// tout en restant connecté à son compte admin.
+function shiftName() { return (isRealAdmin() && prefs.actAs?.trim()) || session.user?.name || prefs.name || ''; }
 const roleName = (r) => t({ boss: 'roleBoss', admin: 'roleAdmin' }[r] || 'roleEmployee');
 async function doSignOut() {
   const wasVisitor = isVisitor();
   const hadClock = prefs.clockOffset;
-  delete prefs.clockOffset; // l'heure simulée ne reste pas pour la prochaine personne
+  delete prefs.clockOffset; delete prefs.actAs; setViewAs(''); // l'heure simulée, l'aperçu et le nom emprunté ne restent pas pour la prochaine personne
   savePrefs();
   await signOut();
   if (wasVisitor || hadClock) { location.reload(); return; }
@@ -2930,9 +2933,10 @@ function openAvatarPicker() {
 function paintViewAs() {
   let b = $('#viewAsBadge');
   const v = viewAs();
-  if (!v) { b?.remove(); return; }
-  if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
-  b.textContent = `${t('viewAsNow', roleName(v))} · ${t('viewAsExit')}`;
+  const who = isRealAdmin() && prefs.actAs?.trim();
+  if (!v && !who) { b?.remove(); return; }
+  if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); delete prefs.actAs; savePrefs(); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
+  b.textContent = `${[v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
 }
 function openAccount() {
   const u = session.user;
@@ -2942,7 +2946,9 @@ function openAccount() {
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span>${viewAs() ? ` <span class="pill sim">${esc(t('viewAsNow', roleName(viewAs())))}</span>` : ''}</p></div></div>
-    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="segmented view-as" role="radiogroup">${['employee', 'boss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${(viewAs() || 'admin') === r}">${esc(roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>` : ''}
+    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="segmented view-as" role="radiogroup">${['employee', 'boss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${(viewAs() || 'admin') === r}">${esc(roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
+    <label class="field act-as"><span>${esc(t('actAsLabel'))}</span><div class="acct-btns"><input id="acActAs" autocomplete="off" maxlength="40" value="${esc(prefs.actAs || '')}" placeholder="${esc(u.name)}"><button type="button" class="btn ghost" id="acActAsSave">${esc(t('save'))}</button></div></label>
+    <p class="section-note">${esc(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsNote'))}</p>` : ''}
     <div class="acct-list">
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
@@ -2977,6 +2983,12 @@ function openAccount() {
         else await updateMe('role', { role: /admin/i.test(code) ? 'admin' : 'boss' }); // démo : rien n'est vérifié
         sfx('save'); toast(t('codeOk', roleName(session.user.role))); closeSheet(); paintFront(); setTimeout(openAccount, 360);
       } catch (err) { msg.textContent = t(err.status === 429 ? 'codeTries' : err.status === 403 ? 'codeBad' : 'adminCodesLater'); sfx('locked'); }
+    });
+    $('#acActAs')?.closest('label').querySelector('#acActAsSave').addEventListener('click', () => {
+      const v = $('#acActAs').value.trim().slice(0, 40);
+      if (v && v.toLowerCase() !== u.name.toLowerCase()) prefs.actAs = v; else delete prefs.actAs;
+      savePrefs(); sfx('save'); toast(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsOff'));
+      paintViewAs(); paintFront(); closeSheet(); setTimeout(openAccount, 360);
     });
     root.querySelectorAll('[data-viewas]').forEach((b) => { b.onclick = () => { setViewAs(b.dataset.viewas); sfx('toggle'); paintViewAs(); closeSheet(); goFront(); paintFront(); setTimeout(openAccount, 360); }; });
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
