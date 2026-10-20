@@ -636,8 +636,8 @@ function startTour() {
   // Les étapes de l'accueil, puis on entre dans « Mon compte » pour montrer l'horaire et ce tutoriel.
   const home = [
     ['#poolStart', bossWatching() ? 'tourStartBoss' : 'tourStart'],
-    ['#poolDash .dash-shifts', isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
-    ['#dashFlag', 'tourFlag'],
+    ['#poolDash .dash-shifts', bossWatching() ? 'tourManual' : isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
+    ['#dashFlag', bossWatching() ? 'tourFeedback' : 'tourFlag'],
     ['#dashBoss', 'tourBoss'],
     ['#poolAccount', 'tourAccount'],
   ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
@@ -1658,6 +1658,7 @@ $('#flagBtn').addEventListener('click', () => openFlag());
 $('#flagHome').addEventListener('click', () => openFlag());
 
 const CAT_ICON = {
+  difficile: '<path d="M4 18c2-6 5-9 8-9s6 3 8 9"/><path d="M12 9V4M9 6l3-2 3 2"/>',
   app: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
   machine: '<path d="M15 3.5a4.5 4.5 0 0 0-4.3 5.9l-6.3 6.3a2 2 0 0 0 2.8 2.8l6.3-6.3A4.5 4.5 0 0 0 19.4 7l-2.7 2.7-2.4-.5-.5-2.4L16.5 4a4.5 4.5 0 0 0-1.5-.5z"/>',
   degat: '<path d="M12 3c3 4 5 6.6 5 9.2A5 5 0 0 1 7 12.2C7 9.6 9 7 12 3z"/><path d="M4 20c2-1 4-1 6 0s4 1 6 0 3-1 4 0"/>',
@@ -1686,6 +1687,12 @@ const looseCtx = () => ({ name: shiftName(), date: todayISO(), shift: null, loos
 const LOOSE = 'gym-loose-flags';
 const readLoose = () => read(LOOSE, []);
 
+// Les tâches du jour à proposer (« quelle tâche était difficile? ») : le quart en cours, sinon l'horaire du jour.
+function flagTaskItems() {
+  if (plan?.items) return plan.items;
+  const tp = todaySched() || SHIFTS[1];
+  try { return buildPlan({ shift: detectShift(tp.start, tp.end), date: todayISO(), start: tp.start, end: tp.end, lang: lang() }).items; } catch { return []; }
+}
 function openFlag({ where = '' } = {}) {
   let category = null;
   let urgent = null; // tant que l'employé n'a pas choisi, suit la catégorie
@@ -1697,8 +1704,9 @@ function openFlag({ where = '' } = {}) {
     </div>
     <div class="cat-grid">${Object.entries(CATEGORIES).map(([k, v]) => `<button type="button" data-cat="${k}" aria-pressed="false">${catIcon(k)}<span>${esc(v[lang()])}</span></button>`).join('')}</div>
     <div class="flag-more" hidden>
-      <label class="field"><span>${t('where')}</span>
+      <label class="field"><span id="flagWhereLabel">${t('where')}</span>
         <input id="flagWhere" list="areaList" placeholder="${esc(t('wherePh'))}" value="${esc(where)}">
+        <datalist id="flagTasks">${flagTaskItems().filter((x) => x.kind === 'task' && !x.auto).map((x) => `<option value="${esc(x.title)}">`).join('')}</datalist>
         <datalist id="areaList">${Object.values(AREAS).map((a) => `<option value="${esc(a[lang()])}">`).join('')}</datalist>
       </label>
       <div class="flag-chips" id="flagChips" hidden>${t('supplyChips').map((c) => `<button type="button" class="chip" data-supply="${esc(c)}">${esc(c)}</button>`).join('')}</div>
@@ -1718,7 +1726,7 @@ function openFlag({ where = '' } = {}) {
     const saveBtn = root.querySelector('#flagSave');
     const text = root.querySelector('#flagText');
     const photos = [];
-    const pick = () => urgent ?? (category ? CATEGORIES[category].urgent : null);
+    const pick = () => (category === 'difficile' ? false : urgent ?? (category ? CATEGORIES[category].urgent : null));
     const paint = () => {
       const u = pick();
       const sup = alertNames(); // la liste peut arriver du serveur après l'ouverture
@@ -1728,6 +1736,12 @@ function openFlag({ where = '' } = {}) {
       const needText = category === 'autre' || category === 'app';
       root.querySelector('#flagWhatLabel').textContent = t(category === 'app' ? 'appWhat' : needText ? 'whatNeeded' : 'whatOpt');
       root.querySelector('#flagChips').hidden = category !== 'materiel';
+      // Tâche difficile : quelle tâche, ce qui était dur; jamais urgent.
+      const hard = category === 'difficile';
+      root.querySelector('#flagWhereLabel').textContent = t(hard ? 'hardWhich' : 'where');
+      root.querySelector('#flagWhere').setAttribute('list', hard ? 'flagTasks' : 'areaList');
+      if (hard) root.querySelector('#flagWhatLabel').textContent = t('hardWhat');
+      root.querySelector('.urgency').closest('.field').hidden = hard;
       saveBtn.textContent = u ? t('flagSend', sup) : t('add');
       saveBtn.disabled = !category || (needText && !text.value.trim());
     };
@@ -2629,12 +2643,43 @@ function upcomingList() {
   return rows || `<p class="section-note">${esc(t('upNoneWeek'))}</p>`;
 }
 
+// L'analyse du superviseur : quelques phrases simples sur la période choisie,
+// comparées à la période d'avant. Jamais de classement d'employés.
+function teamAnalysis(span) {
+  if (!span.length) return '';
+  const today = todayISO();
+  const pct = (list) => { const m = list.map(metrics); const tot = m.reduce((a, x) => a + x.total, 0); return tot ? Math.round((100 * m.reduce((a, x) => a + x.done, 0)) / tot) : null; };
+  const range = {
+    day: [addDays(today, -1), addDays(today, -1)],
+    week: [addDays(mondayOf(today), -7), addDays(mondayOf(today), -1)],
+    month: [`${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`, addDays(`${today.slice(0, 8)}01`, -1)],
+    year: [`${Number(today.slice(0, 4)) - 1}-01-01`, `${Number(today.slice(0, 4)) - 1}-12-31`],
+  }[hist.period];
+  const who = (x) => !hist.who || (hist.by === 'shift' ? String(x.shift) : (x.name || '').trim() || '?') === hist.who;
+  const prev = range ? hist.recent.filter((x) => x.date >= range[0] && x.date <= range[1] && who(x)) : [];
+  const now = pct(span), before = prev.length ? pct(prev) : null;
+  const lines = [];
+  if (now !== null) {
+    const d = before === null ? '' : now === before ? t('anSame') : t(now > before ? 'anUp' : 'anDown', Math.abs(now - before));
+    lines.push(`<li><b class="num">${now}%</b> ${esc(t('anDone'))}${d ? ` <span class="an-trend ${now >= before ? 'up' : 'down'}">${esc(d)}</span>` : ''}</li>`);
+  }
+  const full = span.filter((x) => { const m = metrics(x); return m.total && m.done === m.total; }).length;
+  lines.push(`<li>${esc(t('anFull', full, span.length))}</li>`);
+  const count = (arr) => [...arr.reduce((m, k) => m.set(k, (m.get(k) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const flags = span.flatMap((x) => x.flags || []);
+  const hard = count(flags.filter((f) => f.category === 'difficile').map((f) => f.location || t('anHardAny')));
+  if (hard.length) lines.push(`<li>${esc(t('anHard'))} ${hard.map(([k, n]) => `<b>${esc(k)}</b>${n > 1 ? ` ×${n}` : ''}`).join(', ')}</li>`);
+  const probs = count(flags.filter((f) => f.category !== 'difficile').map((f) => catName(f.category)));
+  lines.push(probs.length ? `<li>${esc(t('anProbs'))} ${probs.map(([k, n]) => `<b>${esc(k)}</b>${n > 1 ? ` ×${n}` : ''}`).join(', ')}</li>` : `<li>${esc(t('anNoProbs'))}</li>`);
+  return `<section class="hi-tally an-card"><h2>${esc(t('anTitle'))}</h2><ul class="an-list">${lines.join('')}</ul></section>`;
+}
+
 function renderHistory({ animate = true } = {}) {
   const isWeek = hist.mode === 'week';
   const isUp = hist.mode === 'upcoming';
   const ready = isUp || (isWeek ? hist.weekLoaded === hist.week : hist.loaded);
   const today = todayISO();
-  const since = hist.period === 'day' ? today : hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
+  const since = hist.period === 'year' ? `${today.slice(0, 4)}-01-01` : hist.period === 'day' ? today : hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
   const me = shiftName().trim().toLowerCase();
   // Un employé voit ses quarts; les superviseurs et l'admin voient ceux de toute l'équipe.
   let shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
@@ -2694,14 +2739,14 @@ function renderHistory({ animate = true } = {}) {
 
   if (bossWatching()) {
     // La page du patron : une phrase, les filtres, ce qui manque, puis les quarts. Rien d'autre.
-    const per = `<div class="segmented hi-period" role="tablist">${['day', 'week', 'month', 'all'].map((k2) => `<button type="button" role="tab" data-hper="${k2}" aria-selected="${hist.period === k2}">${esc(t(`per_${k2}`))}</button>`).join('')}</div>`;
+    const per = `<div class="segmented hi-period" role="tablist">${['day', 'week', 'month', 'year'].map((k2) => `<button type="button" role="tab" data-hper="${k2}" aria-selected="${hist.period === k2}">${esc(t(`per_${k2}`))}</button>`).join('')}</div>`;
     const sum = !ready ? '' : span.length ? t('teamSum', span.length, hist.pctDone, nFlags) : t('teamNone');
     const bstrip = span.length ? `<div class="ap-stats hi-stats">
       <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts', span.length))}</span></div>
       <div class="${hist.pctDone === 100 ? 'ok' : ''}"><b class="num">${hist.pctDone}%</b><span>${esc(t('statTasksDone'))}</span></div>
       <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags', nFlags))}</span></div>
     </div>` : '';
-    $('#historyBody').innerHTML = `${per}${ready ? `<p class="team-sum">${esc(sum)}</p>${whoBar}${bstrip}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
+    $('#historyBody').innerHTML = `${per}${ready ? `<p class="team-sum">${esc(sum)}</p>${whoBar}${bstrip}${teamAnalysis(span)}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
       <div class="hi-links">
         <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
         <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
@@ -2813,7 +2858,7 @@ $('#poolStart').addEventListener('click', (e) => {
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
     window.history.replaceState(null, '', location.pathname);
-    if (bossWatching()) { if (e.target.closest('#poolNext')) $('#dashBoss').click(); else openHistory({ team: true }); return; } // le patron : sa bande ouvre l'espace superviseur, le reste la journée de l'équipe
+    if (bossWatching()) { openHistory({ team: true }); return; } // le patron : sa bande ouvre l'espace superviseur, le reste la journée de l'équipe
     dropStaleShift();
     if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
     if (state) { route(); return; } // quart en cours : retour aux tâches
@@ -2904,12 +2949,38 @@ function paintFront() {
   $('#poolDash').hidden = !inside;
   $('#poolAccount').hidden = !inside;
   if (inside) { $('#poolAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase())); $('#poolAccount').setAttribute('aria-label', t('account')); }
-  $('#dashBoss').hidden = !isBoss() || bossWatching(); // en suivi, l'espace superviseur est dans la grande carte
+  $('#dashBoss').hidden = !isBoss() || bossWatching();
+  // Le manuel a son livre; Mes shifts garde son horloge.
+  const ds = $('#poolDash .dash-shifts svg');
+  if (ds) ds.innerHTML = bossWatching() ? '<path d="M4 5a2 2 0 0 1 2-2h5v17H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 1 2 2z"/>' : '<path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2"/>'; // en suivi, l'espace superviseur est dans la grande carte
   $('#poolLogin').hidden = inside;
   $('#poolVisit').hidden = inside;
   $('#auth').classList.toggle('inside', inside);
 }
-$('#dashFlag').addEventListener('click', () => openFlag());
+$('#dashFlag').addEventListener('click', () => (bossWatching() ? openBoss() : openFlag())); // le superviseur : les retours de l'équipe
+// Le superviseur : la tuile bleue ouvre le manuel du quart (protocole, trucs, aperçu).
+$('#poolDash .dash-shifts').addEventListener('click', (e) => { if (bossWatching()) { e.stopImmediatePropagation(); e.preventDefault(); openManual(); } }, true);
+function openManual() {
+  const row = (id, ico, k) => `<button type="button" class="acct-row" data-man="${id}">${ico}<span>${esc(t(k))}<small>${esc(t(`${k}Sub`))}</small></span>${CHEV_R}</button>`;
+  openSheet(`<div class="sheet-head"><h2>${esc(t('dashManual'))}</h2><p class="lede">${esc(t('manLede'))}</p></div>
+    <div class="acct-list man-list">
+      ${row('proto', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>', 'manProto')}
+      ${row('tips', `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${HERO_ICONS.tips.replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>`, 'manTips')}
+      ${row('overview', `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${HERO_ICONS.overview.replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>`, 'manOverview')}
+    </div>`, (root) => {
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-man]');
+      if (!b) return;
+      closeSheet();
+      setTimeout(() => {
+        if (b.dataset.man === 'proto') { goProtocol(); return; }
+        ap.modeSet = true;
+        if (b.dataset.man === 'tips') { ap.mode = 'tips'; ap.tab = 'tips'; } else { ap.mode = 'overview'; ap.tab = 'day'; }
+        openApercu();
+      }, 320);
+    });
+  });
+}
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-account]')) openAccount(); });
 // Heure simulée (admin) : un rappel toujours visible, pour ne pas l'oublier.
 if (simulated) {
@@ -2935,15 +3006,7 @@ function dayWord(iso) {
 function startAt(nx) { const at = dateOf(nx.date); at.setHours(0, toMin(nx.start), 0, 0); return at; }
 function paintNextBox(inside) {
   const box = $('#poolNext');
-  if (inside && bossWatching()) {
-    // Le superviseur ne fait pas de quart : à la place, l'accès direct à l'espace superviseur.
-    box.hidden = false;
-    box.classList.add('ready', 'nb-boss');
-    box.dataset.boss = '1';
-    box.innerHTML = `<span class="nb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
-      <span class="nb-text"><small>${esc(t(isAdmin() ? 'roleAdmin' : 'bossMode'))}</small><b>${esc(t('dashBossSub'))}</b></span>`;
-    return;
-  }
+  if (inside && bossWatching()) { box.hidden = true; return; } // le superviseur ne fait pas de quart : la carte ouvre ses rapports
   box.classList.remove('nb-boss');
   delete box.dataset.boss;
   const nx = inside && nextShift();
@@ -3082,6 +3145,7 @@ function paintAccount() {
 }
 // Les mots changent selon le rôle : « Shifts de l'équipe » pour un superviseur, « Admin » pour l'admin.
 function roleKey(k) {
+  if (bossWatching() && ['dashShifts', 'dashShiftsSub', 'dashFlag', 'dashFlagSub'].includes(k)) return { dashShifts: 'dashManual', dashShiftsSub: 'dashManualSub', dashFlag: 'dashFeedback', dashFlagSub: 'dashFeedbackSub' }[k];
   if (k === 'dashShifts' && isBoss()) return 'dashShiftsTeam';
   if (k === 'bossMode' && isAdmin()) return 'roleAdmin';
   return k;

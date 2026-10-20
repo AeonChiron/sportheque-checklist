@@ -3,6 +3,7 @@
 // serveur. urgent : choix proposé par défaut (l'employé peut changer).
 
 export const CATEGORIES = {
+  difficile: { fr: 'Tâche difficile', en: 'Hard task', urgent: false }, // épuisante, ou quelque chose qui accroche
   machine: { fr: 'Machine brisée', en: 'Broken machine', urgent: true },
   degat: { fr: 'Dégât ou plancher glissant', en: 'Spill or slippery floor', urgent: true },
   blessure: { fr: 'Blessure', en: 'Injury', urgent: true },
