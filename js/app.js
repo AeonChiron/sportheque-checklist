@@ -844,6 +844,12 @@ function renderNow() {
 }
 
 function renderChecklist() {
+  const lock = shiftLocked();
+  $('#checklist').classList.toggle('locked', Boolean(lock));
+  let note = $('#lockNote');
+  if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
+  note.hidden = !lock;
+  if (lock) note.textContent = `${t('ovFuture')} ${t('ovLocked', countdown(lock))}.`;
   const tasks = planTasks();
   const done = tasks.filter((x) => state.tasks[x.id]?.done).length;
   const d = plan.day;
@@ -859,6 +865,7 @@ function renderChecklist() {
   const ready = tasks.length > 0 && done === tasks.length;
   $('#finishBtn').classList.toggle('ready', ready);
   $('#finishBtn').textContent = t(ready ? 'finishReady' : 'finish');
+  if (lock) { $('#finishBtn').textContent = t('lockShort', countdown(lock)); $('#finishBtn').disabled = true; } else $('#finishBtn').disabled = false;
   const hint = $('#swipeHint');
   hint.hidden = prefs.swipeSeen || !matchMedia('(pointer: coarse)').matches;
   hint.textContent = t('swipeHint');
@@ -885,7 +892,16 @@ function renderChecklist() {
     : '';
 }
 
+// Un quart pas encore commencé (plus de 30 min avant) : on le voit, on coche rien.
+function shiftLocked() {
+  if (!state) return 0;
+  const at = dateOf(state.date); at.setHours(0, toMin(state.start), 0, 0);
+  const left = Math.ceil((at - Date.now()) / 6e4);
+  return left > EARLY_MIN ? left : 0;
+}
+function lockedToast() { const l = shiftLocked(); if (l) toast(t('ovLocked', countdown(l)), 'muted'); return l; }
 function toggleDone(id) {
+  if (lockedToast()) return;
   const wasAll = allDone();
   const e = entry(id);
   const before = JSON.stringify(e);
@@ -1308,6 +1324,7 @@ function openTask(id) {
     // Étapes : chaque toucher coche une étape; toutes faites = tâche cochée.
     for (const b of root.querySelectorAll('[data-step]')) {
       b.onclick = () => {
+        if (lockedToast()) return;
         const i = Number(b.dataset.step);
         const set = new Set(e.steps || []);
         if (set.has(i)) set.delete(i); else set.add(i);

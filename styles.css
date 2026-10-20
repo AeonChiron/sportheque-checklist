@@ -2190,3 +2190,7 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 #sheet .sheet-foot #ovTime { width: 100%; }
 .ov-note { margin: 0 0 8px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, #f5b326 16%, var(--surface)); font-size: 14px; }
 #sheet .sheet-foot #ovGo:disabled { opacity: 1; background: var(--line); color: var(--ink, inherit); box-shadow: none; }
+#checklist.locked #taskList [data-act="toggle"] { opacity: .35; }
+.lock-note { margin: 10px 0; }
+#checklist.locked #taskList [data-act="toggle"], #checklist.locked #taskList [data-act="toggle"] * { opacity: .45; }
+#checklist.locked #finishBtn:disabled { opacity: 1; background: var(--line); color: inherit; box-shadow: none; font-size: 15px; }
