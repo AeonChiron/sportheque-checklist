@@ -1085,7 +1085,7 @@ function renderNow() {
   }
   if (!cur) { box.innerHTML = quiet(t('allDone')); return; }
   const nextIt = plan.items.find((it) => it !== cur && it.start >= cur.start && open(it));
-  const next = nextIt ? `<div class="next"><span>${t('next')}</span><span class="num">${f(nextIt.start)}</span><b>${esc(nextIt.title)}</b></div>` : '';
+  const next = nextIt ? `<div class="next"><span>${t('next')}</span><b>${esc(nextIt.title)}</b></div>` : '';
   const catchUp = '';
   const late = cur.kind === 'task' && cur.end < now ? now - cur.end : 0;
   const remain = late >= 5 ? `<span class="now-late">${esc(t('nowLate', fmtDuration(late, lang())))}</span>` : '';
