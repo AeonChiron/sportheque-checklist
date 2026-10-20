@@ -1,3 +1,4 @@
+import { simulated } from './clock.js'; // en premier : l'heure simulée de l'admin
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS } from './manual.js';
@@ -6,7 +7,7 @@ import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
 import { mountGlass, playFinish, fxSound } from './fx.js';
-import { session, accounts, isBoss, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents } from './auth.js';
+import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
@@ -494,7 +495,7 @@ function openScheduleSheet({ first = false } = {}) {
         if (sc[i]) delete sc[i]; else sc[i] = { ...lastHours }; // un jour allumé reprend les dernières heures
         paintRow(i);
         commit();
-        clank('step');
+        sfx('toggle');
       };
     }
     for (const q of root.querySelectorAll('[data-qp]')) {
@@ -518,7 +519,7 @@ function openScheduleSheet({ first = false } = {}) {
       });
     }
     $('#schedDone').onclick = () => {
-      commit(); closeSheet(); toast(t('schedSaved'));
+      commit(); closeSheet(); toast(t('schedSaved')); setTimeout(() => sfx('save'), 120);
     };
     $('#schedLater')?.addEventListener('click', () => { closeSheet(); if (first) setTimeout(maybeWelcome, 450); });
     if (first) $('#schedDone').addEventListener('click', () => setTimeout(maybeWelcome, 450));
@@ -557,6 +558,7 @@ function maybeWelcome() {
     <ul class="wl-map"><li><b>${esc(t('wlCard'))}</b>${esc(t('wlCardSub'))}</li><li><b>${esc(t('dashShifts'))}</b>${esc(t('wlShiftsSub'))}</li><li><b>${esc(t('dashFlag'))}</b>${esc(t('wlFlagSub'))}</li></ul>`,
   () => {
     $('#wlGo').onclick = closeSheet;
+    setTimeout(() => sfx('welcome'), 250);
     $('#wlSched')?.addEventListener('click', () => { closeSheet(); setTimeout(() => openScheduleSheet(), 350); });
   }, `${hasSched ? '' : `<button type="button" class="btn ghost" id="wlSched">${t('schedSet')}</button>`}<button type="button" class="btn primary" id="wlGo">${t('wlGo')}</button>`);
 }
@@ -824,6 +826,7 @@ function renderTimeline() {
 let audio = null;
 function clank(kind = 'plate') {
   if (prefs.sound === false) return;
+  if (kind === 'step') { sfx('tick'); return; } // la petite case : le son doux du studio
   try {
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
     if (audio.state === 'suspended') audio.resume();
@@ -907,7 +910,7 @@ function renderNow() {
 
 function renderChecklist() {
   const lock = shiftLocked();
-  if (!lock && !state.tasks.pointage?.done) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); } // pointage dès que le quart est ouvert
+  if (!lock && !state.tasks.pointage?.done) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); setTimeout(() => sfx('punch'), 350); } // pointage dès que le quart est ouvert
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -961,12 +964,12 @@ function renderChecklist() {
 
 // Un quart pas encore commencé (plus de 30 min avant) : on le voit, on coche rien.
 function shiftLocked() {
-  if (!state) return 0;
+  if (!state || isAdmin()) return 0; // l'admin teste quand il veut
   const at = dateOf(state.date); at.setHours(0, toMin(state.start), 0, 0);
   const left = Math.ceil((at - Date.now()) / 6e4);
   return left > EARLY_MIN ? left : 0;
 }
-function lockedToast() { const l = shiftLocked(); if (l) toast(t('ovLocked', countdown(l)), 'muted'); return l; }
+function lockedToast() { const l = shiftLocked(); if (l) { toast(t('ovLocked', countdown(l)), 'muted'); sfx('locked'); } return l; }
 function toggleDone(id) {
   if (id === 'pointage') return; // le pointage reste coché
   if (lockedToast()) return;
@@ -1106,6 +1109,7 @@ let lastFocus = null;
 function openSheet(html, onMount, foot = '') {
   lastFocus = document.activeElement;
   if ($('#sheet').hidden) {
+    sfx('open');
     // Première ouverture : le contenu arrive en cascade (pas aux mises à jour).
     $('#sheet').classList.add('fresh');
     clearTimeout(openSheet.timer);
@@ -1127,6 +1131,7 @@ function openSheet(html, onMount, foot = '') {
   $('#sheet').focus({ preventScroll: true });
 }
 function closeSheet() {
+  if (!$('#sheet').hidden && $('#sheet').classList.contains('open')) sfx('close');
   $('#backdrop').classList.remove('open');
   $('#sheet').classList.remove('open');
   setTimeout(() => { $('#backdrop').hidden = true; $('#sheet').hidden = true; }, 300);
@@ -1569,6 +1574,7 @@ function flagMailLine(fl, i) {
 }
 
 async function submitProblem(fl, s = state) {
+  sfx('flag');
   if (sending.has(fl) || !flagNeedsWork(fl)) {
     if (!sending.has(fl)) toast(t(fl.urgent ? 'flagDemo' : s.loose ? 'flagInBoss' : 'flagNoted'));
     return;
@@ -1795,6 +1801,7 @@ async function saveShift() {
   const { name } = state;
   const summary = boardSummary();
   const where = await publishShift(summary);
+  sfx('sent');
   write(LAST_SHIFT, { ...state, savedAt: new Date().toISOString() }); // pour le modifier jusqu'à minuit
   state = null;
   save();
@@ -2486,6 +2493,7 @@ $('#historyBody').addEventListener('click', (ev) => {
   const ds = el.dataset;
   if (ds.up) { const p = presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
+  if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
   if (ds.hper) { hist.period = ds.hper; renderHistory({ animate: false }); return; }
   if (ds.hmode) {
     if (ds.hmode === hist.mode) return;
@@ -2575,6 +2583,7 @@ function placeQuickBar(id) {
   $('#qbTasks').hidden = !state || id === 'checklist';
   $('#qbBoss').hidden = !isBoss() || id === 'boss';
   $('#qbVisit').hidden = !isVisitor();
+  $('#qbAccount').hidden = !session.user;
   bar.classList.toggle('no-tools', id === 'setup'); // l'accueil a déjà ses boutons
 }
 $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
@@ -2626,12 +2635,22 @@ function paintFront() {
   paintNextBox(inside);
   if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
   $('#poolDash').hidden = !inside;
+  $('#poolAccount').hidden = !inside;
+  if (inside) { $('#poolAccount').innerHTML = `<span>${esc((first[0] || '?').toUpperCase())}</span>`; $('#poolAccount').setAttribute('aria-label', t('account')); }
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
   $('#poolVisit').hidden = inside;
   $('#auth').classList.toggle('inside', inside);
 }
 $('#dashFlag').addEventListener('click', () => openFlag());
+document.addEventListener('click', (ev) => { if (ev.target.closest('[data-account]')) openAccount(); });
+// Heure simulée (admin) : un rappel toujours visible, pour ne pas l'oublier.
+if (simulated) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'sim-badge'; b.dataset.account = '';
+  b.textContent = `🕒 ${new Date().toLocaleString(CONFIG.defaultLang === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+  document.body.append(b);
+}
 // La boîte du prochain quart, sous « Bon retour » : le jour, les heures et le
 // compte à rebours. Un toucher fait la même chose que la carte.
 function countdown(min) {
@@ -2664,8 +2683,9 @@ function paintNextBox(inside) {
 }
 // La boîte dorée : l'aperçu du quart en bref, puis « Commencer » ou « Changer l'heure ».
 function openNextOverview(pick) {
-  const nx = pick?.date ? pick : nextShift();
-  if (!nx) return;
+  const found = pick?.date ? pick : nextShift();
+  if (!found) return;
+  const nx = isAdmin() && found.date === todayISO() ? { ...found, ready: true } : found; // l'admin peut partir le quart d'aujourd'hui tout de suite
   const live = Boolean(state) && nx.date === todayISO(); // le quart en cours
   const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
   // Chaque tâche s'ouvre pour lire ses étapes et ses trucs (rien à cocher ici).
@@ -2702,8 +2722,8 @@ function paintAuth() {
   for (const b of document.querySelectorAll('[data-authtab]')) b.setAttribute('aria-selected', String(b.dataset.authtab === authUI.tab));
   for (const el of document.querySelectorAll('#authForm [data-only="signup"]')) el.hidden = !up;
   for (const b of document.querySelectorAll('[data-role]')) b.setAttribute('aria-checked', String(b.dataset.role === authUI.role));
-  $('#aCodeLabel').textContent = t(authUI.role === 'boss' ? 'bossCode' : 'teamCode');
-  $('#aCodeHint').textContent = t(authUI.role === 'boss' ? 'bossCodeHint' : 'teamCodeHint');
+  $('#aCodeLabel').textContent = t({ boss: 'bossCode', admin: 'adminCode' }[authUI.role] || 'teamCode');
+  $('#aCodeHint').textContent = t({ boss: 'bossCodeHint', admin: 'adminCodeHint' }[authUI.role] || 'teamCodeHint');
   $('#aPass').autocomplete = up ? 'new-password' : 'current-password';
   $('#aShow').textContent = t($('#aPass').type === 'password' ? 'show' : 'hide');
   $('#authSubmit').textContent = t(up ? 'signupBtn' : 'loginBtn');
@@ -2767,7 +2787,7 @@ function paintAccount() {
   document.querySelector('.boss-link').hidden = !isBoss();
   $('#flagHome').hidden = !u; // hors quart, il faut savoir qui signale
   if (!u) return;
-  line.innerHTML = `<span class="who">${esc(u.name)} · ${esc(t(u.role === 'boss' ? 'roleBoss' : 'roleEmployee'))}</span><button type="button" class="link" id="signOutBtn">${t('signOut')}</button>`;
+  line.innerHTML = `<span class="who">${esc(u.name)} · ${esc(roleName(u.role))}</span><button type="button" class="link" id="signOutBtn">${t('signOut')}</button>`;
   const b = $('#signOutBtn');
   b.onclick = async () => {
     if (!b.dataset.armed) {
@@ -2776,17 +2796,83 @@ function paintAccount() {
       setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = t('signOut'); } }, 3000);
       return;
     }
-    const wasVisitor = isVisitor();
-    await signOut();
-    if (wasVisitor) { location.reload(); return; }
-    boss.problems = [];
-    boss.team = [];
-    boss.loaded = false;
-    boss.teamLoaded = false;
-    window.history.replaceState(null, '', location.pathname);
-    route();
+    await doSignOut();
   };
   if (isBoss()) refreshBossCount();
+}
+const roleName = (r) => t({ boss: 'roleBoss', admin: 'roleAdmin' }[r] || 'roleEmployee');
+async function doSignOut() {
+  const wasVisitor = isVisitor();
+  const hadClock = prefs.clockOffset;
+  delete prefs.clockOffset; // l'heure simulée ne reste pas pour la prochaine personne
+  savePrefs();
+  await signOut();
+  if (wasVisitor || hadClock) { location.reload(); return; }
+  boss.problems = [];
+  boss.team = [];
+  boss.loaded = false;
+  boss.teamLoaded = false;
+  window.history.replaceState(null, '', location.pathname);
+  route();
+}
+
+// ---------- Mon compte : nom, statut, déconnexion; pour l'admin, les codes et les outils de test ----------
+function openAccount() {
+  const u = session.user;
+  if (!u) return;
+  const admin = isAdmin();
+  const live = session.mode === 'accounts';
+  const sim = prefs.clockOffset ? new Date() : null;
+  const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  openSheet(`<div class="acct-head"><span class="wb-avatar">${esc((u.name[0] || '?').toUpperCase())}</span><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span></p></div></div>
+    <div class="acct-list">
+      <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
+      ${isBoss() ? `<button type="button" class="acct-row" id="acBoss"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg><span>${esc(t('bossMode'))}</span>${CHEV_R}</button>` : ''}
+      <button type="button" class="acct-row" id="acSound"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/>${prefs.sound === false ? '<path d="M17 9l4 6M21 9l-4 6"/>' : '<path d="M17 8a5 5 0 0 1 0 8"/>'}</svg><span>${esc(t(prefs.sound === false ? 'soundOff' : 'soundOn'))}</span></button>
+    </div>
+    ${admin ? `<p class="block-label">${esc(t('adminTools'))}</p>
+    <div class="panel acct-admin">
+      <label class="field"><span>${esc(t('simClock'))}</span><input type="datetime-local" id="acClock" value="${local(new Date())}"></label>
+      <div class="acct-btns"><button type="button" class="btn ghost" id="acClockSet">${esc(t('simApply'))}</button>${sim ? `<button type="button" class="btn ghost" id="acClockReal">${esc(t('simReal'))}</button>` : ''}</div>
+      <p class="section-note">${esc(t('adminUnlock'))}</p>
+      <div class="acct-btns">
+        ${state ? `<button type="button" class="btn ghost" id="acFill">${esc(t('adminFill'))}</button>` : ''}
+        <button type="button" class="btn ghost" id="acWelcome">${esc(t('adminWelcome'))}</button>
+        <button type="button" class="btn ghost" id="acWipe">${esc(t('adminWipe'))}</button>
+      </div>
+    </div>
+    <p class="block-label">${esc(t('adminCodes'))}</p>
+    <div class="panel acct-admin">
+      ${live ? `<div class="row2"><label class="field"><span>${esc(t('teamCode'))}</span><input id="acTeam" autocomplete="off"></label><label class="field"><span>${esc(t('bossCode'))}</span><input id="acBossCode" autocomplete="off"></label></div>
+      <button type="button" class="btn ghost" id="acCodes">${esc(t('save'))}</button><p class="section-note" id="acCodesMsg">${esc(t('adminCodesNote'))}</p>` : `<p class="section-note">${esc(t('adminCodesDemo'))}</p>`}
+    </div>` : ''}`,
+  (root) => {
+    $('#acSched').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 320); };
+    $('#acBoss')?.addEventListener('click', () => { closeSheet(); location.hash = 'superviseur'; route(); });
+    $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
+    $('#acSignOut').onclick = (e) => {
+      const b = e.currentTarget;
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('signOutSure'); sfx('locked'); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = t('signOut'); } }, 3000); return; }
+      closeSheet(); doSignOut();
+    };
+    if (!admin) return;
+    const setClock = (ms) => { if (ms) prefs.clockOffset = ms; else delete prefs.clockOffset; savePrefs(); location.reload(); };
+    $('#acClockSet').onclick = () => { const v = $('#acClock').value; if (v) setClock(new Date(v).getTime() - (Date.now() - (prefs.clockOffset || 0))); }; // décalage = heure voulue − heure réelle
+    $('#acClockReal')?.addEventListener('click', () => setClock(0));
+    $('#acFill')?.addEventListener('click', () => { for (const it of planTasks()) state.tasks[it.id] = { ...(state.tasks[it.id] || {}), done: true, skipped: false, doneAt: new Date().toISOString() }; save(); closeSheet(); openChecklist(); sfx('full'); });
+    $('#acWelcome').onclick = () => { delete prefs.welcomed?.[u.email]; savePrefs(); closeSheet(); setTimeout(maybeWelcome, 380); };
+    $('#acWipe').onclick = (e) => {
+      const b = e.currentTarget;
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('adminWipeSure'); return; }
+      try { for (const k of Object.keys(localStorage)) if (!['gym-auth', 'gym-auth-mode'].includes(k)) localStorage.removeItem(k); } catch { /* ignore */ }
+      location.reload();
+    };
+    $('#acCodes')?.addEventListener('click', async () => {
+      const msg = $('#acCodesMsg');
+      try { await request('auth', { method: 'POST', body: { action: 'codes', team: $('#acTeam').value, boss: $('#acBossCode').value } }); msg.textContent = t('adminCodesSaved'); sfx('save'); } catch (err) { msg.textContent = t(err.status === 400 ? 'adminCodesBad' : 'adminCodesLater'); sfx('locked'); }
+    });
+  }, `<button type="button" class="btn ghost danger" id="acSignOut">${t('signOut')}</button><button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
+  $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
 }
 
 // ---------- 8. Espace superviseur : les signalements, l'équipe ----------
@@ -2878,7 +2964,7 @@ function renderBoss({ animate = true } = {}) {
       : `${teamWeek()}<p class="section-note">${esc(t('teamHint'))}</p>
         <div class="panel team-list">${boss.team.map((u) => `<div class="team-row" data-email="${esc(u.email)}">
           <div class="team-who"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
-          <span class="pill">${esc(t(u.role === 'boss' ? 'roleBoss' : 'roleEmployee'))}</span>
+          <span class="pill">${esc(roleName(u.role))}</span>
           ${u.email === session.user?.email ? `<span class="team-you">${esc(t('you'))}</span>` : `<div class="team-acts">
             ${session.mode === 'demo' ? '' : `<button type="button" class="link" data-reset>${esc(t('newPassword'))}</button>`}
             <button type="button" class="link danger" data-remove>${esc(t('removeUser'))}</button></div>`}
@@ -2939,6 +3025,7 @@ $('#bossBody').addEventListener('click', async (ev) => {
   const ds = el.dataset;
   if (ds.btab) {
     if (ds.btab === boss.tab) return;
+    sfx('tab');
     boss.tab = ds.btab;
     renderBoss();
     refreshBoss();

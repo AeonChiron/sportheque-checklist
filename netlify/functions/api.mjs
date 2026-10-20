@@ -4,7 +4,7 @@ import { createApi } from '../lib/api.mjs';
 
 export default createApi({
   getStore: (name) => getStore({ name, consistency: 'strong' }),
-  env: () => ({ TEAM_CODE: process.env.TEAM_CODE, BOSS_CODE: process.env.BOSS_CODE }),
+  env: () => ({ TEAM_CODE: process.env.TEAM_CODE, BOSS_CODE: process.env.BOSS_CODE, ADMIN_CODE: process.env.ADMIN_CODE }),
 });
 
 export const config = { path: '/api/*' };

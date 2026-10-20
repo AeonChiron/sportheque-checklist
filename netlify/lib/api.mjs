@@ -45,7 +45,9 @@ function cleanSchedule(raw) {
   for (const [k, v] of Object.entries(raw)) if (/^[0-6]$/.test(k) && v && HHMM.test(v.start) && HHMM.test(v.end)) out[k] = { start: v.start, end: v.end };
   return out;
 }
-const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: u.role === 'boss' && u.alerts === true, schedule: cleanSchedule(u.schedule) });
+// Trois rôles : employé, superviseur, admin (la personne qui teste et règle le site; elle a tout ce qu'un superviseur a).
+const lead = (u) => u?.role === 'boss' || u?.role === 'admin';
+const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule) });
 // Courriels des problèmes urgents : par défaut, les superviseurs marqués
 // alerts dans la config (Daniel); les autres peuvent s'abonner eux-mêmes.
 const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
@@ -57,6 +59,13 @@ export function createApi({ getStore, env }) {
   const board = () => getStore('board');
   const problems = () => getStore('problems');
   const photos = () => getStore('problem-photos');
+  const settings = () => getStore('settings');
+  // Les codes d'inscription : ceux que l'admin a changés dans l'app, sinon ceux de Netlify.
+  async function codes() {
+    const e = env();
+    const saved = (await settings().get('codes', { type: 'json' })) || {};
+    return { TEAM_CODE: saved.team || e.TEAM_CODE, BOSS_CODE: saved.boss || e.BOSS_CODE, ADMIN_CODE: e.ADMIN_CODE };
+  }
 
   async function newSession(email) {
     const token = randomBytes(32).toString('hex');
@@ -93,15 +102,17 @@ export function createApi({ getStore, env }) {
       return json({ ok: true });
     }
     if (b.action === 'signup') {
-      const { TEAM_CODE, BOSS_CODE } = env();
+      const { TEAM_CODE, BOSS_CODE, ADMIN_CODE } = await codes();
       if (!TEAM_CODE || !BOSS_CODE) return json({ error: 'codes-missing' }, 503);
-      const role = b.role === 'boss' ? 'boss' : 'employee';
+      const role = ['boss', 'admin'].includes(b.role) ? b.role : 'employee';
+      const want = role === 'admin' ? ADMIN_CODE : role === 'boss' ? BOSS_CODE : TEAM_CODE;
+      if (!want) return json({ error: 'code' }, 403);
       const name = String(b.name || '').trim().slice(0, 40);
       const password = String(b.password || '');
       if (!name) return json({ error: 'name' }, 400);
       if (!EMAIL.test(email)) return json({ error: 'email' }, 400);
       if (password.length < 6 || password.length > 200) return json({ error: 'password' }, 400);
-      if (!sameText(String(b.code || '').trim().toLowerCase(), String(role === 'boss' ? BOSS_CODE : TEAM_CODE).trim().toLowerCase())) return json({ error: 'code' }, 403);
+      if (!sameText(String(b.code || '').trim().toLowerCase(), String(want).trim().toLowerCase())) return json({ error: 'code' }, 403);
       const old = await users().get(email, { type: 'json' });
       if (old && !old.removed) return json({ error: 'exists' }, 409);
       const salt = randomBytes(16).toString('hex');
@@ -115,6 +126,15 @@ export function createApi({ getStore, env }) {
       if (!ok) return json({ error: 'login' }, 401);
       return json({ token: await newSession(email), user: publicUser(u) });
     }
+    if (b.action === 'codes') {
+      const u = await currentUser(req);
+      if (!u) return json({ error: 'auth' }, 401);
+      if (u.role !== 'admin') return json({ error: 'admin' }, 403);
+      const team = String(b.team || '').trim().slice(0, 40), boss = String(b.boss || '').trim().slice(0, 40);
+      if (team.length < 4 || boss.length < 4 || team.toLowerCase() === boss.toLowerCase()) return json({ error: 'codes' }, 400);
+      await settings().setJSON('codes', { team, boss });
+      return json({ ok: true });
+    }
     if (b.action === 'schedule') {
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
@@ -125,7 +145,7 @@ export function createApi({ getStore, env }) {
     if (b.action === 'alerts') {
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
-      if (u.role !== 'boss') return json({ error: 'boss' }, 403);
+      if (!lead(u)) return json({ error: 'boss' }, 403);
       u.alerts = b.on === true;
       await users().setJSON(u.email, u);
       return json({ user: publicUser(u) });
@@ -137,12 +157,12 @@ export function createApi({ getStore, env }) {
   async function alertList() {
     const { blobs } = await users().list();
     const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
-    return json({ to: all.filter((u) => u && !u.removed && u.role === 'boss' && u.alerts).map((u) => ({ name: u.name, email: u.email })) });
+    return json({ to: all.filter((u) => u && !u.removed && lead(u) && u.alerts).map((u) => ({ name: u.name, email: u.email })) });
   }
 
   // ---------- L'équipe (superviseurs) ----------
   async function team(req, me) {
-    if (me.role !== 'boss') return json({ error: 'boss' }, 403);
+    if (!lead(me)) return json({ error: 'boss' }, 403);
     if (req.method === 'GET') {
       const { blobs } = await users().list();
       const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
@@ -227,7 +247,7 @@ export function createApi({ getStore, env }) {
     if (req.method === 'POST') {
       const b = await body(req, 3_000_000);
       if (b.action === 'status') {
-        if (me.role !== 'boss') return json({ error: 'boss' }, 403);
+        if (!lead(me)) return json({ error: 'boss' }, 403);
         if (!PROBLEM_ID.test(b.id || '')) return json({ error: 'id' }, 400);
         const p = await problems().get(b.id, { type: 'json' });
         if (!p) return json({ error: 'missing' }, 404);
@@ -248,7 +268,7 @@ export function createApi({ getStore, env }) {
       await problems().setJSON(id, p);
       return json({ id });
     }
-    if (me.role !== 'boss') return json({ error: 'boss' }, 403);
+    if (!lead(me)) return json({ error: 'boss' }, 403);
     if (params.has('photo')) {
       const key = params.get('photo') || '';
       if (!/^[a-z0-9]{10,20}-[0-9]$/.test(key)) return json({ error: 'photo' }, 400);

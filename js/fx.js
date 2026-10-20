@@ -3,9 +3,27 @@
 // (WebAudio, aucun fichier son). Tout part en silence si les sons sont coupés.
 
 // ---------- Sons ----------
+// Tous les sons passent par un même « studio » : un compresseur doux (rien ne
+// sature) et une petite réverbération de pièce (plus plein, moins « bip »).
 let ac = null;
+let bus = null;
 function A() {
-  ac ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (!ac) {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.2;
+    comp.connect(ac.destination);
+    bus = ac.createGain();
+    bus.gain.value = 0.9;
+    bus.connect(comp);
+    // Réverbération : une réponse de pièce faite de bruit qui s'éteint.
+    const len = Math.floor(ac.sampleRate * 1.1);
+    const ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3.2; }
+    const verb = ac.createConvolver(), wet = ac.createGain();
+    verb.buffer = ir; wet.gain.value = 0.16;
+    bus.connect(verb).connect(wet).connect(comp);
+  }
   if (ac.state === 'suspended') ac.resume();
   return ac;
 }
@@ -18,7 +36,7 @@ function osc(type, f0, f1, at, dur, gain) {
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g).connect(c.destination);
+  o.connect(g).connect(bus);
   o.start(t0);
   o.stop(t0 + dur + 0.05);
 }
@@ -37,11 +55,51 @@ function noise(at, dur, gain, { type = 'bandpass', f0 = 1000, f1 = f0, q = 1 } =
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.02, dur / 4));
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(f).connect(g).connect(c.destination);
+  src.connect(f).connect(g).connect(bus);
   src.start(t0);
 }
 
+// Une cloche douce : la note et deux harmoniques qui s'éteignent plus vite.
+function bell(f, at, dur, gain) {
+  osc('sine', f, f, at, dur, gain);
+  osc('sine', f * 2.01, f * 2.01, at, dur * 0.55, gain * 0.32);
+  osc('sine', f * 3.98, f * 3.98, at, dur * 0.3, gain * 0.12);
+}
+// Un petit « tock » de bois (touches, cases).
+function tock(at, f = 1500, gain = 0.16) {
+  osc('sine', f, f * 0.6, at, 0.05, gain);
+  noise(at, 0.025, gain * 0.6, { f0: f * 1.6, q: 3 });
+}
+
 const SOUNDS = {
+  // ---- Interface : courts et doux, pour ne jamais fatiguer l'oreille ----
+  tick() { tock(0, 1700, 0.14); bell(2349, 0.02, 0.18, 0.035); }, // une étape cochée
+  tab() { tock(0, 1200, 0.09); },
+  toggle() { tock(0, 900, 0.12); osc('sine', 1320, 1760, 0.03, 0.07, 0.05); },
+  open() { noise(0, 0.16, 0.05, { f0: 500, f1: 2200, q: 0.7 }); osc('sine', 660, 880, 0.04, 0.12, 0.03); },
+  close() { noise(0, 0.12, 0.04, { f0: 1800, f1: 500, q: 0.7 }); },
+  save() { bell(1047, 0, 0.35, 0.08); bell(1568, 0.07, 0.45, 0.07); },
+  locked() { osc('sine', 220, 180, 0, 0.16, 0.14); tock(0.01, 600, 0.1); osc('sine', 330, 300, 0.12, 0.14, 0.06); },
+  // ---- Moments ----
+  punch() { // le pointeuse : clac du carton, puis une petite cloche
+    noise(0, 0.05, 0.35, { type: 'lowpass', f0: 900 });
+    osc('sine', 180, 90, 0, 0.09, 0.3);
+    tock(0.09, 2200, 0.1);
+    bell(1319, 0.16, 0.6, 0.09); bell(1976, 0.26, 0.7, 0.07);
+  },
+  ready() { bell(988, 0, 0.6, 0.09); bell(1319, 0.12, 0.8, 0.09); },
+  welcome() { [523, 659, 784, 1047].forEach((f, i) => bell(f, i * 0.11, 0.9, 0.07)); },
+  flag() { // le papier part : un froissement, un « pop » d'envoi
+    noise(0, 0.18, 0.12, { f0: 1500, f1: 4000, q: 0.8 });
+    osc('sine', 500, 1100, 0.16, 0.12, 0.1);
+    bell(1568, 0.26, 0.4, 0.06);
+  },
+  sent() { // fin de quart envoyée : petite fanfare et étincelles
+    [523, 659, 784].forEach((f, i) => osc('triangle', f, f, i * 0.1, 0.5, 0.1));
+    osc('triangle', 1047, 1047, 0.32, 0.9, 0.12);
+    osc('sine', 523, 523, 0.32, 0.9, 0.06);
+    [2093, 2637, 3136, 3951].forEach((f, i) => bell(f, 0.45 + i * 0.07, 0.4, 0.03));
+  },
   pour() { // un « glouglou » d'eau qui tombe dans le verre
     noise(0, 0.28, 0.12, { f0: 500, f1: 1400, q: 2.5 });
     osc('sine', 620, 300, 0.08, 0.12, 0.16);

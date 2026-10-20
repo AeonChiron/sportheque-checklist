@@ -117,3 +117,20 @@ test('Horaire : gardé avec le compte, propre, visible par le superviseur', asyn
   const team = (await call('users', { token: boss.token })).data;
   assert.deepEqual(team.users.find((u) => u.email === 'lina-h@t.ca').schedule, { 1: { start: '07:30', end: '15:30' } });
 });
+
+test('Admin : son propre code; seul l’admin change les codes d’équipe', async () => {
+  const a2 = createApi({ getStore: memoryStores(), env: () => ({ TEAM_CODE: 'Equipe', BOSS_CODE: 'Patron', ADMIN_CODE: 'Racine' }) });
+  const c2 = async (path, { method = 'GET', body, token } = {}) => {
+    const res = await a2(new Request(`http://x/api/${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }));
+    return { status: res.status, data: await res.json() };
+  };
+  assert.equal((await c2('auth', { method: 'POST', body: { action: 'signup', name: 'X', email: 'x@t.ca', password: 'secret12', role: 'admin', code: 'Patron' } })).status, 403);
+  const admin = (await c2('auth', { method: 'POST', body: { action: 'signup', name: 'Kat', email: 'k@t.ca', password: 'secret12', role: 'admin', code: 'racine' } })).data;
+  assert.equal(admin.user.role, 'admin');
+  assert.equal((await c2('users', { token: admin.token })).status, 200); // l'admin voit l'équipe comme un superviseur
+  const emp = (await c2('auth', { method: 'POST', body: { action: 'signup', name: 'E', email: 'e@t.ca', password: 'secret12', role: 'employee', code: 'Equipe' } })).data;
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'codes', team: 'neuf1', boss: 'neuf2' } })).status, 403);
+  assert.equal((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', team: 'neuf1', boss: 'neuf2' } })).status, 200);
+  assert.equal((await c2('auth', { method: 'POST', body: { action: 'signup', name: 'F', email: 'f@t.ca', password: 'secret12', role: 'employee', code: 'Equipe' } })).status, 403);
+  assert.equal((await c2('auth', { method: 'POST', body: { action: 'signup', name: 'F', email: 'f@t.ca', password: 'secret12', role: 'employee', code: 'neuf1' } })).status, 200);
+});

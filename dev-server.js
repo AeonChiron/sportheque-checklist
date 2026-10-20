@@ -12,7 +12,7 @@ import { createApi, memoryStores } from './netlify/lib/api.mjs';
 // TEAM_CODE=equipe, BOSS_CODE=patron (modifiables par variables d'environnement).
 const api = createApi({
   getStore: memoryStores(),
-  env: () => ({ TEAM_CODE: process.env.TEAM_CODE || 'equipe', BOSS_CODE: process.env.BOSS_CODE || 'patron' }),
+  env: () => ({ TEAM_CODE: process.env.TEAM_CODE || 'equipe', BOSS_CODE: process.env.BOSS_CODE || 'patron', ADMIN_CODE: process.env.ADMIN_CODE || 'admin-test' }),
 });
 
 const ROOT = new URL('.', import.meta.url).pathname;

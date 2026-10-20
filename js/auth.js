@@ -21,7 +21,8 @@ const SHARED_KEYS = new Set(['gym-auth', 'gym-auth-mode', 'gym-shift-prefs']);
 export const ns = (k) => (VISITOR && !SHARED_KEYS.has(k) ? `visit:${k}` : k);
 export const isVisitor = () => Boolean(session.user?.visitor);
 export const accounts = () => session.mode !== 'none';
-export const isBoss = () => session.user?.role === 'boss';
+export const isBoss = () => ['boss', 'admin'].includes(session.user?.role); // l'admin a tout ce qu'un superviseur a
+export const isAdmin = () => session.user?.role === 'admin';
 
 const readJSON = (store, k) => { try { return JSON.parse(store.getItem(k)); } catch { return null; } };
 function load() {
@@ -113,7 +114,7 @@ export async function signIn(action, fields, remember = true) {
     const all = readJSON(localStorage, DEMO_USERS) || {};
     if (action === 'signup') {
       if (!fields.name?.trim()) throw Object.assign(new Error('name'), { status: 400 });
-      const role = fields.role === 'boss' ? 'boss' : 'employee';
+      const role = ['boss', 'admin'].includes(fields.role) ? fields.role : 'employee';
       const name = fields.name.trim();
       all[email] = { name, email, role, alerts: role === 'boss' && configAlerts().some((x) => x.name.toLowerCase() === name.toLowerCase()) };
       try { localStorage.setItem(DEMO_USERS, JSON.stringify(all)); } catch { /* ignore */ }
@@ -177,7 +178,7 @@ export async function alertRecipients() {
     } catch { /* hors ligne : la config */ }
   }
   if (session.mode === 'demo') {
-    const all = Object.values(readJSON(localStorage, DEMO_USERS) || {}).filter((u) => u.role === 'boss' && u.alerts);
+    const all = Object.values(readJSON(localStorage, DEMO_USERS) || {}).filter((u) => ['boss', 'admin'].includes(u.role) && u.alerts);
     const names = new Set(all.map((u) => u.name.toLowerCase()));
     return [...configAlerts().filter((x) => !names.has(x.name.toLowerCase())), ...all.map((u) => ({ name: u.name, email: '' }))];
   }
