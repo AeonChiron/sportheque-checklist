@@ -1710,7 +1710,7 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 /* Connexion : nom du gym + de l'appli en haut, phrase du jour et gros bouton en bas. */
 .pool-head { text-align: center; color: #fff; text-shadow: 0 2px 14px rgba(0, 40, 90, .35); animation: rise-in .8s cubic-bezier(.2, .9, .3, 1.2) .1s both; }
 .pool-gym { margin: 4px 0 0; font: 750 clamp(40px, 12vw, 56px)/1 var(--serif); font-variation-settings: 'SOFT' 100; letter-spacing: -.01em; }
-.pool-app { margin: 8px 0 0; font: 600 15px/1.2 var(--display); letter-spacing: .2em; text-transform: uppercase; opacity: .95; }
+.pool-app { margin: 8px 0 0; font: 600 17px/1.2 var(--display); letter-spacing: .2em; text-transform: uppercase; opacity: .95; }
 .pool-gym[hidden] + .pool-app { font: 750 clamp(30px, 9vw, 40px)/1.05 var(--serif); font-variation-settings: 'SOFT' 100; letter-spacing: 0; text-transform: none; }
 .pool-bottom { margin-top: auto; gap: 14px; }
 .pool-cheer { margin: 0 auto 6px; max-width: 30ch; color: #fff; font: 500 18px/1.35 var(--font); text-wrap: balance; text-shadow: 0 1px 10px rgba(0, 40, 90, .45); animation: rise-in .8s cubic-bezier(.2, .9, .3, 1.2) .25s both; }
@@ -2295,7 +2295,7 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .help-btn[hidden] { display: none; }
 .help-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 /* Visite guidée : tout s'assombrit sauf le bouton expliqué; une bulle courte à côté. */
-.tour { position: fixed; inset: 0; z-index: 90; opacity: 0; transition: opacity .25s; }
+.tour { position: fixed; inset: 0; z-index: 95; opacity: 0; transition: opacity .25s; }
 .tour.on { opacity: 1; }
 .tour-hole { position: fixed; box-shadow: 0 0 0 200vmax rgba(6, 18, 36, .72); border-radius: 24px; transition: left .4s var(--ease), top .4s var(--ease), width .4s var(--ease), height .4s var(--ease), opacity .3s; pointer-events: auto; cursor: pointer; }
 .tour-hole::after { content: ''; position: absolute; inset: -4px; border-radius: inherit; border: 3px solid #ffd43b; animation: tour-ring 1.6s ease-out infinite; }
@@ -2319,3 +2319,16 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .tour-cheer { display: block; width: 120px; height: auto; margin: -64px auto 6px; }
 @media (prefers-reduced-motion: reduce) { .tour-hole, .tour-tip { transition: none; animation: none; } .tour-hole::after { animation: none; } }
 .tour-tip.done ~ *, .tour-hole[style*="width:0"]::after { display: none; }
+/* Admin : la poubelle à côté de chaque quart (deux touchers). */
+.hi-row { display: flex; gap: 8px; align-items: stretch; }
+.hi-row > .hi-card { flex: 1; min-width: 0; }
+.hi-del { flex: none; width: 48px; display: grid; place-items: center; border: 1.5px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.hi-del svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hi-del.armed { background: #c62828; border-color: #c62828; color: #fff; }
+/* Admin : « Voir comme » et la pastille d'aperçu. */
+.view-as { margin-bottom: 4px; }
+.view-badge { cursor: pointer; border: 0; }
+.tour-dots button { width: 10px; height: 10px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; }
+.tour-dots button.on { background: var(--ink); }
+.tour-dots { gap: 10px; }
+.view-badge { display: inline-block; pointer-events: auto; margin: 0 auto 6px; padding: 7px 14px; border-radius: 99px; background: #7c3aed; color: #fff; font: 700 13px/1 var(--font); white-space: nowrap; box-shadow: 0 8px 20px -8px rgba(60, 0, 120, .7); }

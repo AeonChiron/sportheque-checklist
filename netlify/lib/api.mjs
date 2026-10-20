@@ -234,7 +234,7 @@ export function createApi({ getStore, env }) {
   }
 
   // ---------- Historique des quarts ----------
-  async function shifts(req) {
+  async function shifts(req, me) {
     const store = board();
     if (req.method === 'GET') {
       const params = new URL(req.url).searchParams;
@@ -257,7 +257,19 @@ export function createApi({ getStore, env }) {
       const lists = await Promise.all(dates.map((d) => store.get(d, { type: 'json' })));
       return json({ days: Object.fromEntries(dates.map((d, i) => [d, lists[i] || []])) });
     }
-    const shift = sanitizeShift(await body(req));
+    const raw = await body(req);
+    // L'admin seulement peut effacer un quart de l'historique.
+    if (raw?.action === 'delete') {
+      if (me?.role !== 'admin') return json({ error: 'admin' }, 403);
+      if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift))) return json({ error: 'invalid' }, 400);
+      const name = String(raw.name || '').trim().toLowerCase();
+      const list = (await store.get(raw.date, { type: 'json' })) || [];
+      const left = list.filter((x) => !(Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name));
+      if (left.length === list.length) return json({ error: 'missing' }, 404);
+      await store.setJSON(raw.date, left);
+      return json({ ok: true });
+    }
+    const shift = sanitizeShift(raw);
     if (!shift) return json({ error: 'invalid' }, 400);
     const list = (await store.get(shift.date, { type: 'json' })) || [];
     // Un quart déjà enregistré se modifie seulement le jour même (heure du Québec).

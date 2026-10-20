@@ -152,3 +152,22 @@ test('Admin : son propre code; seul l’admin change les codes d’équipe', asy
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: 'javascript:alert(1)' } })).status, 400);
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: '' } })).data.user.avatar, '');
 });
+
+test('Historique : seul l’admin efface un quart', async () => {
+  const a3 = createApi({ getStore: memoryStores(), env: () => ({ TEAM_CODE: 'Equipe', BOSS_CODE: 'Patron', ADMIN_CODE: 'Racine' }) });
+  const c3 = async (path, { method = 'GET', body, token } = {}) => {
+    const res = await a3(new Request(`http://x/api/${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }));
+    return { status: res.status, data: await res.json() };
+  };
+  const sign = async (name, role, code) => (await c3('auth', { method: 'POST', body: { action: 'signup', name, email: `${name}@t.ca`, password: 'secret12', role, code } })).data.token;
+  const emp = await sign('Marie', 'employee', 'equipe');
+  const boss = await sign('Daniel', 'boss', 'patron');
+  const admin = await sign('Kat', 'admin', 'racine');
+  await c3('board', { method: 'POST', token: emp, body: { date: '2026-10-21', shift: 1, name: 'Marie', items: [], flags: [] } });
+  const del = { action: 'delete', date: '2026-10-21', shift: 1, name: 'marie' };
+  assert.equal((await c3('board', { method: 'POST', token: emp, body: del })).status, 403);
+  assert.equal((await c3('board', { method: 'POST', token: boss, body: del })).status, 403);
+  assert.equal((await c3('board', { method: 'POST', token: admin, body: del })).status, 200);
+  assert.equal((await c3('board?dates=2026-10-21', { token: admin })).data.days['2026-10-21'].length, 0);
+  assert.equal((await c3('board', { method: 'POST', token: admin, body: del })).status, 404);
+});

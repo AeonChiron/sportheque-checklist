@@ -21,8 +21,18 @@ const SHARED_KEYS = new Set(['gym-auth', 'gym-auth-mode', 'gym-shift-prefs']);
 export const ns = (k) => (VISITOR && !SHARED_KEYS.has(k) ? `visit:${k}` : k);
 export const isVisitor = () => Boolean(session.user?.visitor);
 export const accounts = () => session.mode !== 'none';
-export const isBoss = () => ['boss', 'admin'].includes(session.user?.role); // l'admin a tout ce qu'un superviseur a
-export const isAdmin = () => session.user?.role === 'admin';
+// L'admin peut « voir comme » un employé ou un superviseur (aperçu sur ce téléphone seulement;
+// le serveur, lui, garde son vrai rôle).
+const VIEW = 'gym-view-as';
+export const isRealAdmin = () => session.user?.role === 'admin';
+export const viewAs = () => {
+  if (!isRealAdmin()) return '';
+  try { const v = localStorage.getItem(VIEW); return ['employee', 'boss'].includes(v) ? v : ''; } catch { return ''; }
+};
+export const setViewAs = (v) => { try { if (['employee', 'boss'].includes(v)) localStorage.setItem(VIEW, v); else localStorage.removeItem(VIEW); } catch { /* ignore */ } };
+const role = () => viewAs() || session.user?.role;
+export const isBoss = () => ['boss', 'admin'].includes(role()); // l'admin a tout ce qu'un superviseur a
+export const isAdmin = () => role() === 'admin';
 
 const readJSON = (store, k) => { try { return JSON.parse(store.getItem(k)); } catch { return null; } };
 function load() {

@@ -5,7 +5,7 @@
 // raté (pas de réseau, session expirée) est gardé en file et renvoyé plus tard.
 
 import { session, request, ns } from './auth.js';
-import { sanitizeShift, mergeShift, combineDay, recentShifts } from './board-shape.js';
+import { sanitizeShift, mergeShift, combineDay, recentShifts, key } from './board-shape.js';
 
 const LOCAL = 'gym-board-local';
 const QUEUE = 'gym-board-queue';
@@ -96,5 +96,20 @@ export async function loadRecent(n = 40) {
     return { live: true, shifts: recentShifts(remote, local, n) };
   } catch {
     return { live: false, shifts: recentShifts({}, local, n) };
+  }
+}
+
+// Admin : efface un quart de l'historique (ce téléphone, et le serveur s'il y en a un).
+// Réponse : true si c'est effacé partout où il était.
+export async function deleteShift(s) {
+  const all = readLocal();
+  if (all[s.date]) { all[s.date] = all[s.date].filter((x) => key(x) !== key(s)); writeLocal(all); }
+  writeJSON(QUEUE, readJSON(QUEUE, []).filter((x) => !(x.date === s.date && key(x) === key(s))));
+  if (!shared()) return true;
+  try {
+    await request('board', { method: 'POST', body: { action: 'delete', date: s.date, shift: s.shift, name: s.name } });
+    return true;
+  } catch (err) {
+    return [404].includes(err?.status); // déjà parti du serveur
   }
 }

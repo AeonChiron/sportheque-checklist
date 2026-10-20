@@ -45,7 +45,7 @@ export function sanitizeShift(raw) {
   };
 }
 
-const key = (s) => `${s.shift}|${s.name.toLowerCase()}`;
+export const key = (s) => `${s.shift}|${s.name.toLowerCase()}`;
 
 // Un quart par personne, par quart, par jour : le plus récent remplace l'ancien.
 export function mergeShift(list, shift) {

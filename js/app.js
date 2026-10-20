@@ -8,11 +8,11 @@ import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
 import { mountGlass, playFinish, fxSound } from './fx.js';
-import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe } from './auth.js';
+import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
-import { publishShift, flushQueue, loadWeek, loadRecent, keepReport } from './board.js';
+import { publishShift, flushQueue, loadWeek, loadRecent, keepReport, deleteShift } from './board.js';
 
 const KEY = 'gym-shift-v2';
 const PREFS = 'gym-shift-prefs';
@@ -190,7 +190,7 @@ function renderBrand() {
 
 function paintStatic() {
   document.documentElement.lang = lang() === 'en' ? 'en-CA' : 'fr-CA';
-  for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
+  for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(roleKey(el.dataset.t));
   for (const el of document.querySelectorAll('[data-ph]')) el.placeholder = t(el.dataset.ph);
   for (const el of document.querySelectorAll('[data-label]')) { el.setAttribute('aria-label', t(el.dataset.label)); el.title = t(el.dataset.label); }
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
@@ -559,10 +559,10 @@ function startTour() {
   savePrefs();
   const steps = [
     ['#poolStart', 'tourStart'],
-    ['#poolDash .dash-shifts', 'tourShifts'],
+    ['#poolDash .dash-shifts', isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
     ['#dashFlag', 'tourFlag'],
-    ['#dashBoss', 'tourBoss'],
-    ['#poolAccount', 'tourAccount'],
+    ['#dashBoss', isAdmin() ? 'tourBossAdmin' : 'tourBoss'],
+    ['#poolAccount', isAdmin() ? 'tourAccountAdmin' : 'tourAccount'],
   ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
   const box = document.createElement('div');
   box.id = 'tour';
@@ -599,12 +599,14 @@ function startTour() {
     tip.className = 'tour-tip';
     tip.innerHTML = `<p class="tour-count">${i + 1} / ${steps.length}</p><h2 id="tourH">${esc(t(`${k}T`))}</h2><p>${esc(t(k))}</p>
       <div class="tour-btns"><button type="button" class="link" data-tour="skip">${esc(t('tourSkip'))}</button><button type="button" class="btn primary" data-tour="next">${esc(t(i === steps.length - 1 ? 'tourLast' : 'tourNext'))}</button></div>
-      <div class="tour-dots" aria-hidden="true">${steps.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>`;
+      <div class="tour-dots">${steps.map((st, j) => `<button type="button" data-tour-go="${j}" class="${j <= i ? 'on' : ''}" aria-label="${esc(t(`${st[1]}T`))}"${j === i ? ' aria-current="step"' : ''}></button>`).join('')}</div>`;
     place();
     sfx('tick');
     tip.querySelector('[data-tour="next"]').focus({ preventScroll: true });
   };
   box.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-tour-go]');
+    if (go) { i = Number(go.dataset.tourGo); show(); return; } // sauter directement à une étape
     const b = e.target.closest('[data-tour]');
     const act = b?.dataset.tour || (e.target === hole || e.target === box ? 'next' : '');
     if (act === 'next') { i += 1; show(); }
@@ -2494,7 +2496,10 @@ function renderHistory({ animate = true } = {}) {
   const ready = isUp || (isWeek ? hist.weekLoaded === hist.week : hist.loaded);
   const today = todayISO();
   const since = hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
-  const shifts = isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since);
+  const me = (session.user?.name || prefs.name || '').trim().toLowerCase();
+  // Un employé voit ses quarts; les superviseurs et l'admin voient ceux de toute l'équipe.
+  const shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
+    .filter((x) => isBoss() || !me || (x.name || '').trim().toLowerCase() === me);
   $('#hiEyebrow').textContent = [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ');
 
   // Par jour, le plus récent en haut; dans un jour, le dernier enregistré en haut.
@@ -2518,7 +2523,7 @@ function renderHistory({ animate = true } = {}) {
   let k = 0;
   const groups = dates.map((d) => `<section class="hi-day">
       <div class="hi-dayhead"><h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
-      ${byDate.get(d).map((s) => histCard(s, k++)).join('')}
+      ${byDate.get(d).map((s) => { const i = k++; return isAdmin() ? `<div class="hi-row">${histCard(s, i)}<button type="button" class="hi-del" data-hdel="${i}" aria-label="${esc(t('histDelete'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>` : histCard(s, i); }).join('')}
     </section>`).join('');
 
   $('#historyBody').innerHTML = `
@@ -2549,9 +2554,21 @@ function renderHistory({ animate = true } = {}) {
 }
 
 $('#historyBody').addEventListener('click', (ev) => {
-  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper]');
+  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel]');
   if (!el || el.disabled) return;
   const ds = el.dataset;
+  if (ds.hdel !== undefined) { // admin seulement : deux touchers pour effacer un quart de l'historique
+    const s = hist.view[Number(ds.hdel)];
+    if (!s || !isAdmin()) return;
+    if (!el.dataset.armed) { el.dataset.armed = '1'; el.classList.add('armed'); el.setAttribute('aria-label', t('histDeleteSure')); sfx('locked'); toast(t('histDeleteSure')); setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.classList.remove('armed'); } }, 3000); return; }
+    deleteShift(s).then((ok) => {
+      if (!ok) { toast(t('histDeleteFail'), 'bad'); return; }
+      hist.recent = hist.recent.filter((x) => x !== s);
+      for (const d of Object.keys(hist.days || {})) hist.days[d] = hist.days[d].filter((x) => x !== s);
+      hist.sig = ''; renderHistory({ animate: false }); toast(t('histDeleted')); sfx('toggle');
+    });
+    return;
+  }
   if (ds.up) { const p = presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
   if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
@@ -2764,6 +2781,7 @@ setInterval(() => { if (current === 'auth' && session.user && !document.hidden) 
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {
+  if (location.hash) window.history.replaceState(null, '', location.pathname); // un rafraîchissement reste sur l'accueil
   paintStatic();
   authSheet(false);
   show('auth');
@@ -2863,6 +2881,12 @@ function paintAccount() {
   };
   if (isBoss()) refreshBossCount();
 }
+// Les mots changent selon le rôle : « Shifts de l'équipe » pour un superviseur, « Admin » pour l'admin.
+function roleKey(k) {
+  if (k === 'dashShifts' && isBoss()) return 'dashShiftsTeam';
+  if (k === 'bossMode' && isAdmin()) return 'roleAdmin';
+  return k;
+}
 const roleName = (r) => t({ boss: 'roleBoss', admin: 'roleAdmin' }[r] || 'roleEmployee');
 async function doSignOut() {
   const wasVisitor = isVisitor();
@@ -2902,6 +2926,14 @@ function openAvatarPicker() {
   }, `<button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
 }
+// Pastille « Aperçu : Employé » tant que l'admin regarde l'app avec un autre rôle; un toucher revient à Admin.
+function paintViewAs() {
+  let b = $('#viewAsBadge');
+  const v = viewAs();
+  if (!v) { b?.remove(); return; }
+  if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
+  b.textContent = `${t('viewAsNow', roleName(v))} · ${t('viewAsExit')}`;
+}
 function openAccount() {
   const u = session.user;
   if (!u) return;
@@ -2909,7 +2941,8 @@ function openAccount() {
   const live = session.mode === 'accounts';
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span></p></div></div>
+  openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span>${viewAs() ? ` <span class="pill sim">${esc(t('viewAsNow', roleName(viewAs())))}</span>` : ''}</p></div></div>
+    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="segmented view-as" role="radiogroup">${['employee', 'boss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${(viewAs() || 'admin') === r}">${esc(roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>` : ''}
     <div class="acct-list">
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
@@ -2945,6 +2978,7 @@ function openAccount() {
         sfx('save'); toast(t('codeOk', roleName(session.user.role))); closeSheet(); paintFront(); setTimeout(openAccount, 360);
       } catch (err) { msg.textContent = t(err.status === 429 ? 'codeTries' : err.status === 403 ? 'codeBad' : 'adminCodesLater'); sfx('locked'); }
     });
+    root.querySelectorAll('[data-viewas]').forEach((b) => { b.onclick = () => { setViewAs(b.dataset.viewas); sfx('toggle'); paintViewAs(); closeSheet(); goFront(); paintFront(); setTimeout(openAccount, 360); }; });
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
     $('#acSignOut').onclick = (e) => {
       const b = e.currentTarget;
@@ -3463,6 +3497,7 @@ document.addEventListener('visibilitychange', () => document.body.classList.togg
 // Firefox afficherait une question : on s'en passe là.
 if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {});
 paintStatic();
+paintViewAs();
 initAuth(() => { route(); flushQueue(); refreshAlerts(); }); // le serveur a répondu autre chose que prévu
 if (isVisitor()) {
   let seen = false;
