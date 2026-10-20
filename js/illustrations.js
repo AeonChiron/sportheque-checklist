@@ -17,6 +17,19 @@ const shadow = (rx = 26) => `<ellipse cx="48" cy="87" rx="${rx}" ry="3.6" fill="
 const spark = (x, y, d) => `<g transform="translate(${x} ${y})"><path class="a a-spark" style="--d:${d}s" d="M0-5.5l1.4 4.1 4.1 1.4-4.1 1.4L0 5.5l-1.4-4.1-4.1-1.4 4.1-1.4z" fill="var(--il-accent)"/></g>`;
 
 const ART = {
+  // Pointage : l'horloge dorée, la carte descend dans la fente et « clac ».
+  pointage: () => `${shadow(26)}
+    <rect x="20" y="12" width="56" height="70" rx="11" fill="#ffd23f" ${S}/>
+    <rect x="25" y="17" width="46" height="60" rx="8" fill="#ffe680" opacity=".7"/>
+    <circle cx="48" cy="35" r="14" fill="#fffbea" ${S}/>
+    <path d="M48 26.5V35l6 3.5" fill="none" ${S}/>
+    <circle cx="48" cy="35" r="1.8" fill="var(--il-ink)"/>
+    <rect x="31" y="58" width="34" height="6" rx="3" fill="var(--il-ink)"/>
+    <g class="a a-punchcard">
+      <rect x="38" y="44" width="20" height="26" rx="2.5" fill="#fff" ${T}/>
+      <path d="M42 50h12M42 55h12M42 60h8" stroke="#e0a800" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    ${spark(75, 14, 0)}${spark(18, 30, 0.8)}${spark(80, 52, 1.5)}`,
   // Plaque d'interrupteurs : les 3 ventilations s'allument l'une après l'autre.
   ouverture: () => `${shadow(22)}
     <rect x="24" y="10" width="48" height="74" rx="10" fill="var(--il-fill)" ${S}/>

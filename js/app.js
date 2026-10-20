@@ -387,7 +387,7 @@ const mySchedule = () => (prefs.schedules || {})[schedKey()] || null;
 function saveSchedule(sc, { push = true } = {}) {
   prefs.schedules = { ...(prefs.schedules || {}), [schedKey()]: sc };
   savePrefs();
-  if (push) pushSchedule(sc);
+  if (push && !prefs.simNew) pushSchedule(sc); // aperçu « nouvel employé » : rien ne part au serveur
 }
 // L'horaire suit le compte (serveur) : envoyé un instant après le dernier changement.
 // Un serveur pas encore à jour répond « action inconnue » : on garde la copie du téléphone.
@@ -398,7 +398,7 @@ function pushSchedule(sc) {
 }
 // Le serveur connaît l'horaire : on le prend. Il ne le connaît pas encore : on lui envoie celui du téléphone.
 function adoptSchedule(u) {
-  if (!u?.email) return;
+  if (!u?.email || prefs.simNew) return;
   if (u.schedule && Object.keys(u.schedule).length) {
     if (JSON.stringify(u.schedule) === JSON.stringify(mySchedule())) return;
     saveSchedule(u.schedule, { push: false });
@@ -868,13 +868,14 @@ function nowMinutes() {
 // Chaque type de tâche a la couleur d'un disque olympique (rouge, bleu, jaune, vert…).
 const PLATE = { accueil: 'r', fermeture: 'r', buanderie: 'b', spinning: 'b', dechets: 'y', gym: 'g', zone: 'g', surfaces: 'g', cardio: 'w', muscu: 'w', bureaux: 'k' };
 const plateOf = (it) => PLATE[it?.area] || 'k';
-const icon = (it) => `<span class="t-icon" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? `<svg class="punch-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>` : illustration(it.photo)}</span>`;
+const icon = (it) => `<span class="t-icon" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? illustration('pointage') : illustration(it.photo)}</span>`;
 
 function taskRow(it, { extra = false } = {}) {
   const e = state.tasks[it.id] || {};
   const now = nowMinutes();
   const isNow = !extra && now !== null && it.start <= now && now < it.end;
-  const cls = ['task', e.done && 'done', e.skipped && !e.done && 'skipped', isNow && 'current'].filter(Boolean).join(' ');
+  const punch = it.id === 'pointage';
+  const cls = ['task', e.done && 'done', e.skipped && !e.done && 'skipped', isNow && 'current', punch && 'punch', punch && !e.done && 'alive', punch && justPunched && 'stamp'].filter(Boolean).join(' ');
   const tags = [];
   if (isNow) tags.push(`<span class="tag now">${t('now')}</span>`);
   for (const r of it.reminders || []) tags.push(`<span class="tag time">${f(r.at)} · ${esc(r.label)}</span>`);
@@ -883,7 +884,7 @@ function taskRow(it, { extra = false } = {}) {
   if (e.remark) tags.push(`<span class="tag note">${t('remark')}</span>`);
   const time = extra
     ? `<span class="t-time num">+<small>${it.minutes} min</small></span>`
-    : `<span class="t-time num">${f(it.start)}<small>${it.auto ? '✓' : `${it.minutes} min`}</small></span>`;
+    : `<span class="t-time num">${f(it.start)}<small>${it.auto ? '' : `${it.minutes} min`}</small></span>`;
   return `<li class="${cls}" data-id="${esc(it.id)}">
     <span class="swipe-under" aria-hidden="true">✓</span>
     <div class="task-inner">
@@ -896,7 +897,7 @@ function taskRow(it, { extra = false } = {}) {
           ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
         </span>
       </button>
-      ${it.id === 'pointage' && !shiftStarted() ? `<span class="check-wait num" aria-label="${esc(t('punchAt', f(toMin(state.start))))}">${nb(f(toMin(state.start)))}</span>` : `<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
+      ${it.id === 'pointage' && !shiftStarted() && !isAdmin() ? `<span class="check-wait num" aria-label="${esc(t('punchAt', f(toMin(state.start))))}">${nb(f(toMin(state.start)))}</span>` : `<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
     </div>
   </li>`;
 }
@@ -920,6 +921,18 @@ function pipsHTML(done, total, plate, land = -1) {
 }
 const sfx = (name) => { if (prefs.sound !== false) fxSound(name); };
 let glass = null;
+// Le pointage : un vrai « clac » (tampon doré, éclats, son) et il remplit le verre plus que les autres.
+let justPunched = false;
+const PUNCH_W = 3; // le pointage vaut trois tâches dans le verre
+function punchIn(manual = false) {
+  state.tasks.pointage = { done: true, doneAt: new Date().toISOString(), ...(manual ? { manual: true } : {}) };
+  save();
+  justPunched = true;
+  landId = 'pointage';
+  renderChecklist();
+  justPunched = false;
+  setTimeout(() => { sfx('punch'); buzz('plate'); celebrate(); }, 250);
+}
 function renderTimeline() {
   const tasks = planTasks();
   const done = tasks.filter((it) => state.tasks[it.id]?.done).length;
@@ -930,7 +943,9 @@ function renderTimeline() {
   }
   box.querySelector('.glass-count b').textContent = `${done}/${tasks.length}`;
   box.querySelector('.glass-count span').textContent = t('tasks');
-  glass.set(tasks.length ? done / tasks.length : 0, { pour: Boolean(landId) });
+  const w = (it) => (it.id === 'pointage' ? PUNCH_W : 1);
+  const total = tasks.reduce((a, it) => a + w(it), 0);
+  glass.set(total ? tasks.filter((it) => state.tasks[it.id]?.done).reduce((a, it) => a + w(it), 0) / total : 0, { pour: Boolean(landId) });
   box.setAttribute('aria-label', t('barLabel', done, tasks.length));
   box.classList.toggle('full', tasks.length > 0 && done === tasks.length);
   if (liftNext && !reducedMotion()) { box.classList.remove('lift'); void box.offsetWidth; box.classList.add('lift'); }
@@ -1027,8 +1042,8 @@ function renderNow() {
 function renderChecklist() {
   const lock = shiftLocked();
   // Le pointage se coche seulement à l'heure du début du quart (pas avant, même si le quart est ouvert).
-  if (state.tasks.pointage?.done && !shiftStarted()) { delete state.tasks.pointage; save(); } // coché trop tôt par une ancienne version
-  if (!lock && !state.tasks.pointage?.done && shiftStarted()) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); setTimeout(() => sfx('punch'), 350); }
+  if (state.tasks.pointage?.done && !state.tasks.pointage.manual && !shiftStarted()) { delete state.tasks.pointage; save(); } // coché trop tôt par une ancienne version
+  if (!lock && !state.tasks.pointage?.done && shiftStarted()) { punchIn(); return; }
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -1089,7 +1104,7 @@ function shiftLocked() {
 }
 function lockedToast() { const l = shiftLocked(); if (l) { toast(t('ovLocked', countdown(l)), 'muted'); sfx('locked'); } return l; }
 function toggleDone(id) {
-  if (id === 'pointage') return; // le pointage reste coché
+  if (id === 'pointage') { if (isAdmin() && !state.tasks.pointage?.done) punchIn(true); return; } // le pointage reste coché; l'admin peut pointer d'avance
   if (lockedToast()) return;
   const wasAll = allDone();
   const e = entry(id);
@@ -2952,6 +2967,7 @@ const roleName = (r) => t({ boss: 'roleBoss', admin: 'roleAdmin' }[r] || 'roleEm
 async function doSignOut() {
   const wasVisitor = isVisitor();
   const hadClock = prefs.clockOffset;
+  if (prefs.simNew) { saveSchedule(prefs.simNew.sched, { push: false }); delete prefs.simNew; }
   delete prefs.clockOffset; delete prefs.actAs; setViewAs(''); // l'heure simulée, l'aperçu et le nom emprunté ne restent pas pour la prochaine personne
   savePrefs();
   await signOut();
@@ -2992,9 +3008,10 @@ function paintViewAs() {
   let b = $('#viewAsBadge');
   const v = viewAs();
   const who = isRealAdmin() && prefs.actAs?.trim();
-  if (!v && !who) { b?.remove(); return; }
-  if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); delete prefs.actAs; savePrefs(); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
-  b.textContent = `${[v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
+  const fresh = isRealAdmin() && prefs.simNew;
+  if (!v && !who && !fresh) { b?.remove(); return; }
+  if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); delete prefs.actAs; if (prefs.simNew) { const back = prefs.simNew.sched; delete prefs.simNew; saveSchedule(back, { push: false }); } savePrefs(); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
+  b.textContent = `${[v && t('viewAsNow', roleName(v)), fresh && t('simNewBadge'), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
 }
 function openAccount() {
   let pendingView = '';
@@ -3022,6 +3039,7 @@ function openAccount() {
       <p class="section-note">${esc(t('adminUnlock'))}</p>
       <div class="acct-btns">
         ${state ? `<button type="button" class="btn ghost" id="acFill">${esc(t('adminFill'))}</button>` : ''}
+        <button type="button" class="btn ghost" id="acNewbie">${esc(t('simNewBtn'))}</button>
         <button type="button" class="btn ghost" id="acWipe">${esc(t('adminWipe'))}</button>
       </div>
     </div>
@@ -3068,6 +3086,15 @@ function openAccount() {
     $('#acClockSet').onclick = () => { const v = $('#acClock').value; if (v) setClock(new Date(v).getTime() - (Date.now() - (prefs.clockOffset || 0))); }; // décalage = heure voulue − heure réelle
     $('#acClockReal')?.addEventListener('click', () => setClock(0));
     $('#acFill')?.addEventListener('click', () => { for (const it of planTasks()) state.tasks[it.id] = { ...(state.tasks[it.id] || {}), done: true, skipped: false, doneAt: new Date().toISOString() }; save(); closeSheet(); openChecklist(); sfx('full'); });
+    // Revivre l'arrivée d'un nouvel employé : sans horaire, tutoriel au début. L'horaire réel est gardé de côté.
+    $('#acNewbie').onclick = () => {
+      if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {} };
+      delete prefs.welcomed?.[u.email];
+      savePrefs();
+      saveSchedule({}, { push: false });
+      closeSheet(); paintViewAs(); goFront(); paintFront();
+      setTimeout(startTour, 420);
+    };
     $('#acWipe').onclick = (e) => {
       const b = e.currentTarget;
       if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('adminWipeSure'); return; }
