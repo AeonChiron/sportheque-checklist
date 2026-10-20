@@ -410,11 +410,25 @@ function openScheduleSheet({ first = false } = {}) {
       for (const q of row.querySelectorAll('[data-qp]')) { const p = presetOf(q.dataset.qp); q.setAttribute('aria-pressed', String(Boolean(h && h.start === p.start && h.end === p.end))); }
       if (h) { row.querySelector('[data-cstart]').value = h.start; row.querySelector('[data-cend]').value = h.end; }
     };
+    // Chaque changement est gardé tout de suite : fermer la feuille ne perd rien.
+    const commit = () => {
+      const clean = {};
+      for (const [k, v] of Object.entries(sc)) if (v.start && v.end) clean[k] = { ...v };
+      saveSchedule(clean);
+      if (current === 'history') renderHistory({ animate: false });
+      if (current === 'auth') paintFront();
+      if (current === 'setup') {
+        paintSetupSched();
+        const tp = todaySched(); // aujourd'hui à l'horaire : les heures du formulaire suivent
+        if (tp) { $('#fStart').value = tp.start; $('#fEnd').value = tp.end; updatePreview(); }
+      }
+    };
     for (const sw of root.querySelectorAll('[data-sw]')) {
       sw.onclick = () => {
         const i = Number(sw.dataset.sw);
         if (sc[i]) delete sc[i]; else sc[i] = { ...lastHours }; // un jour allumé reprend les dernières heures
         paintRow(i);
+        commit();
         clank('step');
       };
     }
@@ -425,6 +439,7 @@ function openScheduleSheet({ first = false } = {}) {
         sc[i] = { start: p.start, end: p.end };
         lastHours = sc[i];
         paintRow(i);
+        commit();
         clank('step');
       };
     }
@@ -434,16 +449,26 @@ function openScheduleSheet({ first = false } = {}) {
         sc[i] = { start: root.querySelector(`[data-cstart="${i}"]`).value, end: root.querySelector(`[data-cend="${i}"]`).value };
         if (sc[i].start && sc[i].end) lastHours = sc[i];
         paintRow(i);
+        commit();
       });
     }
     $('#schedDone').onclick = () => {
-      for (const k of Object.keys(sc)) if (!(sc[k].start && sc[k].end)) delete sc[k];
-      saveSchedule(sc); closeSheet(); toast(t('schedSaved'));
-      if (current === 'history') renderHistory({ animate: false });
-      if (current === 'auth') paintFront();
+      commit(); closeSheet(); toast(t('schedSaved'));
     };
     $('#schedLater')?.addEventListener('click', closeSheet);
   }, `${first ? `<button type="button" class="btn ghost" id="schedLater">${t('schedLater')}</button>` : ''}<button type="button" class="btn primary" id="schedDone">${t(first ? 'schedDoneFirst' : 'save')}</button>`);
+}
+// Page « Bon quart » : pas encore d'horaire → on l'invite à l'entrer une fois;
+// congé aujourd'hui → une petite ligne pour le modifier.
+function paintSetupSched() {
+  const box = $('#setupSched');
+  if (!box) return;
+  if (state) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = !mySchedule() || !Object.keys(mySchedule()).length
+    ? `<div class="sched-card empty"><div><b>${t('schedTitle')}</b><p>${t('schedEmpty')}</p></div><button type="button" class="btn primary" data-sched>${t('schedSet')}</button></div>`
+    : todaySched() ? '' : `<p class="sched-off-line">${esc(t('schedTodayOff'))} · <button type="button" class="link" data-sched>${t('schedEdit')}</button></p>`;
+  if (!box.innerHTML) box.hidden = true;
 }
 // Carte « Mon horaire » en haut de Mes shifts.
 function schedCard() {
@@ -518,6 +543,7 @@ function setupScreen() {
   renderPresets();
   paintDate();
   paintEditToday();
+  paintSetupSched();
   manualShift = null;
   setTimeout(paintInstallTip, 0); // après show('setup')
   editing = false;
@@ -2350,6 +2376,8 @@ $('#poolStart').addEventListener('click', (e) => {
     if (tp) { startScheduled(tp); return; } // jour prévu : le quart part tout seul
     window.history.replaceState(null, '', location.pathname);
     route();
+    // Pas encore d'horaire : on le demande, une fois, pour que la prochaine fois parte toute seule.
+    if (!state && current === 'setup' && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 500);
   };
   if (reducedMotion()) { go(); return; }
   btn.classList.add('lifting');
@@ -2484,6 +2512,7 @@ $('#authForm').addEventListener('submit', async (ev) => {
   try {
     const user = await signIn(up ? 'signup' : 'login', fields, $('#aRemember').checked);
     prefs.name = user.name;
+    if (!mySchedule() && prefs.schedules?.local) saveSchedule(prefs.schedules.local); // l'horaire suit la personne
     savePrefs();
     $('#aPass').value = '';
     $('#aCode').value = '';
@@ -2988,6 +3017,9 @@ wake();
 // Animations en pause quand l'onglet est caché (batterie).
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('paused', document.hidden));
 
+// Demande au navigateur de ne jamais effacer nos données (connexion, horaire).
+// Firefox afficherait une question : on s'en passe là.
+if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {});
 paintStatic();
 initAuth(() => { route(); flushQueue(); refreshAlerts(); }); // le serveur a répondu autre chose que prévu
 if (isVisitor()) {

@@ -2111,3 +2111,11 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .hi-link span { display: grid; gap: 2px; min-width: 0; }
 .hi-link b { font: 700 15px/1.15 var(--font); }
 .hi-link small { font: 500 12px/1.2 var(--font); opacity: .85; }
+
+/* Page « Bon quart » : inviter à entrer l'horaire une fois */
+.setup-sched { margin: 0 0 14px; }
+.setup-sched .sched-card { margin-bottom: 0; }
+.sched-off-line { margin: 0; text-align: center; color: var(--muted); font-size: 14px; }
+.home-hero .setup-sched { margin: 4px 0 6px; text-align: left; }
+.home-hero .setup-sched .sched-card.empty { padding: 12px 14px; gap: 10px; }
+.home-hero .setup-sched .sched-card.empty p { font-size: 13.5px; }
