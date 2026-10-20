@@ -47,7 +47,9 @@ const ensurePlan = () => { if (state && !plan) plan = shiftPlan(state); };
 
 const lang = () => (prefs.lang === 'en' ? 'en' : 'fr');
 const t = (key, ...args) => {
-  const v = UI[lang()][key];
+  const d = UI[lang()];
+  // Un patron qui regarde un quart lit les tâches de son équipe, pas les siennes.
+  const v = isBoss() && !(isRealAdmin() && prefs.actAs?.trim()) && d[key + 'Boss'] !== undefined ? d[key + 'Boss'] : d[key];
   return typeof v === 'function' ? v(...args) : v;
 };
 const f = (min) => fmt(min, lang());
