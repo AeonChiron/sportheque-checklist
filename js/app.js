@@ -73,6 +73,7 @@ const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 let current = null;
 const RANK = { poster: 6, auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, boss: 5, problem: 6, review: 7 };
 function show(id) {
+  paintAdminTools();
   const prev = current;
   current = id;
   if (id !== 'checklist' && $('#momentAllDone')?.classList.contains('on')) hideAllDone(); // jamais par-dessus un autre écran
@@ -392,7 +393,15 @@ const mySchedule = () => (prefs.schedules || {})[schedKey()] || null;
 function saveSchedule(sc, { push = true } = {}) {
   prefs.schedules = { ...(prefs.schedules || {}), [schedKey()]: sc };
   savePrefs();
-  if (push && !prefs.simNew) pushSchedule(sc); // aperçu « nouvel employé » : rien ne part au serveur
+  refreshScheduleStatus();
+  if (push && !prefs.simNew && !prefs.simShift) pushSchedule(sc); // aperçu « nouvel employé » : rien ne part au serveur
+}
+// Recompute every schedule-dependent surface when the local schedule changes.
+function refreshScheduleStatus() {
+  setupNext = nextShift();
+  if (current === 'auth') paintFront();
+  if (current === 'history') renderHistory({ animate: false });
+  if (current === 'setup') paintSetupSched();
 }
 // L'horaire suit le compte (serveur) : envoyé un instant après le dernier changement.
 // Un serveur pas encore à jour répond « action inconnue » : on garde la copie du téléphone.
@@ -403,7 +412,7 @@ function pushSchedule(sc) {
 }
 // Le serveur connaît l'horaire : on le prend. Il ne le connaît pas encore : on lui envoie celui du téléphone.
 function adoptSchedule(u) {
-  if (!u?.email || prefs.simNew) return;
+  if (!u?.email || prefs.simNew || prefs.simShift) return;
   if (u.schedule && Object.keys(u.schedule).length) {
     if (JSON.stringify(u.schedule) === JSON.stringify(mySchedule())) return;
     saveSchedule(u.schedule, { push: false });
@@ -432,7 +441,8 @@ function nextShift() {
     if (i > 0) return { ...p, date, ready: false };
     const s0 = toMin(p.start);
     const e0 = toMin(p.end) <= s0 ? toMin(p.end) + 1440 : toMin(p.end);
-    if (editableShift() || nowMin >= e0) continue; // déjà envoyé ou fini : on regarde plus loin
+    const submitted = editableShift();
+    if ((submitted?.start === p.start && submitted?.end === p.end) || nowMin >= e0) continue; // déjà envoyé ou fini : on regarde plus loin
     return { ...p, date, ready: nowMin >= s0 - EARLY_MIN };
   }
   return null;
@@ -622,7 +632,7 @@ function maybeWelcome() {
   if (!key || prefs.welcomed?.[key] || $('#tour')) return;
   // Le tutoriel part tout seul une seule fois, à la toute première connexion. L'admin connaît son app :
   // jamais tout seul pour lui (l'aperçu « Nouveau » ou « Revoir le tutoriel » le relancent).
-  if (isRealAdmin()) { prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true }; savePrefs(); return; }
+  if (isRealAdmin() && !prefs.simNew) { prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true }; savePrefs(); return; }
   if (!$('#sheet').hidden) { setTimeout(maybeWelcome, 600); return; } // attend qu'un panneau se ferme
   if (current === 'auth') startTour();
 }
@@ -654,9 +664,10 @@ function startTour() {
   box.innerHTML = '<div class="tour-hole" aria-hidden="true"></div><div class="tour-tip" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="tourH"></div>';
   document.body.append(box);
   const hole = box.querySelector('.tour-hole'), tip = box.querySelector('.tour-tip');
-  let i = 0;
+  let i = prefs.simNew?.tourStep || 0;
   const sheetOpen = () => !$('#sheet').hidden;
   const end = (then) => {
+    if (prefs.simNew && i >= steps.length) { prefs.simNew.tourDone = true; savePrefs(); }
     box.classList.remove('on');
     setTimeout(() => box.remove(), 300);
     removeEventListener('resize', place);
@@ -688,6 +699,7 @@ function startTour() {
     tip.style.setProperty('--ax', `${Math.min(Math.max(r.left + r.width / 2 - tr.left - 8, 18), tr.width - 34)}px`); // la pointe de la bulle vise le bouton
   }
   const show = () => {
+    if (prefs.simNew) { prefs.simNew.tourStep = i; savePrefs(); }
     if (i >= steps.length) { finish(); return; }
     const [sel, k, inSheet] = steps[i];
     // Les étapes du compte : la feuille s'ouvre; revenir à l'accueil la referme.
@@ -763,6 +775,7 @@ document.addEventListener('click', (ev) => {
 // Un quart d'aujourd'hui où rien n'est coché suit l'horaire : des heures restées d'avant
 // (ex. un soir choisi sur l'ancienne page) ne restent pas collées.
 function dropStaleShift() {
+  if (prefs.simShift) return;
   const tp = todaySched();
   if (!state || state.date !== todayISO() || !tp?.start) return;
   if (tp.start === state.start && tp.end === state.end && state.name === shiftName()) return;
@@ -770,11 +783,12 @@ function dropStaleShift() {
   if (Object.entries(state.tasks || {}).some(([id, x]) => x.done && id !== 'pointage') || state.flags?.length) return;
   state = null; save();
 }
-function startScheduled(p) {
+function startScheduled(p, { simulation = false } = {}) {
   state = {
     name: shiftName(),
     supervisor: '',
-    date: todayISO(),
+    date: p.date || todayISO(),
+    simulation,
     start: p.start,
     end: p.end,
     shift: detectShift(p.start, p.end),
@@ -1805,6 +1819,7 @@ function flagMailLine(fl, i) {
 }
 
 async function submitProblem(fl, s = state) {
+  if (prefs.simShift || prefs.simNew) { toast(t('simulationLocal')); return; }
   sfx('flag');
   if (sending.has(fl) || !flagNeedsWork(fl)) {
     if (!sending.has(fl)) toast(t(fl.urgent ? 'flagDemo' : s.loose ? 'flagInBoss' : 'flagNoted'));
@@ -2015,6 +2030,7 @@ function boardSummary() {
 
 // Fin du quart : il s'ajoute à l'historique. Pas de courriel.
 async function saveShift() {
+  if (prefs.simShift || prefs.simNew) { toast(t('simulationLocal')); return; }
   const btn = $('#sendBtn');
   btn.disabled = true;
   btn.textContent = t('saving');
@@ -2879,6 +2895,10 @@ $('#poolStart').addEventListener('click', (e) => {
   setTimeout(() => { clank('lift'); pool().cheer(); }, 380);
   setTimeout(() => { go(); btn.classList.remove('lifting'); }, 1150);
 });
+$('#poolNext').addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  if (session.user) openNextOverview();
+});
 $('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
 // Barre rapide : Accueil, Mes tâches, Recommencer, Superviseur, visiteur,
 // thème et langue. Un seul élément, déplacé en haut de l'écran affiché
@@ -3031,8 +3051,8 @@ function paintNextBox(inside) {
 function openNextOverview(pick) {
   const found = pick?.date ? pick : nextShift();
   if (!found) return;
-  const nx = isAdmin() && found.date === todayISO() ? { ...found, ready: true } : found; // l'admin peut partir le quart d'aujourd'hui tout de suite
-  const live = Boolean(state) && nx.date === todayISO(); // le quart en cours
+  const nx = found;
+  const live = Boolean(state) && state.date === nx.date && state.start === nx.start && state.end === nx.end; // le quart en cours
   const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
   // Chaque tâche s'ouvre pour lire ses étapes et ses trucs (rien à cocher ici).
   const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => (it.kind === 'task' && (it.steps?.length || it.summary)
@@ -3040,8 +3060,9 @@ function openNextOverview(pick) {
     : `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`)).join('');
   openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))}${nx.date > addDays(todayISO(), 1) ? ` ${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}` : ''} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${live || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
     $('#ovGo').onclick = () => { closeSheet(); if (live) openChecklist(); else if (nx.ready && !state) startScheduled(nx); };
+    $('#ovSim')?.addEventListener('click', () => confirmShiftSimulation(nx));
     $('#ovTime').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); }; // les heures se changent dans « Quand travailles-tu? »
-  }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || (nx.ready && !state) ? '' : ' disabled'}>${live ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
+  }, `${isRealAdmin() ? `<button type="button" class="btn primary" id="ovSim">${t('simulationStart')}</button>` : ''}<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || (nx.ready && !state) ? '' : ' disabled'}>${live ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
 }
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
 setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 20000);
@@ -3162,7 +3183,8 @@ const roleName = (r) => t({ boss: 'roleBoss', admin: 'roleAdmin' }[r] || 'roleEm
 async function doSignOut() {
   const wasVisitor = isVisitor();
   const hadClock = prefs.clockOffset;
-  if (prefs.simNew) { saveSchedule(prefs.simNew.sched, { push: false }); delete prefs.simNew; }
+  restoreNewbie();
+  if (prefs.simShift) { const back = prefs.simShift; state = back.state || null; save(); delete prefs.simShift; }
   delete prefs.clockOffset; delete prefs.actAs; delete prefs.workAsEmp; setViewAs(''); // l'heure simulée, l'aperçu et le nom emprunté ne restent pas pour la prochaine personne
   savePrefs();
   await signOut();
@@ -3222,8 +3244,12 @@ function avatarHTML(user, letter) {
 }
 function startNewbie(role = 'employee') {
   const u = session.user;
-  if (!u) return;
-  if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {} };
+  if (!u || !isRealAdmin()) return;
+  if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {}, state, welcomed: prefs.welcomed?.[u.email], workAsEmp: prefs.workAsEmp };
+  state = null; plan = null; save();
+  clearTimeout(pushSchedule.timer);
+  prefs.simNew.tourStep = 0;
+  prefs.simNew.tourDone = false;
   prefs.simNew.role = role; // nouvel employé ou nouveau superviseur
   delete prefs.simNew.avatar;
   delete prefs.workAsEmp;
@@ -3235,20 +3261,67 @@ function startNewbie(role = 'employee') {
   setTimeout(startTour, 420);
 }
 // Pastille « Aperçu : Employé » tant que l'admin regarde l'app avec un autre rôle; un toucher revient à Admin.
-function paintViewAs() {
-  let b = $('#viewAsBadge');
-  const v = viewAs();
-  const who = isRealAdmin() && prefs.actAs?.trim();
-  const fresh = isRealAdmin() && prefs.simNew;
-  if (!v && !who && !fresh) { b?.remove(); return; }
-  if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); delete prefs.actAs; if (prefs.simNew) { const back = prefs.simNew.sched; delete prefs.simNew; saveSchedule(back, { push: false }); } savePrefs(); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
-  b.textContent = `${[fresh ? t('viewAsNow', t(curView())) : v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
+function paintViewAs() { paintAdminTools(); }
+function paintAdminTools() {
+  let bar = $('#adminSimulator');
+  if (!isRealAdmin()) { bar?.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div'); bar.id = 'adminSimulator';
+    document.body.append(bar);
+  }
+  bar.innerHTML = `<button type="button" id="adminRoles">${esc(t('viewAsTitle'))} · ${esc(curView().startsWith('new') ? t(curView()) : roleName(viewAs() || 'admin'))}</button>${prefs.simShift ? `<button type="button" id="simulationExit">${esc(t('simulationExit'))}</button>` : ''}`;
+  $('#adminRoles').onclick = () => {
+    if (prefs.simShift) { exitShiftSimulation(); return; }
+    if ($('#tour')) { $('#tour').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); setTimeout(openAccount, 400); }
+    else openAccount();
+  };
+  $('#simulationExit')?.addEventListener('click', exitShiftSimulation);
 }
+function restoreNewbie() {
+  const back = prefs.simNew;
+  if (!back) return;
+  // Keep server writes suppressed until the real schedule has been restored.
+  saveSchedule(back.sched, { push: false });
+  state = back.state || null; plan = null; save();
+  prefs.workAsEmp = back.workAsEmp;
+  if (back.welcomed === undefined) delete prefs.welcomed?.[session.user.email];
+  else prefs.welcomed = { ...prefs.welcomed, [session.user.email]: back.welcomed };
+  delete prefs.simNew; savePrefs();
+}
+function confirmShiftSimulation(nx) {
+  if (!isRealAdmin()) return;
+  openSheet(`<div class="sheet-head"><h2>${esc(t('simulationSure'))}</h2></div><p class="lede">${esc(t('simulationBody'))}</p>`, () => {
+    $('#simulationNo').onclick = () => openNextOverview(nx);
+    $('#simulationYes').onclick = () => {
+      if (!isRealAdmin()) return;
+      if (prefs.simShift) return;
+      clearTimeout(pushSchedule.timer);
+      prefs.simShift = { state, sched: mySchedule(), clockOffset: prefs.clockOffset || 0, workAsEmp: prefs.workAsEmp };
+      prefs.workAsEmp = true;
+      const realNow = Date.now() - (prefs.clockOffset || 0);
+      prefs.clockOffset = startAt(nx).getTime() - realNow;
+      savePrefs();
+      startScheduled(nx, { simulation: true });
+      location.reload();
+    };
+  }, `<button type="button" class="btn ghost" id="simulationNo">${t('cancel2')}</button><button type="button" class="btn primary" id="simulationYes">${t('simulationYes')}</button>`);
+}
+function exitShiftSimulation() {
+  const back = prefs.simShift;
+  if (!back) return;
+  if ('sched' in back) saveSchedule(back.sched, { push: false });
+  state = back.state || null; save();
+  prefs.clockOffset = back.clockOffset;
+  prefs.workAsEmp = back.workAsEmp;
+  delete prefs.simShift; savePrefs();
+  location.reload();
+}
+
 function openAccount() {
   let pendingView = '';
   const u = session.user;
   if (!u) return;
-  const admin = isAdmin();
+  const admin = isRealAdmin();
   const live = session.mode === 'accounts';
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -3337,7 +3410,8 @@ function openAccount() {
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', () => {
     if (pendingView && pendingView !== curView()) {
       if (pendingView.startsWith('new')) { startNewbie(pendingView === 'newBoss' ? 'boss' : 'employee'); return; } // première visite : sans horaire, tutoriel du rôle
-      if (prefs.simNew) { saveSchedule(prefs.simNew.sched, { push: false }); delete prefs.simNew; savePrefs(); }
+      restoreNewbie();
+      delete prefs.workAsEmp; savePrefs();
       setViewAs(pendingView); sfx('save'); paintViewAs(); closeSheet(); goFront(); paintFront();
       toast(pendingView === 'admin' ? t('viewAsBack') : t('viewAsNow', roleName(pendingView)));
       return;
@@ -3844,6 +3918,7 @@ if (isVisitor()) {
   if (!seen && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 1600);
 }
 route();
+if (isRealAdmin() && prefs.simNew && !prefs.simNew.tourDone && !prefs.simShift) setTimeout(startTour, 450);
 
 // Un quart ou un signalement enregistré sans réseau part tout seul dès que le réseau revient.
 flushQueue();
