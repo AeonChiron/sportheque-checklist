@@ -140,6 +140,7 @@ export function createApi({ getStore, env }) {
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
       if (u.role !== 'admin') return json({ error: 'admin' }, 403);
+      if (b.read === true) { const c = await codes(); return json({ codes: { team: c.TEAM_CODE || '', boss: c.BOSS_CODE || '', admin: c.ADMIN_CODE || '' } }); }
       // Un champ vide garde le code actuel; les trois codes doivent rester différents.
       const pick = (k) => String(b[k] || '').trim().slice(0, 40);
       const now = await codes();

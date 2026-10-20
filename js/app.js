@@ -2902,6 +2902,11 @@ function openAccount() {
       try { for (const k of Object.keys(localStorage)) if (!['gym-auth', 'gym-auth-mode'].includes(k)) localStorage.removeItem(k); } catch { /* ignore */ }
       location.reload();
     };
+    // Les codes actuels, déjà remplis : l'admin les voit et les change au même endroit.
+    if ($('#acCodes')) request('auth', { method: 'POST', body: { action: 'codes', read: true } }).then(({ codes }) => {
+      if (!$('#acTeam')) return;
+      $('#acTeam').value = codes.team; $('#acBossCode').value = codes.boss; $('#acAdminCode').value = codes.admin;
+    }).catch(() => {});
     $('#acCodes')?.addEventListener('click', async () => {
       const msg = $('#acCodesMsg');
       try { await request('auth', { method: 'POST', body: { action: 'codes', team: $('#acTeam').value, boss: $('#acBossCode').value, admin: $('#acAdminCode').value } }); msg.textContent = t('adminCodesSaved'); sfx('save'); } catch (err) { msg.textContent = t(err.status === 400 ? 'adminCodesBad' : 'adminCodesLater'); sfx('locked'); }

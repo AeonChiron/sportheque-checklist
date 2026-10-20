@@ -136,6 +136,8 @@ test('Admin : son propre code; seul l’admin change les codes d’équipe', asy
   // Un champ vide garde le code; l'admin change aussi le sien; trois codes différents.
   assert.equal((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', admin: 'neuf1' } })).status, 400);
   assert.equal((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', admin: '1758' } })).status, 200);
+  assert.deepEqual((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', read: true } })).data.codes, { team: 'neuf1', boss: 'neuf2', admin: '1758' });
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'codes', read: true } })).status, 403);
   // Un compte existant devient admin avec le code; un mauvais code est refusé, 10 fois au plus par jour.
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: 'racine' } })).status, 403);
   const up = await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: '1758' } });
