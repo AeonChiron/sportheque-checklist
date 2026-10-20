@@ -5,7 +5,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
-import { rackSVG, playFinish, fxSound } from './fx.js';
+import { mountGlass, playFinish, fxSound } from './fx.js';
 import { session, accounts, isBoss, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
@@ -545,16 +545,20 @@ function pipsHTML(done, total, plate, land = -1) {
   return Array.from({ length: total }, (_, j) => `<i class="${j < done ? 'on' : ''}${j === land ? ' pop' : ''}"></i>`).join('');
 }
 const sfx = (name) => { if (prefs.sound !== false) fxSound(name); };
+let glass = null;
 function renderTimeline() {
   const tasks = planTasks();
-  const done = tasks.filter((it) => state.tasks[it.id]?.done)
-    .sort((a, b) => String(state.tasks[a.id].doneAt || '').localeCompare(String(state.tasks[b.id].doneAt || '')));
-  const land = landId ? done.findIndex((it) => it.id === landId) : -1;
+  const done = tasks.filter((it) => state.tasks[it.id]?.done).length;
   const box = $('#timeline');
-  box.innerHTML = rackSVG(done.map(plateOf), tasks.length, { land });
-  box.setAttribute('aria-label', t('barLabel', done.length, tasks.length));
-  box.classList.toggle('full', tasks.length > 0 && done.length === tasks.length);
-  if (land >= 0 && !reducedMotion()) { box.classList.remove('thud'); void box.offsetWidth; box.classList.add('thud'); }
+  if (!glass || !box.querySelector('.glass')) {
+    glass = mountGlass(box);
+    box.insertAdjacentHTML('beforeend', '<div class="glass-count"><b class="num"></b><span></span></div>');
+  }
+  box.querySelector('.glass-count b').textContent = `${done}/${tasks.length}`;
+  box.querySelector('.glass-count span').textContent = t('tasks');
+  glass.set(tasks.length ? done / tasks.length : 0, { pour: Boolean(landId) });
+  box.setAttribute('aria-label', t('barLabel', done, tasks.length));
+  box.classList.toggle('full', tasks.length > 0 && done === tasks.length);
   if (liftNext && !reducedMotion()) { box.classList.remove('lift'); void box.offsetWidth; box.classList.add('lift'); }
   landId = null;
   liftNext = false;
@@ -698,8 +702,8 @@ function toggleDone(id) {
   if (e.done) landId = id;
   if (!wasAll && allDone()) liftNext = true;
   renderChecklist();
-  if (e.done) { sfx('rackLand'); buzz('plate'); }
-  if (!wasAll && allDone()) { sfx('rackFull'); setTimeout(() => buzz('lift'), reducedMotion() ? 0 : 650); }
+  if (e.done) { sfx('pour'); buzz('plate'); }
+  if (!wasAll && allDone()) { sfx('full'); setTimeout(() => buzz('lift'), reducedMotion() ? 0 : 650); }
   if (!wasAll && allDone()) setTimeout(showAllDone, reducedMotion() ? 0 : 900);
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
   const tasks = planTasks();

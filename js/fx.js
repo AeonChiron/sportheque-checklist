@@ -1,4 +1,4 @@
-// Effets : le support à haltères (progrès du quart), les animations de fin
+// Effets : le verre d'eau (progrès du quart), les animations de fin
 // de tâche (une par type de tâche) et leurs sons, synthétisés sur place
 // (WebAudio, aucun fichier son). Tout part en silence si les sons sont coupés.
 
@@ -42,13 +42,13 @@ function noise(at, dur, gain, { type = 'bandpass', f0 = 1000, f1 = f0, q = 1 } =
 }
 
 const SOUNDS = {
-  rackLand() { // l'haltère tombe dans son berceau
-    osc('sine', 130, 70, 0.2, 0.22, 0.5);
-    noise(0.2, 0.09, 0.35, { type: 'lowpass', f0: 500 });
-    osc('sine', 1480, 1480, 0.2, 0.28, 0.06);
-    osc('sine', 2210, 2210, 0.21, 0.2, 0.04);
+  pour() { // un « glouglou » d'eau qui tombe dans le verre
+    noise(0, 0.28, 0.12, { f0: 500, f1: 1400, q: 2.5 });
+    osc('sine', 620, 300, 0.08, 0.12, 0.16);
+    osc('sine', 760, 380, 0.2, 0.11, 0.13);
+    osc('sine', 900, 480, 0.3, 0.1, 0.1);
   },
-  rackFull() {
+  full() {
     [523, 659, 784, 1047].forEach((f, i) => osc('triangle', f, f, 0.35 + i * 0.09, 0.45, 0.14));
   },
   rag() {
@@ -117,36 +117,98 @@ export function fxSound(name) {
   try { SOUNDS[name]?.(); } catch { /* pas de son ici : tant pis */ }
 }
 
-// ---------- Support à haltères (progrès du quart) ----------
-// Chaque tâche finie dépose un haltère de sa couleur dans son berceau.
-export function rackSVG(colors, total, { land = -1 } = {}) {
-  const W = 340, rows = total > 8 ? 2 : 1, per = Math.ceil(Math.max(1, total) / rows);
-  const H = rows === 2 ? 92 : 50, pad = 16, cell = (W - pad * 2) / per;
-  const hw = Math.min(30, cell - 6), head = Math.max(6, Math.min(9, hw * 0.28)), hh = Math.min(20, hw * 0.62);
-  const rowY = (r) => (rows === 2 ? 26 + r * 42 : 26);
-  let rails = '', items = '';
-  for (let r = 0; r < rows; r++) {
-    const y = rowY(r) + hh / 2 + 3;
-    rails += `<rect class="rail" x="${pad - 6}" y="${y}" width="${W - (pad - 6) * 2}" height="5" rx="2.5"/>`;
-    rails += `<rect class="leg" x="${pad - 2}" y="${y + 4}" width="4" height="${rows === 2 && r === 0 ? 38 : 10}" rx="2"/><rect class="leg" x="${W - pad - 2}" y="${y + 4}" width="4" height="${rows === 2 && r === 0 ? 38 : 10}" rx="2"/>`;
+// ---------- Verre d'eau (progrès du quart) ----------
+// Chaque tâche finie remplit le verre : le niveau monte en ressort (il dépasse
+// un peu et revient), la surface clapote, quelques gouttes sautent, des bulles
+// montent. Au repos, l'eau bouge doucement. Rien ne tourne quand c'est caché.
+const NS = 'http://www.w3.org/2000/svg';
+const GLASS = 'M8 6H92L83.5 107Q82.6 114 76 114H24Q17.4 114 16.5 107Z';
+const TOP = 14, BOTTOM = 113; // niveau plein / vide (unités du dessin)
+
+export function mountGlass(host) {
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const uid = `g${Math.random().toString(36).slice(2, 7)}`;
+  host.innerHTML = `<div class="glass"><svg viewBox="0 -14 100 130" aria-hidden="true">
+      <defs><clipPath id="${uid}"><path d="${GLASS}"/></clipPath></defs>
+      <path class="glass-in" d="${GLASS}"/>
+      <g clip-path="url(#${uid})"><path class="water-back"/><path class="water"/><g class="bubbles"></g></g>
+      <g class="drops"></g>
+      <path class="glass-shine" d="M15 14L20 100" />
+      <path class="glass-rim" d="${GLASS}"/>
+    </svg></div>`;
+  const svg = host.querySelector('svg');
+  const front = svg.querySelector('.water'), back = svg.querySelector('.water-back');
+  const bubbleG = svg.querySelector('.bubbles'), dropG = svg.querySelector('.drops');
+  const s = { y: BOTTOM, v: 0, target: BOTTOM, slosh: 0, t: 0, last: 0, bubbles: [], drops: [], raf: 0 };
+
+  const wave = (amp, ph, k1, k2) => {
+    let d = '';
+    for (let x = -4; x <= 104; x += 4) {
+      const y = s.y + amp * Math.sin(x * k1 + ph) + amp * 0.45 * Math.sin(x * k2 - ph * 1.3);
+      d += `${x === -4 ? 'M' : 'L'}${x} ${y.toFixed(2)}`;
+    }
+    return `${d}L104 130L-4 130Z`;
+  };
+  const circle = (cls) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('class', cls); return c; };
+  function bubble(big = false) {
+    const el = circle('bubble');
+    bubbleG.append(el);
+    s.bubbles.push({ el, x: 24 + Math.random() * 52, y: BOTTOM - 2, r: big ? 1.6 + Math.random() * 1.6 : 0.9 + Math.random() * 1.1, sp: 14 + Math.random() * 18, wob: Math.random() * 6 });
   }
-  for (let j = 0; j < total; j++) {
-    const r = Math.floor(j / per), k = j % per;
-    const cx = pad + cell * (k + 0.5), cy = rowY(r);
-    const x0 = cx - hw / 2;
-    const c = colors[j];
-    const body = `<rect class="bar" x="${x0 + head - 1}" y="${cy - 1.6}" width="${hw - head * 2 + 2}" height="3.2" rx="1.6"/>
-      <rect class="hd" x="${x0}" y="${cy - hh / 2}" width="${head}" height="${hh}" rx="2.4"/>
-      <rect class="hd" x="${x0 + hw - head}" y="${cy - hh / 2}" width="${head}" height="${hh}" rx="2.4"/>`;
-    items += `<path class="cradle" d="M${cx - hw / 2 + 2} ${cy + hh / 2 + 3} q${hw / 2 - 2} -5 ${hw - 4} 0"/>`;
-    if (!c) { items += `<g class="slot">${body}</g>`; continue; }
-    items += `<g class="db${j === land ? ' land' : ''}" style="--pc:var(--plate-${c});--i:${j}">${body}
-      <rect class="shine" x="${x0 + 1.5}" y="${cy - hh / 2 + 2}" width="2" height="${hh - 4}" rx="1"/>
-      <rect class="shine" x="${x0 + hw - head + 1.5}" y="${cy - hh / 2 + 2}" width="2" height="${hh - 4}" rx="1"/></g>`;
-    if (j === land) items += `<g class="puff" style="--x:${cx}px;--y:${cy + hh / 2}px"><circle cx="${cx - hw / 2}" cy="${cy + hh / 2 + 2}" r="3"/><circle cx="${cx + hw / 2}" cy="${cy + hh / 2 + 2}" r="3"/><circle cx="${cx}" cy="${cy + hh / 2 + 4}" r="2.4"/></g>`;
+  function splash(n) {
+    for (let i = 0; i < n; i++) {
+      const el = circle('drop');
+      dropG.append(el);
+      s.drops.push({ el, x: 30 + Math.random() * 40, y: s.y, vx: (Math.random() - 0.5) * 40, vy: -(40 + Math.random() * 45), r: 1.2 + Math.random() * 1.4, life: 1 });
+    }
   }
-  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs><linearGradient id="rackSweep" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
-    <g class="rack-frame">${rails}</g>${items}<rect class="sweep" x="-80" y="0" width="70" height="${H}" fill="url(#rackSweep)"/></svg>`;
+  function draw() {
+    const amp = 1.3 + s.slosh;
+    back.setAttribute('d', wave(amp * 0.9, s.t * 2.1 + 1.7, 0.075, 0.16));
+    front.setAttribute('d', wave(amp, s.t * 2.8, 0.09, 0.19));
+    for (const b of s.bubbles) {
+      b.el.setAttribute('cx', (b.x + Math.sin(s.t * 3 + b.wob) * 1.2).toFixed(2));
+      b.el.setAttribute('cy', b.y.toFixed(2));
+      b.el.setAttribute('r', b.r);
+      b.el.setAttribute('opacity', Math.max(0, Math.min(1, (b.y - s.y) / 10)).toFixed(2));
+    }
+    for (const d of s.drops) {
+      d.el.setAttribute('cx', d.x.toFixed(2)); d.el.setAttribute('cy', d.y.toFixed(2));
+      d.el.setAttribute('r', d.r); d.el.setAttribute('opacity', d.life.toFixed(2));
+    }
+  }
+  function step(now) {
+    s.raf = 0;
+    if (!host.isConnected) return;
+    if (!svg.getClientRects().length || document.hidden) { s.last = 0; setTimeout(() => { if (!s.raf) s.raf = requestAnimationFrame(step); }, 400); return; }
+    const dt = Math.min(0.05, (now - (s.last || now)) / 1000);
+    s.last = now; s.t += dt;
+    // Ressort : le niveau dépasse un peu sa marque, puis se pose.
+    const acc = 70 * (s.target - s.y) - 7.5 * s.v;
+    s.v += acc * dt; s.y += s.v * dt;
+    s.slosh *= Math.exp(-1.6 * dt);
+    if (s.y < BOTTOM - 3 && Math.random() < dt * 0.9) bubble();
+    for (const b of s.bubbles) b.y -= b.sp * dt;
+    s.bubbles = s.bubbles.filter((b) => (b.y > s.y - 1 ? true : (b.el.remove(), false)));
+    for (const d of s.drops) { d.vy += 260 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.life -= dt * 1.3; }
+    s.drops = s.drops.filter((d) => (d.life > 0 && d.y < s.y + 2 ? true : (d.el.remove(), false)));
+    draw();
+    s.raf = requestAnimationFrame(step);
+  }
+  return {
+    set(frac, { pour = false } = {}) {
+      const f = Math.max(0, Math.min(1, frac));
+      s.target = BOTTOM - (BOTTOM - TOP) * f;
+      if (still) { s.y = s.target; s.v = 0; draw(); return; }
+      if (pour && f > 0) {
+        s.slosh += 3.2;
+        s.v -= 18;
+        splash(4);
+        for (let i = 0; i < 6; i++) setTimeout(() => bubble(true), i * 70);
+      } else if (!s.raf && s.y === BOTTOM) { s.y = s.target; }
+      if (!s.raf) s.raf = requestAnimationFrame(step);
+    },
+  };
 }
 
 // ---------- Fin de tâche : une scène par type de tâche ----------
