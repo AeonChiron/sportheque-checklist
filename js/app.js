@@ -373,6 +373,35 @@ const dowOf = (iso) => (dateOf(iso).getDay() + 6) % 7; // 0 = lundi
 // Un jour = un quart habituel (id) ou des heures perso { start, end }.
 const presetOf = (v) => (v && typeof v === 'object' ? { id: 'custom', start: v.start, end: v.end } : PRESETS.find((p) => p.id === v) || null);
 const todaySched = () => presetOf(mySchedule()?.[dowOf(todayISO())]);
+// Le prochain quart à l'horaire. ready : on peut le partir, de 30 min avant le début jusqu'à la fin.
+const EARLY_MIN = 30;
+const nb = (x) => String(x).replace(/ /g, '\u00a0'); // « 7 h 30 » ne se coupe pas
+function nextShift() {
+  const sc = mySchedule();
+  if (!sc) return null;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const today = todayISO();
+  for (let i = 0; i < 8; i++) {
+    const date = addDays(today, i);
+    const p = presetOf(sc[dowOf(date)]);
+    if (!p?.start || !p?.end) continue;
+    if (i > 0) return { ...p, date, ready: false };
+    const s0 = toMin(p.start);
+    const e0 = toMin(p.end) <= s0 ? toMin(p.end) + 1440 : toMin(p.end);
+    if (editableShift() || nowMin >= e0) continue; // déjà envoyé ou fini : on regarde plus loin
+    return { ...p, date, ready: nowMin >= s0 - EARLY_MIN };
+  }
+  return null;
+}
+// « aujourd'hui », « demain (mer. 21 oct.) », « jeudi 22 oct. »
+function whenLabel(iso) {
+  const today = todayISO();
+  const short = dateOf(iso).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' });
+  if (iso === today) return t('today').toLowerCase();
+  if (iso === addDays(today, 1)) return `${t('tomorrow').toLowerCase()} (${nb(short)})`;
+  return dateOf(iso).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'short' });
+}
 const presetName = (id) => (id === 'custom' ? t('schedCustom') : (t('presets') || {})[id] || id);
 const SCHED_SHORT = { jour: 'J', soir: 'S', 'soir-court': 'SC' };
 const schedShort = (v) => (v && typeof v === 'object' ? f(toMin(v.start)).replace(' h ', 'h').replace(' h', 'h') : SCHED_SHORT[v] || '•');
@@ -460,12 +489,16 @@ function openScheduleSheet({ first = false } = {}) {
 }
 // Page « Bon quart » : pas encore d'horaire → on l'invite à l'entrer une fois;
 // congé aujourd'hui → une petite ligne pour le modifier.
+let setupNext = null; // le prochain quart montré en aperçu sur « Bon quart »
 function paintSetupSched() {
   const box = $('#setupSched');
   if (!box) return;
   if (state) { box.hidden = true; return; }
   box.hidden = false;
-  box.innerHTML = !mySchedule() || !Object.keys(mySchedule()).length
+  const nx = setupNext;
+  box.innerHTML = nx && !nx.ready
+    ? `<p class="sched-next">${ICON.clock}<span>${esc(t('setupNext', whenLabel(nx.date), nb(f(toMin(nx.start))), nb(f(toMin(nx.end)))))}</span></p>`
+    : !mySchedule() || !Object.keys(mySchedule()).length
     ? `<div class="sched-card empty"><div><b>${t('schedTitle')}</b><p>${t('schedEmpty')}</p></div><button type="button" class="btn primary" data-sched>${t('schedSet')}</button></div>`
     : todaySched() ? '' : `<p class="sched-off-line">${esc(t('schedTodayOff'))} · <button type="button" class="link" data-sched>${t('schedEdit')}</button></p>`;
   if (!box.innerHTML) box.hidden = true;
@@ -525,7 +558,8 @@ function pickPreset(id) {
   updatePreview();
 }
 
-function setupScreen() {
+function setupScreen({ next = null } = {}) {
+  setupNext = next;
   // Le matin, on propose le quart de jour; l'après-midi, celui du soir.
   // Chaque téléphone retient les dernières heures choisies pour chacun.
   const defShift = new Date().getHours() < 12 ? 1 : 2;
@@ -539,6 +573,7 @@ function setupScreen() {
   const planned = todaySched();
   $('#fStart').value = planned?.start || last?.start || SHIFTS[defShift].start;
   $('#fEnd').value = planned?.end || last?.end || SHIFTS[defShift].end;
+  if (next) { $('#fDate').value = next.date; $('#fStart').value = next.start; $('#fEnd').value = next.end; }
   showHours(false);
   renderPresets();
   paintDate();
@@ -2372,9 +2407,10 @@ $('#poolStart').addEventListener('click', (e) => {
   if (btn.classList.contains('lifting')) return;
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
-    const tp = !state && todaySched();
-    if (tp) { startScheduled(tp); return; } // jour prévu : le quart part tout seul
+    const nx = !state && nextShift();
+    if (nx?.ready) { startScheduled(nx); return; } // 30 min avant : le quart part tout seul
     window.history.replaceState(null, '', location.pathname);
+    if (nx) { setupScreen({ next: nx }); return; } // plus tard : l'aperçu de ce qui l'attend
     route();
     // Pas encore d'horaire : on le demande, une fois, pour que la prochaine fois parte toute seule.
     if (!state && current === 'setup' && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 500);
@@ -2434,10 +2470,10 @@ function paintFront() {
   if (inside) {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
     let sub = t('wbStart');
-    const tp = todaySched();
+    const nx = !state && nextShift();
     if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
-    else if (tp) sub = t('wbTodayAt', f(toMin(tp.start)), f(toMin(tp.end)));
-    else if (mySchedule()) sub = t('wbOff');
+    else if (nx?.ready) sub = t('wbReady', nb(f(toMin(nx.start))), nb(f(toMin(nx.end))));
+    else if (nx) sub = t('wbNext', whenLabel(nx.date), nb(f(toMin(nx.start))));
     label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
   } else {
@@ -2451,6 +2487,8 @@ function paintFront() {
   $('#auth').classList.toggle('inside', inside);
 }
 $('#dashFlag').addEventListener('click', () => openFlag());
+// La carte suit l'heure : 30 min avant, « Prochain quart » devient « On y va ».
+setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 30000);
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {
