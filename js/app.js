@@ -1075,22 +1075,20 @@ function renderNow() {
   if (now < plan.start) { box.innerHTML = quiet(t('startsAt', f(plan.start))); return; }
   if (now >= plan.end) { box.innerHTML = quiet(t('over')); return; }
   const open = (it) => it.kind === 'task' && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped;
-  let cur = plan.items.find((it) => it.start <= now && now < it.end);
-  if (!cur) { box.innerHTML = ''; return; }
-  // Tâche finie (même en avance) : on passe tout de suite à la suivante.
-  if (cur.kind === 'task' && !open(cur)) {
-    const ahead = plan.items.find((it) => it.start >= cur.start && open(it)) || plan.items.find(open);
-    if (!ahead) { box.innerHTML = quiet(t('allDone')); return; }
-    cur = ahead;
+  // « En cours » = ce qu'on fait vraiment : la première tâche pas encore cochée dont l'heure est arrivée,
+  // même en retard. Tout est à jour : ce que l'horaire prévoit maintenant (ou la suivante, si on est en avance).
+  const sched = plan.items.find((it) => it.start <= now && now < it.end);
+  let cur = plan.items.find((it) => open(it) && it.start <= now);
+  if (!cur) {
+    if (sched && sched.kind !== 'task') cur = sched; // la pause, à son heure
+    else cur = plan.items.find((it) => open(it) && (!sched || it.start >= sched.start)) || plan.items.find(open);
   }
+  if (!cur) { box.innerHTML = quiet(t('allDone')); return; }
   const nextIt = plan.items.find((it) => it !== cur && it.start >= cur.start && open(it));
   const next = nextIt ? `<div class="next"><span>${t('next')}</span><span class="num">${f(nextIt.start)}</span><b>${esc(nextIt.title)}</b></div>` : '';
-  // Une tâche dont l'heure est passée et pas encore cochée : un toucher pour rattraper
-  // (on coche au fil du quart plutôt que tout à la fin, et l'historique reste juste).
-  const missed = [...plan.items].reverse().find((it) => it !== cur && it.kind === 'task' && it.end <= now && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped);
-  const catchUp = missed ? `<div class="catch-up" data-id="${esc(missed.id)}"><span>${esc(t('catchUp', missed.title))}</span>
-      <button class="btn small ghost" data-act="toggle">✓ ${t('catchYes')}</button><button class="btn small ghost cu-open" data-act="open" aria-label="${esc(t('details'))}">…</button></div>` : '';
-  const remain = '';
+  const catchUp = '';
+  const late = cur.kind === 'task' && cur.end < now ? now - cur.end : 0;
+  const remain = late >= 5 ? `<span class="now-late">${esc(t('nowLate', fmtDuration(late, lang())))}</span>` : '';
   const bar = '';
   if (cur.kind !== 'task') {
     box.innerHTML = `<div class="now-card"><div class="now-head"><span class="live">${t('now')}</span>${remain}</div>

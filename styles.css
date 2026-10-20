@@ -2432,3 +2432,4 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .an-trend { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--sunk, #eee); }
 .man-list .acct-row span { display: flex; flex-direction: column; flex: 1; }
 .man-list .acct-row small { color: var(--muted); font-size: 13px; font-weight: 400; }
+.now-late { margin-left: auto; font-size: 12.5px; font-weight: 600; opacity: .9; }
