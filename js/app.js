@@ -34,7 +34,14 @@ const savePrefs = () => write(PREFS, prefs);
 let state = read(KEY, null);
 const save = () => write(KEY, state);
 let plan = null;
-const ensurePlan = () => { if (state && !plan) plan = buildPlan({ ...state, lang: lang() }); };
+// Le plan du quart en cours, avec le pointage en premier : coché tout seul en commençant (jamais à zéro).
+function shiftPlan(st) {
+  const p = buildPlan({ ...st, lang: lang() });
+  const S = p.items[0]?.start ?? 0;
+  p.items.unshift({ id: 'pointage', kind: 'task', auto: true, minutes: 0, start: S, end: S, area: 'gym', reminders: [], steps: [], tips: [], title: t('punchTitle'), summary: t('punchSub') });
+  return p;
+}
+const ensurePlan = () => { if (state && !plan) plan = shiftPlan(state); };
 
 const lang = () => (prefs.lang === 'en' ? 'en' : 'fr');
 const t = (key, ...args) => {
@@ -300,7 +307,7 @@ function setLang(l) {
   savePrefs();
   paintStatic();
   if (current === 'setup') { renderPresets(); updatePreview(); }
-  if (state && plan) plan = buildPlan({ ...state, lang: lang() });
+  if (state && plan) plan = shiftPlan(state);
   if (current === 'checklist') renderChecklist();
   if (current === 'finish') openFinish();
   if (current === 'apercu') { refCache.clear(); renderApercu({ animate: false }); }
@@ -721,7 +728,7 @@ async function loadHandoff() {
 function openChecklist() {
   paintStatic();
   loadHandoff();
-  plan = buildPlan({ ...state, lang: lang() });
+  plan = shiftPlan(state);
   setTimeout(() => document.querySelector('#taskList .task.current, #taskList .task:not(.done)')?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }), current === 'checklist' ? 0 : 450);
   renderChecklist();
   show('checklist');
@@ -743,7 +750,7 @@ function nowMinutes() {
 // Chaque type de tâche a la couleur d'un disque olympique (rouge, bleu, jaune, vert…).
 const PLATE = { accueil: 'r', fermeture: 'r', buanderie: 'b', spinning: 'b', dechets: 'y', gym: 'g', zone: 'g', surfaces: 'g', cardio: 'w', muscu: 'w', bureaux: 'k' };
 const plateOf = (it) => PLATE[it?.area] || 'k';
-const icon = (it) => `<span class="t-icon" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${illustration(it.photo)}</span>`;
+const icon = (it) => `<span class="t-icon" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? `<svg class="punch-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>` : illustration(it.photo)}</span>`;
 
 function taskRow(it, { extra = false } = {}) {
   const e = state.tasks[it.id] || {};
@@ -758,7 +765,7 @@ function taskRow(it, { extra = false } = {}) {
   if (e.remark) tags.push(`<span class="tag note">${t('remark')}</span>`);
   const time = extra
     ? `<span class="t-time num">+<small>${it.minutes} min</small></span>`
-    : `<span class="t-time num">${f(it.start)}<small>${it.minutes} min</small></span>`;
+    : `<span class="t-time num">${f(it.start)}<small>${it.auto ? '✓' : `${it.minutes} min`}</small></span>`;
   return `<li class="${cls}" data-id="${esc(it.id)}">
     <span class="swipe-under" aria-hidden="true">✓</span>
     <div class="task-inner">
@@ -900,6 +907,7 @@ function renderNow() {
 
 function renderChecklist() {
   const lock = shiftLocked();
+  if (!lock && !state.tasks.pointage?.done) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); } // pointage dès que le quart est ouvert
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -960,6 +968,7 @@ function shiftLocked() {
 }
 function lockedToast() { const l = shiftLocked(); if (l) toast(t('ovLocked', countdown(l)), 'muted'); return l; }
 function toggleDone(id) {
+  if (id === 'pointage') return; // le pointage reste coché
   if (lockedToast()) return;
   const wasAll = allDone();
   const e = entry(id);
@@ -2453,7 +2462,6 @@ function renderHistory({ animate = true } = {}) {
     <div class="segmented hi-mode" role="tablist">
       <button type="button" role="tab" data-hmode="upcoming" aria-selected="${isUp}">${esc(t('upcoming'))}</button>
       <button type="button" role="tab" data-hmode="recent" aria-selected="${hist.mode === 'recent'}">${esc(t('recent'))}</button>
-      <button type="button" role="tab" data-hmode="week" aria-selected="${isWeek}">${esc(t('byWeek'))}</button>
     </div>
     ${isWeek ? `<div class="ap-weekbar">
       <button type="button" class="icon-btn" data-hwk="-1" aria-label="${esc(t('prevWeek'))}">${CHEV_L}</button>
@@ -2533,6 +2541,7 @@ $('#poolStart').addEventListener('click', (e) => {
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
     window.history.replaceState(null, '', location.pathname);
+    if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
     if (state) { route(); return; } // quart en cours : retour aux tâches
     // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
     const nx = nextShift();
@@ -2588,6 +2597,13 @@ $('#qbVisit').addEventListener('click', () => {
 
 // La page du plancher : « Commencer » pour les nouveaux; une fois connecté,
 // « Bon retour » + le tableau de bord (quarts, trucs, signaler, aperçu).
+// Le quart ouvert est terminé (heure de fin passée) mais pas encore envoyé.
+function shiftOver() {
+  if (!state?.end) return false;
+  const end = dateOf(state.date);
+  end.setHours(0, toMin(state.end) + (toMin(state.end) <= toMin(state.start) ? 1440 : 0), 0, 0);
+  return Date.now() > end.getTime();
+}
 function paintFront() {
   const inside = Boolean(session.user);
   const first = (session.user?.name || '').split(' ')[0];
@@ -2596,11 +2612,13 @@ function paintFront() {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
     let sub = t('wbStart');
     const nx = !state && nextShift();
-    if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
+    if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = t('wbUnsent', n); }
+    else if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
     else if (nx?.ready) sub = t('wbReady');
     else if (nx) sub = t('wbPeek');
     label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
+    $('#poolStart').classList.toggle('unsent', Boolean(state && plan && shiftOver()));
   } else {
     label.textContent = t('getStarted');
     $('#poolStart').removeAttribute('aria-label');

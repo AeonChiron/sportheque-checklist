@@ -2249,3 +2249,6 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .wl-steps li.ok { color: var(--muted); }
 .wl-map { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14.5px; line-height: 1.4; }
 #sheet .sheet-foot #wlGo { flex: 1; min-height: 54px; }
+#auth.inside .pool-cta.unsent .wb-text em { color: #c2410c; font-weight: 650; }
+.t-icon .punch-ico { width: 60%; height: 60%; margin: auto; fill: none; stroke: #2bb38a; stroke-width: 2.2; stroke-linecap: round; }
+#cEyebrow { color: color-mix(in srgb, var(--muted) 75%, var(--ink)); }
