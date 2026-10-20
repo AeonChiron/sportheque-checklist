@@ -2217,3 +2217,35 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 #sheet .ov-more ol, #sheet .ov-more ul { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 4px; }
 #sheet .ov-more li { display: list-item; padding: 0; border: 0; grid-template-columns: none; font-size: 14px; }
 #sheet .ov-more .ov-tips-h { margin-top: 8px; font: 650 11px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+/* Une seule carte d'accueil : « Bon retour » + la bande du prochain quart dessous */
+#auth.inside .pool-cta { flex-wrap: wrap; row-gap: 10px; }
+#auth.inside .pool-cta .wb-strip { order: 9; flex: 1 0 100%; margin: 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); animation: none; border-radius: 18px; }
+#auth.inside .pool-cta .wb-strip[hidden] { display: none; }
+#auth.inside .pool-cta .wb-strip.ready { animation: nb-glow 2.2s ease-in-out 1s infinite; }
+.flag-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 12px; }
+.flag-chips .chip { color: var(--ink); }
+.flag-chips button.chip[aria-pressed="true"] { background: color-mix(in srgb, #3fb3e6 22%, var(--surface)); border-color: #3fb3e6; }
+.panel.supplies { margin-bottom: 14px; }
+.panel.supplies h2 { margin: 0 0 10px; font-size: 17px; }
+.team-week { margin-bottom: 14px; overflow-x: auto; }
+.team-week h2 { margin: 0 0 10px; font-size: 17px; }
+.tw-grid { display: grid; grid-template-columns: minmax(64px, auto) repeat(7, minmax(38px, 1fr)); gap: 4px; align-items: center; font-size: 13px; }
+.tw-day { text-align: center; font: 650 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tw-day.today { color: #1d7fc4; }
+.tw-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-cell { min-height: 30px; display: grid; place-items: center; border-radius: 8px; background: var(--line); opacity: .5; font: 650 12px/1 var(--display); }
+.tw-cell.on { background: color-mix(in srgb, #3fb3e6 24%, var(--surface)); opacity: 1; }
+.tw-cell.today { outline: 2px solid #1d7fc4; outline-offset: -2px; }
+.handoff-note { margin: 10px 0; padding: 10px 14px; border-radius: 16px; background: color-mix(in srgb, #8b7cf6 14%, var(--surface)); border: 1px solid color-mix(in srgb, #8b7cf6 35%, transparent); }
+.handoff-note small { font: 650 11px/1.2 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.handoff-note p { margin: 3px 0 0; font-size: 15px; }
+/* Bienvenue : la progression ne part jamais de zéro */
+.wl-bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin: 2px 0 14px; }
+.wl-bar i { display: block; height: 100%; width: var(--w); background: linear-gradient(90deg, #3fb3e6, #2563c9); border-radius: inherit; }
+.wl-steps { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+.wl-steps li { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.wl-steps li span { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); font-weight: 800; font-size: 13px; }
+.wl-steps li.ok span { background: #2bb38a; border-color: #2bb38a; color: #fff; }
+.wl-steps li.ok { color: var(--muted); }
+.wl-map { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; font-size: 14.5px; line-height: 1.4; }
+#sheet .sheet-foot #wlGo { flex: 1; min-height: 54px; }

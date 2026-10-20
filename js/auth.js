@@ -11,6 +11,8 @@ const MODE = 'gym-auth-mode';
 const DEMO_USERS = 'gym-demo-users';
 
 export const session = { mode: 'none', user: null, token: '' };
+// authEvents.user(u) : appelé quand le serveur confirme le compte (l'app reprend l'horaire gardé).
+export const authEvents = { user: null };
 
 // Visiteur : essaie l'app sans compte. Tout reste sur ce téléphone, dans un
 // espace à part (clés « visit: »), et s'efface quand il quitte.
@@ -85,6 +87,7 @@ export function initAuth(onChange) {
       session.mode = 'accounts';
       session.user = user;
       keep({ token: session.token, user, remember: saved?.remember !== false }, saved?.remember !== false);
+      authEvents.user?.(user);
     })
     .catch((err) => {
       if (err.status === 401) {

@@ -6,6 +6,9 @@ import { blobToBase64 } from './photos.js';
 import { problemId } from './problem-shape.js';
 
 const DEMO = 'gym-demo-problems';
+export const APP_TAG = '[App] ';
+// Une idée envoyée comme « Autre » (ancien serveur) redevient « Idée ou bug de l'app ».
+const unTag = (p) => (p && p.category === 'autre' && p.text?.startsWith(APP_TAG) ? { ...p, category: 'app', text: p.text.slice(APP_TAG.length) } : p);
 const readDemo = () => { try { return JSON.parse(localStorage.getItem(ns(DEMO))) || {}; } catch { return {}; } };
 const writeDemo = (all) => { try { localStorage.setItem(ns(DEMO), JSON.stringify(all)); } catch { /* plein : les photos sont lourdes */ } };
 const dataURL = (blob) => new Promise((resolve, reject) => {
@@ -25,12 +28,18 @@ export async function createProblem(p, blobs = []) {
     return id;
   }
   const photos = await Promise.all(blobs.map(blobToBase64));
-  return (await request('problems', { method: 'POST', body: { ...p, photos }, timeout: 45_000 })).id;
+  try {
+    return (await request('problems', { method: 'POST', body: { ...p, photos }, timeout: 45_000 })).id;
+  } catch (err) {
+    // Serveur pas encore à jour : une idée pour l'app part comme « Autre », marquée.
+    if (err.status !== 400 || p.category !== 'app') throw err;
+    return (await request('problems', { method: 'POST', body: { ...p, category: 'autre', text: `${APP_TAG}${p.text}`, photos }, timeout: 45_000 })).id;
+  }
 }
 
 export async function listProblems() {
   if (session.mode === 'demo') return Object.values(readDemo()).sort((a, b) => b.id.localeCompare(a.id));
-  return (await request('problems')).problems;
+  return (await request('problems')).problems.map(unTag);
 }
 
 export async function getProblem(id) {
@@ -39,7 +48,7 @@ export async function getProblem(id) {
     if (!p) throw Object.assign(new Error('missing'), { status: 404 });
     return p;
   }
-  return (await request(`problems?id=${encodeURIComponent(id)}`)).problem;
+  return unTag((await request(`problems?id=${encodeURIComponent(id)}`)).problem);
 }
 
 export async function setProblemStatus(id, status) {

@@ -22,6 +22,7 @@ export function sanitizeShift(raw) {
     end: str(raw.end, 5),
     submittedAt: str(raw.submittedAt, 30),
     notes: str(raw.notes, 1000),
+    handoff: str(raw.handoff, 200), // un mot pour le prochain quart
     done: count(raw.done),
     total: count(raw.total),
     items: (Array.isArray(raw.items) ? raw.items : []).slice(0, 40).map((i) => ({

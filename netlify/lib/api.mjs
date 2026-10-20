@@ -37,7 +37,15 @@ const sameText = (a, b) => {
   const y = Buffer.from(String(b));
   return x.length === y.length && timingSafeEqual(x, y);
 };
-const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: u.role === 'boss' && u.alerts === true });
+// L'horaire de la semaine : { '0'..'6' (lundi = 0) : { start, end } } — suit la personne d'un téléphone à l'autre.
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+function cleanSchedule(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw)) if (/^[0-6]$/.test(k) && v && HHMM.test(v.start) && HHMM.test(v.end)) out[k] = { start: v.start, end: v.end };
+  return out;
+}
+const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: u.role === 'boss' && u.alerts === true, schedule: cleanSchedule(u.schedule) });
 // Courriels des problèmes urgents : par défaut, les superviseurs marqués
 // alerts dans la config (Daniel); les autres peuvent s'abonner eux-mêmes.
 const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
@@ -107,6 +115,13 @@ export function createApi({ getStore, env }) {
       if (!ok) return json({ error: 'login' }, 401);
       return json({ token: await newSession(email), user: publicUser(u) });
     }
+    if (b.action === 'schedule') {
+      const u = await currentUser(req);
+      if (!u) return json({ error: 'auth' }, 401);
+      u.schedule = cleanSchedule(b.schedule);
+      await users().setJSON(u.email, u);
+      return json({ user: publicUser(u) });
+    }
     if (b.action === 'alerts') {
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
@@ -159,10 +174,10 @@ export function createApi({ getStore, env }) {
     if (req.method === 'GET') {
       const params = new URL(req.url).searchParams;
       if (params.has('recent')) {
-        // Les jours les plus récents d'abord, jusqu'à avoir assez de quarts (au plus 45 jours).
-        const want = Math.min(Math.max(Number(params.get('recent')) || 40, 1), 120);
+        // Les jours les plus récents d'abord, jusqu'à avoir assez de quarts (tout l'historique au besoin).
+        const want = Math.min(Math.max(Number(params.get('recent')) || 40, 1), 1000);
         const { blobs } = await store.list();
-        const dates = blobs.map((x) => x.key).filter((k) => DATE.test(k)).sort().reverse().slice(0, 45);
+        const dates = blobs.map((x) => x.key).filter((k) => DATE.test(k)).sort().reverse().slice(0, 1500);
         const days = {};
         let n = 0;
         for (const d of dates) {

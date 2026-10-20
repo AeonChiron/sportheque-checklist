@@ -11,6 +11,7 @@ export const CATEGORIES = {
   toilettes: { fr: 'Toilettes ou vestiaire', en: 'Washroom or locker room', urgent: false },
   batiment: { fr: 'Bâtiment (lumière, porte, fuite)', en: 'Building (light, door, leak)', urgent: false },
   objet: { fr: 'Objet trouvé ou oublié', en: 'Lost or found item', urgent: false },
+  app: { fr: 'Idée ou bug de l’app', en: 'App idea or bug', urgent: false },
   autre: { fr: 'Autre', en: 'Other', urgent: false },
 };
 
@@ -31,7 +32,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export function sanitizeProblem(raw) {
   if (!raw || typeof raw !== 'object' || !CATEGORIES[raw.category]) return null;
   const text = str(raw.text, 600);
-  if (raw.category === 'autre' && !text) return null;
+  if ((raw.category === 'autre' || raw.category === 'app') && !text) return null;
   return {
     category: raw.category,
     location: str(raw.location, 80),

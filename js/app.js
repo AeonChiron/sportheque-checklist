@@ -6,7 +6,7 @@ import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
 import { mountGlass, playFinish, fxSound } from './fx.js';
-import { session, accounts, isBoss, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
+import { session, accounts, isBoss, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
@@ -375,7 +375,29 @@ function syncPresets() {
 // « Bon retour » part le quart avec les bonnes heures, sans formulaire.
 const schedKey = () => session.user?.email || 'local';
 const mySchedule = () => (prefs.schedules || {})[schedKey()] || null;
-function saveSchedule(sc) { prefs.schedules = { ...(prefs.schedules || {}), [schedKey()]: sc }; savePrefs(); }
+function saveSchedule(sc, { push = true } = {}) {
+  prefs.schedules = { ...(prefs.schedules || {}), [schedKey()]: sc };
+  savePrefs();
+  if (push) pushSchedule(sc);
+}
+// L'horaire suit le compte (serveur) : envoyé un instant après le dernier changement.
+// Un serveur pas encore à jour répond « action inconnue » : on garde la copie du téléphone.
+function pushSchedule(sc) {
+  if (session.mode !== 'accounts' || !session.token) return;
+  clearTimeout(pushSchedule.timer);
+  pushSchedule.timer = setTimeout(() => request('auth', { method: 'POST', body: { action: 'schedule', schedule: sc } }).catch(() => {}), 900);
+}
+// Le serveur connaît l'horaire : on le prend. Il ne le connaît pas encore : on lui envoie celui du téléphone.
+function adoptSchedule(u) {
+  if (!u?.email) return;
+  if (u.schedule && Object.keys(u.schedule).length) {
+    if (JSON.stringify(u.schedule) === JSON.stringify(mySchedule())) return;
+    saveSchedule(u.schedule, { push: false });
+    if (current === 'auth') paintFront();
+    if (current === 'history') renderHistory({ animate: false });
+  } else if (mySchedule() && Object.keys(mySchedule()).length) pushSchedule(mySchedule());
+}
+authEvents.user = adoptSchedule;
 const dowOf = (iso) => (dateOf(iso).getDay() + 6) % 7; // 0 = lundi
 // Un jour = un quart habituel (id) ou des heures perso { start, end }.
 const presetOf = (v) => (v && typeof v === 'object' ? { id: 'custom', start: v.start, end: v.end } : PRESETS.find((p) => p.id === v) || null);
@@ -491,7 +513,8 @@ function openScheduleSheet({ first = false } = {}) {
     $('#schedDone').onclick = () => {
       commit(); closeSheet(); toast(t('schedSaved'));
     };
-    $('#schedLater')?.addEventListener('click', closeSheet);
+    $('#schedLater')?.addEventListener('click', () => { closeSheet(); if (first) setTimeout(maybeWelcome, 450); });
+    if (first) $('#schedDone').addEventListener('click', () => setTimeout(maybeWelcome, 450));
   }, `${first ? `<button type="button" class="btn ghost" id="schedLater">${t('schedLater')}</button>` : ''}<button type="button" class="btn primary" id="schedDone">${t(first ? 'schedDoneFirst' : 'save')}</button>`);
 }
 // Page « Bon quart » : pas encore d'horaire → on l'invite à l'entrer une fois;
@@ -509,6 +532,26 @@ function paintSetupSched() {
     ? `<div class="sched-card empty"><div><b>${t('schedTitle')}</b><p>${t('schedEmpty')}</p></div><button type="button" class="btn primary" data-sched>${t('schedSet')}</button></div>`
     : todaySched() ? '' : `<p class="sched-off-line">${esc(t('schedTodayOff'))} · <button type="button" class="link" data-sched>${t('schedEdit')}</button></p>`;
   if (!box.innerHTML) box.hidden = true;
+}
+// Bienvenue (une fois par compte) : où on en est (jamais à zéro : le compte est déjà fait)
+// et les trois endroits à connaître.
+function maybeWelcome() {
+  const key = session.user?.email;
+  if (!key || prefs.welcomed?.[key] || !$('#sheet').hidden) return;
+  prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true };
+  savePrefs();
+  const hasSched = Boolean(mySchedule() && Object.keys(mySchedule()).length);
+  const steps = [[true, t('wlAccount')], [hasSched, t('wlSchedule')], [false, t('wlFirst')]];
+  const done = steps.filter((x) => x[0]).length;
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${esc(t('wlEyebrow', done, steps.length))}</p><h2>${esc(t('wlTitle', (session.user.name || '').split(' ')[0]))}</h2></div>
+    <div class="wl-bar" aria-hidden="true"><i style="--w:${Math.round((100 * done) / steps.length)}%"></i></div>
+    <ol class="wl-steps">${steps.map(([ok, label]) => `<li class="${ok ? 'ok' : ''}"><span>${ok ? '✓' : ''}</span>${esc(label)}</li>`).join('')}</ol>
+    <p class="block-label">${esc(t('wlWhere'))}</p>
+    <ul class="wl-map"><li><b>${esc(t('wlCard'))}</b>${esc(t('wlCardSub'))}</li><li><b>${esc(t('dashShifts'))}</b>${esc(t('wlShiftsSub'))}</li><li><b>${esc(t('dashFlag'))}</b>${esc(t('wlFlagSub'))}</li></ul>`,
+  () => {
+    $('#wlGo').onclick = closeSheet;
+    $('#wlSched')?.addEventListener('click', () => { closeSheet(); setTimeout(() => openScheduleSheet(), 350); });
+  }, `${hasSched ? '' : `<button type="button" class="btn ghost" id="wlSched">${t('schedSet')}</button>`}<button type="button" class="btn primary" id="wlGo">${t('wlGo')}</button>`);
 }
 // Carte « Mon horaire » en haut de Mes shifts.
 function schedCard() {
@@ -665,8 +708,19 @@ $('#setupForm').addEventListener('submit', (ev) => {
 });
 
 // ---------- 2. Checklist ----------
+// Le mot laissé par le quart d'avant (2 derniers jours), en haut des tâches.
+let handoff = null;
+async function loadHandoff() {
+  if (!state) return;
+  const { shifts } = await loadRecent(12).catch(() => ({ shifts: [] }));
+  const mine = (s) => s.date === state.date && s.shift === state.shift && s.name === state.name;
+  const h = shifts.find((s) => s.handoff && !mine(s) && s.date >= addDays(state.date, -2) && s.date <= state.date);
+  handoff = h ? { text: h.handoff, by: h.name, date: h.date } : null;
+  if (current === 'checklist') renderChecklist();
+}
 function openChecklist() {
   paintStatic();
+  loadHandoff();
   plan = buildPlan({ ...state, lang: lang() });
   setTimeout(() => document.querySelector('#taskList .task.current, #taskList .task:not(.done)')?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }), current === 'checklist' ? 0 : 450);
   renderChecklist();
@@ -851,6 +905,10 @@ function renderChecklist() {
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
   note.hidden = !lock;
   if (lock) note.textContent = `${t('ovFuture')} ${t('ovLocked', countdown(lock))}.`;
+  let hn = $('#handoffNote');
+  if (!hn) { hn = document.createElement('div'); hn.id = 'handoffNote'; hn.className = 'handoff-note'; note.after(hn); }
+  hn.hidden = !handoff;
+  if (handoff) hn.innerHTML = `<small>${esc(t('handoffFrom', handoff.by.split(' ')[0]))}</small><p>${esc(handoff.text)}</p>`;
   const tasks = planTasks();
   const done = tasks.filter((x) => state.tasks[x.id]?.done).length;
   const d = plan.day;
@@ -1374,6 +1432,7 @@ $('#flagBtn').addEventListener('click', () => openFlag());
 $('#flagHome').addEventListener('click', () => openFlag());
 
 const CAT_ICON = {
+  app: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
   machine: '<path d="M15 3.5a4.5 4.5 0 0 0-4.3 5.9l-6.3 6.3a2 2 0 0 0 2.8 2.8l6.3-6.3A4.5 4.5 0 0 0 19.4 7l-2.7 2.7-2.4-.5-.5-2.4L16.5 4a4.5 4.5 0 0 0-1.5-.5z"/>',
   degat: '<path d="M12 3c3 4 5 6.6 5 9.2A5 5 0 0 1 7 12.2C7 9.6 9 7 12 3z"/><path d="M4 20c2-1 4-1 6 0s4 1 6 0 3-1 4 0"/>',
   blessure: '<rect x="4" y="8" width="16" height="10" rx="2"/><path d="M9 8V6h6v2M12 10.5v5M9.5 13h5"/>',
@@ -1416,6 +1475,7 @@ function openFlag({ where = '' } = {}) {
         <input id="flagWhere" list="areaList" placeholder="${esc(t('wherePh'))}" value="${esc(where)}">
         <datalist id="areaList">${Object.values(AREAS).map((a) => `<option value="${esc(a[lang()])}">`).join('')}</datalist>
       </label>
+      <div class="flag-chips" id="flagChips" hidden>${t('supplyChips').map((c) => `<button type="button" class="chip" data-supply="${esc(c)}">${esc(c)}</button>`).join('')}</div>
       <label class="field"><span id="flagWhatLabel">${t('whatOpt')}</span>
         <textarea id="flagText" rows="2" placeholder="${esc(t('whatPh'))}"></textarea>
       </label>
@@ -1439,9 +1499,11 @@ function openFlag({ where = '' } = {}) {
       root.querySelector('#flagUrgQ').textContent = t('urgentQ', sup);
       root.querySelector('#flagUrgSub').textContent = t('urgentYesSub', sup);
       for (const b of root.querySelectorAll('[data-urg]')) b.setAttribute('aria-checked', String(u !== null && (b.dataset.urg === '1') === u));
-      root.querySelector('#flagWhatLabel').textContent = t(category === 'autre' ? 'whatNeeded' : 'whatOpt');
+      const needText = category === 'autre' || category === 'app';
+      root.querySelector('#flagWhatLabel').textContent = t(category === 'app' ? 'appWhat' : needText ? 'whatNeeded' : 'whatOpt');
+      root.querySelector('#flagChips').hidden = category !== 'materiel';
       saveBtn.textContent = u ? t('flagSend', sup) : t('add');
-      saveBtn.disabled = !category || (category === 'autre' && !text.value.trim());
+      saveBtn.disabled = !category || (needText && !text.value.trim());
     };
     mountPhotos(root, photos, () => {});
     refreshAlerts().then(() => { if (root.contains(text)) paint(); });
@@ -1452,7 +1514,17 @@ function openFlag({ where = '' } = {}) {
         const more = root.querySelector('.flag-more');
         if (more.hidden) { more.hidden = false; more.classList.add('reveal'); }
         paint();
-        if (category === 'autre') text.focus();
+        if (category === 'autre' || category === 'app') text.focus();
+      };
+    }
+    // Matériel manquant : un toucher ajoute l'item (sacs, produit, papier…).
+    for (const c of root.querySelectorAll('[data-supply]')) {
+      c.onclick = () => {
+        const items = text.value.split(',').map((x) => x.trim()).filter(Boolean);
+        const on = !items.includes(c.dataset.supply);
+        text.value = (on ? [...items, c.dataset.supply] : items.filter((x) => x !== c.dataset.supply)).join(', ');
+        c.setAttribute('aria-pressed', String(on));
+        paint();
       };
     }
     for (const b of root.querySelectorAll('[data-urg]')) b.onclick = () => { urgent = b.dataset.urg === '1'; paint(); };
@@ -1634,6 +1706,7 @@ $('#menuBtn').addEventListener('click', () => {
 $('#finishBtn').addEventListener('click', openFinish);
 $('#backBtn').addEventListener('click', () => { renderChecklist(); show('checklist'); });
 $('#fNotes').addEventListener('input', (ev) => { state.notes = ev.target.value; save(); });
+$('#fHandoff').addEventListener('input', (ev) => { state.handoff = ev.target.value; save(); });
 
 function openFinish() {
   paintStatic();
@@ -1656,6 +1729,7 @@ function openFinish() {
         <button class="btn small ghost" data-act="done" aria-label="${esc(t('done'))}">✓</button><button class="btn small flag" data-act="skip" aria-label="${esc(t('notDone'))}">✕</button></div>`).join('')}
     </div>` : `<div class="notice ok"><b>${t('allChecked')}</b></div>`}`;
   $('#fNotes').value = state.notes || '';
+  $('#fHandoff').value = state.handoff || '';
   $('#sendBtn').textContent = t('saveShift');
   $('#sendBtn').disabled = false;
   if (current !== 'finish') countUp($('#finishSummary'));
@@ -1689,6 +1763,7 @@ function boardSummary() {
     shift: state.shift,
     name: state.name,
     supervisor: state.supervisor || '',
+    handoff: (state.handoff || '').trim(),
     done: planTasks().filter((x) => state.tasks[x.id]?.done).length,
     total: planTasks().length,
     start: state.start,
@@ -2531,6 +2606,7 @@ function paintFront() {
     $('#poolStart').removeAttribute('aria-label');
   }
   paintNextBox(inside);
+  if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
   $('#poolDash').hidden = !inside;
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
@@ -2562,7 +2638,8 @@ function paintNextBox(inside) {
   const left = Math.ceil((at - Date.now()) / 6e4);
   const go = left <= 0;
   box.classList.toggle('ready', nx.ready);
-  box.setAttribute('aria-label', `${t(nx.ready ? 'nbNow' : 'nbNext')} : ${whenLabel(nx.date)}, ${f(toMin(nx.start))} – ${f(toMin(nx.end))}. ${go ? t('nbGo') : `${t('nbIn')} ${countdown(left)}`}`);
+  // Une seule carte : la bande dorée fait partie du bouton « Bon retour » (le lecteur d'écran lit tout).
+  $('#poolStart').setAttribute('aria-label', `${t('welcomeBackName', (session.user?.name || '').split(' ')[0])}. ${t(nx.ready ? 'nbNow' : 'nbNext')} : ${whenLabel(nx.date)}, ${f(toMin(nx.start))} – ${f(toMin(nx.end))}. ${go ? t('nbGo') : `${t('nbIn')} ${countdown(left)}`}`);
   box.innerHTML = `<span class="nb-ico" aria-hidden="true">${ICON.clock}</span>
     <span class="nb-text"><small>${esc(t(nx.ready ? 'nbNow' : 'nbNext'))}</small><b>${esc(dayWord(nx.date))}</b><em>${nx.date === todayISO() ? `${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}` : `${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))} · ${nb(f(toMin(nx.start)))}`}</em></span>
     <span class="nb-count"><small>${esc(go ? t('nbGo') : t('nbIn'))}</small><b class="num">${esc(go ? t('nbGoBig') : countdown(left))}</b></span>`;
@@ -2582,7 +2659,6 @@ function openNextOverview(pick) {
     $('#ovTime').onclick = () => { closeSheet(); window.history.replaceState(null, '', location.pathname); setupScreen(); };
   }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || (nx.ready && !state) ? '' : ' disabled'}>${live ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
 }
-$('#poolNext').addEventListener('click', () => openNextOverview());
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
 setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 20000);
 
@@ -2647,6 +2723,7 @@ $('#authForm').addEventListener('submit', async (ev) => {
     const user = await signIn(up ? 'signup' : 'login', fields, $('#aRemember').checked);
     prefs.name = user.name;
     if (!mySchedule() && prefs.schedules?.local) saveSchedule(prefs.schedules.local); // l'horaire suit la personne
+    adoptSchedule(user);
     savePrefs();
     $('#aPass').value = '';
     $('#aCode').value = '';
@@ -2761,6 +2838,18 @@ function problemCard(p, i) {
     </span>${CHEV_R}</button>`;
 }
 
+// La semaine de l'équipe : qui travaille quel jour (l'horaire que chacun a entré).
+function teamWeek() {
+  // Démo : les horaires gardés sur ce téléphone font l'affaire.
+  const rows = (boss.team || []).map((u) => ({ ...u, schedule: u.schedule && Object.keys(u.schedule).length ? u.schedule : prefs.schedules?.[u.email] })).filter((u) => u.schedule && Object.keys(u.schedule).length);
+  if (!rows.length) return '';
+  const days = WEEKDAYS[lang()];
+  const ti = dowOf(todayISO());
+  return `<div class="panel team-week"><h2>${esc(t('teamWeek'))}</h2><div class="tw-grid" style="--n:${rows.length}">
+    <span></span>${days.map((d, i) => `<span class="tw-day${i === ti ? ' today' : ''}">${esc(cap(d).slice(0, 3))}</span>`).join('')}
+    ${rows.map((u) => `<b class="tw-name">${esc(u.name.split(' ')[0])}</b>${days.map((_, i) => { const v = u.schedule[i]; return `<span class="tw-cell${v ? ' on' : ''}${i === ti ? ' today' : ''}">${v ? esc(schedShort(v)) : ''}</span>`; }).join('')}`).join('')}
+  </div></div>`;
+}
 function renderBoss({ animate = true } = {}) {
   $('#bossEyebrow').textContent = [CONFIG.gymName, session.user?.name].filter(Boolean).join(' · ');
   const n = openCount();
@@ -2768,7 +2857,7 @@ function renderBoss({ animate = true } = {}) {
   if (boss.tab === 'trends') panel = boss.trendLoaded ? trendsPanel() : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>';
   else if (boss.tab === 'team') {
     panel = !boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
-      : `<p class="section-note">${esc(t('teamHint'))}</p>
+      : `${teamWeek()}<p class="section-note">${esc(t('teamHint'))}</p>
         <div class="panel team-list">${boss.team.map((u) => `<div class="team-row" data-email="${esc(u.email)}">
           <div class="team-who"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
           <span class="pill">${esc(t(u.role === 'boss' ? 'roleBoss' : 'roleEmployee'))}</span>
@@ -2778,8 +2867,14 @@ function renderBoss({ animate = true } = {}) {
         </div>`).join('')}</div>`;
   } else {
     const list = boss.filter === 'open' ? boss.problems.filter((p) => p.status !== 'resolved') : boss.problems;
+    // À commander : ce que les signalements « Matériel manquant » encore ouverts demandent.
+    const need = new Map();
+    for (const p of boss.problems.filter((x) => x.category === 'materiel' && x.status !== 'resolved')) {
+      for (const it of (p.text || t('materielNoText')).split(',').map((x) => x.trim()).filter(Boolean)) need.set(it, (need.get(it) || 0) + 1);
+    }
+    const supplies = need.size ? `<div class="panel supplies"><h2>${esc(t('toOrder'))}</h2><div class="flag-chips">${[...need].sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="chip"><b>${esc(k)}</b>${n > 1 ? ` ×${n}` : ''}</span>`).join('')}</div></div>` : '';
     panel = !boss.loaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-      : `<div class="segmented tiny pb-filter" role="tablist">
+      : `${supplies}<div class="segmented tiny pb-filter" role="tablist">
           <button type="button" role="tab" data-pfilter="open" aria-selected="${boss.filter === 'open'}">${esc(t('toFix'))}${n ? ` · ${n}` : ''}</button>
           <button type="button" role="tab" data-pfilter="all" aria-selected="${boss.filter === 'all'}">${esc(t('allProblems'))}</button>
         </div>
@@ -2996,6 +3091,13 @@ function trendsPanel() {
         </div>`;
       }).join('') : `<p class="tr-good">✓ ${esc(t('nothingSlips'))}</p>`}
     </div>
+    ${(() => {
+      // Revient souvent : même catégorie au même endroit, au moins deux fois en 30 jours.
+      const rep = new Map();
+      for (const x of problems) { const k = `${x.category}|${(x.location || '').trim().toLowerCase()}`; const r = rep.get(k) || { cat: x.category, where: x.location || '', n: 0 }; r.n += 1; rep.set(k, r); }
+      const often = [...rep.values()].filter((r) => r.n >= 2).sort((a, b) => b.n - a.n).slice(0, 5);
+      return often.length ? `<div class="panel trend"><h2>${esc(t('oftenTitle'))}</h2>${often.map((r) => `<div class="tr-row"><div class="tr-top"><b>${esc(catName(r.cat))}${r.where ? ` · ${esc(r.where)}` : ''}</b><span class="num">${esc(t('nTimes', r.n))}</span></div></div>`).join('')}</div>` : '';
+    })()}
     <div class="panel trend">
       <h2>${esc(t('problemsByCat'))}</h2>
       ${byCat.length ? byCat.map(([k, n]) => `<div class="tr-row">

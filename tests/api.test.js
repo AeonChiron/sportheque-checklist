@@ -19,7 +19,7 @@ test('Inscription : il faut le bon code pour chaque rôle', async () => {
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'marie@x.ca', password: 'secret1', role: 'boss', code: 'equipe' } })).status, 403);
   const ok = await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'Marie@X.ca', password: 'secret1', role: 'employee', code: ' equipe ' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false });
+  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false, schedule: {} });
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'M', email: 'marie@x.ca', password: 'secret1', code: 'equipe' } })).status, 409);
   const me = await call('auth', { token: ok.data.token });
   assert.equal(me.data.user.name, 'Marie');
@@ -105,4 +105,15 @@ test('Un quart se modifie le jour même seulement; photos effacées après 90 jo
   assert.equal((await go('problems', { category: 'machine' }, token)).status, 200);
   assert.equal(await stores('problem-photos').get(`${oldId}-0`), null);
   assert.equal((await stores('problems').get(oldId, { type: 'json' })).photosExpired, 1);
+});
+
+test('Horaire : gardé avec le compte, propre, visible par le superviseur', async () => {
+  const emp = (await call('auth', { method: 'POST', body: { action: 'signup', name: 'Lina', email: 'lina-h@t.ca', password: 'secret12', role: 'employee', code: 'Equipe' } })).data;
+  const sched = { 1: { start: '07:30', end: '15:30' }, 9: { start: '07:00', end: '08:00' }, 3: { start: '25:00', end: '10:00' } };
+  const r = (await call('auth', { method: 'POST', token: emp.token, body: { action: 'schedule', schedule: sched } })).data;
+  assert.deepEqual(r.user.schedule, { 1: { start: '07:30', end: '15:30' } });
+  assert.deepEqual((await call('auth', { token: emp.token })).data.user.schedule, { 1: { start: '07:30', end: '15:30' } });
+  const boss = (await call('auth', { method: 'POST', body: { action: 'signup', name: 'Dan', email: 'dan-h@t.ca', password: 'secret12', role: 'boss', code: 'Patron' } })).data;
+  const team = (await call('users', { token: boss.token })).data;
+  assert.deepEqual(team.users.find((u) => u.email === 'lina-h@t.ca').schedule, { 1: { start: '07:30', end: '15:30' } });
 });
