@@ -61,6 +61,7 @@ const RANK = { poster: 6, auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, a
 function show(id) {
   const prev = current;
   current = id;
+  if (id !== 'checklist' && $('#momentAllDone')?.classList.contains('on')) hideAllDone(); // jamais par-dessus un autre écran
   ensurePlan();
   paintShiftPill();
   const target = document.getElementById(id);
