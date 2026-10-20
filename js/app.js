@@ -752,6 +752,15 @@ document.addEventListener('click', (ev) => {
   openApercu();
 });
 // Un jour prévu à l'horaire : le quart part tout seul, avec les bonnes heures.
+// Un quart d'aujourd'hui où rien n'est coché suit l'horaire : des heures restées d'avant
+// (ex. un soir choisi sur l'ancienne page) ne restent pas collées.
+function dropStaleShift() {
+  const tp = todaySched();
+  if (!state || state.date !== todayISO() || !tp?.start) return;
+  if (tp.start === state.start && tp.end === state.end) return;
+  if (Object.values(state.tasks || {}).some((x) => x.done) || state.flags?.length) return;
+  state = null; save();
+}
 function startScheduled(p) {
   state = {
     name: shiftName(),
@@ -2803,6 +2812,7 @@ $('#poolStart').addEventListener('click', (e) => {
     if (!session.user) { authSheet(true, 'signup'); return; }
     window.history.replaceState(null, '', location.pathname);
     if (bossWatching()) { if (e.target.closest('#poolNext')) $('#dashBoss').click(); else openHistory({ team: true }); return; } // le patron : sa bande ouvre l'espace superviseur, le reste la journée de l'équipe
+    dropStaleShift();
     if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
     if (state) { route(); return; } // quart en cours : retour aux tâches
     // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
@@ -3696,6 +3706,7 @@ function route() {
   if (h === '#affiche') return openPoster();
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();
+  dropStaleShift();
   if (state?.name && state?.date) return openChecklist();
   if (session.user) return goFront(); // l'accueil (lapin, horaire) fait tout; la page « heures » sert aux heures spéciales
   return setupScreen();
