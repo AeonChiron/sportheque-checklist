@@ -2178,3 +2178,13 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 @media (max-height: 700px) {
   .pool-head .pool-gym { font-size: clamp(44px, 12.5vw, 60px); }
 }
+/* Aperçu du prochain quart (boîte dorée) */
+.ov-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.ov-list li { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.ov-list li .num { color: var(--muted); font-weight: 600; }
+.ov-list li.break b { color: var(--muted); font-weight: 600; }
+#sheet .ov-list li { background: none; border-radius: 0; box-shadow: none; min-height: 0; margin: 0; padding: 7px 2px; grid-template-columns: 62px 1fr; font-size: 14.5px; }
+#sheet .ov-list li b { font-weight: 600; }
+#sheet .sheet-foot:has(#ovGo) { display: grid; grid-template-columns: 1fr; gap: 8px; }
+#sheet .sheet-foot #ovGo { order: -1; width: 100%; min-height: 56px; font-size: 17px; }
+#sheet .sheet-foot #ovTime { width: 100%; }

@@ -2413,13 +2413,12 @@ $('#poolStart').addEventListener('click', (e) => {
   if (btn.classList.contains('lifting')) return;
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
-    const nx = !state && nextShift();
-    if (nx?.ready) { startScheduled(nx); return; } // 30 min avant : le quart part tout seul
     window.history.replaceState(null, '', location.pathname);
-    if (nx) { setupScreen({ next: nx }); return; } // plus tard : l'aperçu de ce qui l'attend
-    route();
-    // Pas encore d'horaire : on le demande, une fois, pour que la prochaine fois parte toute seule.
-    if (!state && current === 'setup' && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 500);
+    if (state) { route(); return; } // quart en cours : retour aux tâches
+    // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
+    const nx = nextShift();
+    if (nx) { startScheduled(nx); return; }
+    openScheduleSheet({ first: true }); // pas encore d'horaire : on l'entre, une fois
   };
   if (reducedMotion()) { go(); return; }
   btn.classList.add('lifting');
@@ -2523,7 +2522,18 @@ function paintNextBox(inside) {
     <span class="nb-text"><small>${esc(t(nx.ready ? 'nbNow' : 'nbNext'))}</small><b>${esc(dayWord(nx.date))}</b><em>${nx.date === todayISO() ? `${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}` : `${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))} · ${nb(f(toMin(nx.start)))}`}</em></span>
     <span class="nb-count"><small>${esc(go ? t('nbGo') : t('nbIn'))}</small><b class="num">${esc(go ? t('nbGoBig') : countdown(left))}</b></span>`;
 }
-$('#poolNext').addEventListener('click', () => $('#poolStart').click());
+// La boîte dorée : l'aperçu du quart en bref, puis « Commencer » ou « Changer l'heure ».
+function openNextOverview() {
+  const nx = !state && nextShift();
+  if (!nx) return;
+  const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
+  const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`).join('');
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div><ol class="ov-list">${rows}</ol>`, () => {
+    $('#ovGo').onclick = () => { closeSheet(); startScheduled(nx); };
+    $('#ovTime').onclick = () => { closeSheet(); window.history.replaceState(null, '', location.pathname); setupScreen(); };
+  }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo">${t('ovStart')}</button>`);
+}
+$('#poolNext').addEventListener('click', openNextOverview);
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
 setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 20000);
 
