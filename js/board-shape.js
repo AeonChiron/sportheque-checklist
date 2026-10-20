@@ -79,5 +79,5 @@ export function recentShifts(remoteByDate, localByDate, n = 40) {
   const all = dates.flatMap((d) => combineDay(remoteByDate?.[d] || [], localByDate?.[d] || []));
   return all
     .sort((a, b) => (b.submittedAt || b.date).localeCompare(a.submittedAt || a.date) || b.date.localeCompare(a.date))
-    .slice(0, Math.max(1, Math.min(n, 200)));
+    .slice(0, Math.max(1, Math.min(n, 1000)));
 }
