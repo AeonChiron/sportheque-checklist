@@ -2402,3 +2402,9 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .work-row[aria-checked="true"] .switch::after { transform: translateX(18px); }
 .pic-cheer { font-size: 16px; font-weight: 600; color: var(--ink); text-align: center; }
 .next-box.nb-boss { color: #fff; background: linear-gradient(140deg, #24456f, #10233f); box-shadow: 0 14px 28px -14px rgba(10, 30, 60, .8), inset 0 1px 0 rgba(255, 255, 255, .2); animation: rise-in .7s cubic-bezier(.2, .9, .3, 1.2) .35s both; grid-template-columns: auto 1fr; }
+.qs-own-btn { border-style: dashed !important; }
+.qs-own-btn span { color: var(--muted); font-weight: 500; }
+.qs-own { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0 4px; }
+.qs-own[hidden] { display: none; }
+.qs-own input { font-size: 20px; font-weight: 700; width: 100%; }
+.qs-custom { display: block; margin: 18px auto 0; }
