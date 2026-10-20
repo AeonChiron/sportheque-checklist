@@ -443,9 +443,10 @@ export const SHIFTS = {
           steps: [
             'Écrans du cardio : **guenille sèche**, juste pour enlever les traces de doigts. Pas besoin de produit.',
             'Même guenille : le devant et l’**arrière du cardio**, les logos et les panneaux, jusqu’à ce qu’il reste plus de poussière.',
+            'Désinfecte les **machines les plus utilisées** (pas toutes) : vaporise-en une dizaine de la même section, puis **reviens à la première** et tapote doucement. Au moins 30 secondes.',
             'Remets les poids, les accessoires et les bancs à leur place. Ramasse les petits déchets dans les allées.',
           ],
-          tips: [...DUST.fr, 'Les poignées et les sièges des autres machines, c’est à 10 h.'],
+          tips: [...DUST.fr, 'Les autres machines, c’est à 10 h.'],
         },
         en: {
           title: 'General disinfection',
@@ -453,9 +454,10 @@ export const SHIFTS = {
           steps: [
             'Cardio screens: **dry rag**, just to wipe off fingerprints. No product needed.',
             'Same rag: the front and **back of the cardio**, logos and panels, until there’s no dust left.',
+            'Disinfect the **most-used machines** (not all of them): spray about ten in the same section, then **go back to the first** and pat gently. At least 30 seconds.',
             'Put weights, accessories and benches back. Pick up small trash in the aisles.',
           ],
-          tips: [...DUST.en, 'Handles and seats on the other machines are at 10:00.'],
+          tips: [...DUST.en, 'The other machines are at 10:00.'],
         },
       },
       {
@@ -732,21 +734,23 @@ export const SHIFTS = {
           title: 'Désinfection générale',
           summary: 'Points de contact, écrans, surfaces.',
           steps: [
-            'Points de contact : poignées, sièges, dossiers, **machines de bench**, réglages. Enlève les traces de sueur.',
+            'Points de contact : poignées, sièges, dossiers, **machines de bench**, réglages. Commence par les **machines les plus utilisées**.',
+            'Vaporise une dizaine de machines de la même section, puis **reviens à la première** et tapote doucement. Au moins 30 secondes. Enlève les traces de sueur.',
             'Écrans : **guenille sèche**, juste pour les traces de doigts. Pas besoin de produit.',
             'Au besoin : tablettes, thermostats, télés, boîtiers Vidéotron, distributeurs de papier, miroirs.',
           ],
-          tips: [SECONDS30.fr, ...DUST.fr, 'À faire même si le matin l’a fait.'],
+          tips: [...DUST.fr, 'À faire même si le matin l’a fait.'],
         },
         en: {
           title: 'General disinfection',
           summary: 'Touch points, screens, surfaces.',
           steps: [
-            'Touch points: handles, seats, backrests, **bench machines**, adjusters. Wipe off sweat.',
+            'Touch points: handles, seats, backrests, **bench machines**, adjusters. Start with the **most-used machines**.',
+            'Spray about ten machines in the same section, then **go back to the first** and pat gently. At least 30 seconds. Wipe off sweat.',
             'Screens: **dry rag**, just for fingerprints. No product needed.',
             'As needed: shelves, thermostats, TVs, Vidéotron boxes, paper dispensers, mirrors.',
           ],
-          tips: [SECONDS30.en, ...DUST.en, 'Do it even if the morning shift did.'],
+          tips: [...DUST.en, 'Do it even if the morning shift did.'],
         },
       },
       {
