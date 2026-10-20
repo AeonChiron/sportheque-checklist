@@ -462,9 +462,42 @@ function schedEditor(sc) {
       </div></div>`;
   }).join('')}</div>`;
 }
-function openScheduleSheet({ first = false } = {}) {
+// Pas encore d'horaire : un choix rapide (le quart habituel + les jours, lundi à vendredi déjà cochés).
+// L'horaire jour par jour reste à un toucher, mais ce n'est pas le chemin par défaut.
+function openQuickSchedule({ first = false } = {}) {
+  const days = WEEKDAYS[lang()];
+  const pick = { preset: PRESETS[0].id, days: new Set([0, 1, 2, 3, 4]) };
+  const paint = (root) => {
+    for (const b of root.querySelectorAll('[data-qs]')) b.setAttribute('aria-checked', String(b.dataset.qs === pick.preset));
+    for (const b of root.querySelectorAll('[data-qd]')) b.setAttribute('aria-pressed', String(pick.days.has(Number(b.dataset.qd))));
+    root.querySelector('#qsSave').disabled = !pick.days.size;
+  };
+  openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${esc(t('qsTitle'))}</h2><p class="lede">${esc(t('qsLede'))}</p></div>
+    <p class="block-label">${esc(t('qsShift'))}</p>
+    <div class="qs-shifts" role="radiogroup">${PRESETS.map((p) => `<button type="button" role="radio" data-qs="${p.id}" aria-checked="false"><b>${esc(presetName(p.id))}</b><span class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</span></button>`).join('')}</div>
+    <p class="block-label">${esc(t('qsDays'))}</p>
+    <div class="qs-days">${days.map((d, i) => `<button type="button" data-qd="${i}" aria-pressed="false" aria-label="${esc(cap(d))}">${esc(cap(d).slice(0, 3))}</button>`).join('')}</div>
+    <button type="button" class="link qs-custom" id="qsCustom">${esc(t('qsCustom'))}</button>`, (root) => {
+    paint(root);
+    root.addEventListener('click', (e) => {
+      const s1 = e.target.closest('[data-qs]'), d1 = e.target.closest('[data-qd]');
+      if (s1) { pick.preset = s1.dataset.qs; clank('step'); paint(root); }
+      if (d1) { const n = Number(d1.dataset.qd); if (pick.days.has(n)) pick.days.delete(n); else pick.days.add(n); sfx('toggle'); paint(root); }
+    });
+    root.querySelector('#qsCustom').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet({ first, full: true }), 340); };
+    root.querySelector('#qsSave').onclick = () => {
+      const p = presetOf(pick.preset);
+      saveSchedule(Object.fromEntries([...pick.days].map((d) => [d, { start: p.start, end: p.end }])));
+      closeSheet(); toast(t('qsSaved')); setTimeout(() => sfx('save'), 120);
+      if (current === 'auth') paintFront();
+      if (current === 'history') renderHistory({ animate: false });
+    };
+  }, `<button type="button" class="btn primary" id="qsSave">${esc(t('qsSave'))}</button>`);
+}
+function openScheduleSheet({ first = false, full = false } = {}) {
   const sc = {};
   for (const [k, v] of Object.entries(mySchedule() || {})) { const h = hoursOf(v); if (h) sc[k] = { start: h.start, end: h.end }; }
+  if (!full && !Object.keys(sc).length) { openQuickSchedule({ first }); return; }
   let lastHours = Object.values(sc).at(-1) || { start: PRESETS[0].start, end: PRESETS[0].end };
   openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${t(first ? 'schedFirstTitle' : 'schedTitle')}</h2><p class="lede">${t('schedLede')}</p></div>${schedEditor(sc)}`, (root) => {
     const paintRow = (i) => {
@@ -524,7 +557,7 @@ function openScheduleSheet({ first = false } = {}) {
     };
     $('#schedLater')?.addEventListener('click', () => { closeSheet(); if (first) setTimeout(maybeWelcome, 450); });
     if (first) $('#schedDone').addEventListener('click', () => setTimeout(maybeWelcome, 450));
-  }, `${first ? `<button type="button" class="btn ghost" id="schedLater">${t('schedLater')}</button>` : ''}<button type="button" class="btn primary" id="schedDone">${t(first ? 'schedDoneFirst' : 'save')}</button>`);
+  }, `<button type="button" class="btn primary" id="schedDone">${t(first ? 'schedDoneFirst' : 'save')}</button>`);
 }
 // Page « Bon quart » : pas encore d'horaire → on l'invite à l'entrer une fois;
 // congé aujourd'hui → une petite ligne pour le modifier.
@@ -557,13 +590,21 @@ function startTour() {
   if (current !== 'auth') goFront();
   prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true };
   savePrefs();
-  const steps = [
+  // Les étapes de l'accueil, puis on entre dans « Mon compte » pour montrer l'horaire et ce tutoriel.
+  const home = [
     ['#poolStart', 'tourStart'],
     ['#poolDash .dash-shifts', isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
     ['#dashFlag', 'tourFlag'],
     ['#dashBoss', isAdmin() ? 'tourBossAdmin' : 'tourBoss'],
-    ['#poolAccount', isAdmin() ? 'tourAccountAdmin' : 'tourAccount'],
+    ['#poolAccount', 'tourAccount'],
   ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
+  const inside = session.user.visitor ? [] : [
+    ['#acSched', 'tourSched', true],
+    ['#acPic', 'tourPic', true],
+    ...(isRealAdmin() ? [['.view-as', 'tourViewAs', true]] : []),
+    ['#acTour', 'tourAgain', true],
+  ];
+  const steps = [...home, ...inside];
   const box = document.createElement('div');
   box.id = 'tour';
   box.className = 'tour';
@@ -571,20 +612,30 @@ function startTour() {
   document.body.append(box);
   const hole = box.querySelector('.tour-hole'), tip = box.querySelector('.tour-tip');
   let i = 0;
-  const end = () => { box.classList.remove('on'); setTimeout(() => box.remove(), 300); removeEventListener('resize', place); };
+  const sheetOpen = () => !$('#sheet').hidden;
+  const end = (then) => {
+    box.classList.remove('on');
+    setTimeout(() => box.remove(), 300);
+    removeEventListener('resize', place);
+    if (sheetOpen()) closeSheet();
+    if (then) setTimeout(then, 380);
+  };
+  const hasSched = () => Boolean(mySchedule() && Object.keys(mySchedule()).length);
   const finish = () => {
+    if (sheetOpen()) closeSheet();
     hole.style.cssText = `left:${innerWidth / 2}px;top:${innerHeight / 2}px;width:0;height:0`; // tout reste sombre derrière le bravo
     tip.className = 'tour-tip done';
     tip.style.cssText = '';
-    const hasSched = Boolean(mySchedule() && Object.keys(mySchedule()).length);
-    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t('tourDoneText'))}</p>
-      <div class="tour-btns">${hasSched ? '' : `<button type="button" class="btn ghost" data-tour="sched">${esc(t('schedSet'))}</button>`}<button type="button" class="btn primary" data-tour="end">${esc(t('tourDoneGo'))}</button></div>`;
+    const need = !hasSched();
+    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t(need ? 'tourDoneSched' : 'tourDoneText'))}</p>
+      <div class="tour-btns"><button type="button" class="btn primary" data-tour="${need ? 'sched' : 'end'}">${esc(t(need ? 'tourDoneSchedGo' : 'tourDoneGo'))}</button></div>`;
     celebrate(); sfx('full'); buzz('plate');
-    tip.querySelector('[data-tour="end"]').focus({ preventScroll: true });
+    tip.querySelector('[data-tour]').focus({ preventScroll: true });
   };
   function place() {
     if (i >= steps.length) return;
     const el = $(steps[i][0]);
+    if (!el) return;
     const r = el.getBoundingClientRect(), pad = 8;
     hole.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px;border-radius:${Math.min(28, r.height / 2 + pad)}px`;
     const below = r.top + r.height / 2 < innerHeight / 2;
@@ -595,7 +646,11 @@ function startTour() {
   }
   const show = () => {
     if (i >= steps.length) { finish(); return; }
-    const [, k] = steps[i];
+    const [sel, k, inSheet] = steps[i];
+    // Les étapes du compte : la feuille s'ouvre; revenir à l'accueil la referme.
+    if (inSheet && !sheetOpen()) { openAccount(); box.classList.add('wait'); setTimeout(() => { box.classList.remove('wait'); show(); }, 480); return; }
+    if (!inSheet && sheetOpen()) { closeSheet(); box.classList.add('wait'); setTimeout(() => { box.classList.remove('wait'); show(); }, 400); return; }
+    $(sel)?.scrollIntoView({ block: 'center' });
     tip.className = 'tour-tip';
     tip.innerHTML = `<p class="tour-count">${i + 1} / ${steps.length}</p><h2 id="tourH">${esc(t(`${k}T`))}</h2><p>${esc(t(k))}</p>
       <div class="tour-btns"><button type="button" class="link" data-tour="skip">${esc(t('tourSkip'))}</button><button type="button" class="btn primary" data-tour="next">${esc(t(i === steps.length - 1 ? 'tourLast' : 'tourNext'))}</button></div>
@@ -605,6 +660,7 @@ function startTour() {
     tip.querySelector('[data-tour="next"]').focus({ preventScroll: true });
   };
   box.addEventListener('click', (e) => {
+    if (box.classList.contains('wait')) return;
     const go = e.target.closest('[data-tour-go]');
     if (go) { i = Number(go.dataset.tourGo); show(); return; } // sauter directement à une étape
     const b = e.target.closest('[data-tour]');
@@ -612,7 +668,7 @@ function startTour() {
     if (act === 'next') { i += 1; show(); }
     else if (act === 'skip') { i = steps.length; finish(); }
     else if (act === 'end') end();
-    else if (act === 'sched') { end(); setTimeout(() => openScheduleSheet(), 320); }
+    else if (act === 'sched') end(() => openScheduleSheet({ first: true }));
   });
   box.addEventListener('keydown', (e) => { if (e.key === 'Escape') end(); });
   addEventListener('resize', place);
@@ -2714,7 +2770,6 @@ function paintFront() {
   if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
   $('#poolDash').hidden = !inside;
   $('#poolAccount').hidden = !inside;
-  $('#poolHelp').hidden = !inside;
   if (inside) { $('#poolAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase())); $('#poolAccount').setAttribute('aria-label', t('account')); }
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
@@ -2851,7 +2906,7 @@ $('#authForm').addEventListener('submit', async (ev) => {
     toast(t('welcomeName', user.name));
     route();
     // Nouveau compte : l'horaire d'abord; la visite guidée suit quand il se ferme.
-    if (authUI.tab === 'signup' && !mySchedule()) { paintFront.welcomeQueued = true; setTimeout(() => openScheduleSheet({ first: true }), 700); }
+    // Nouveau compte : la visite guidée d'abord (elle part toute seule); l'horaire vient à la fin.
   } catch (err) {
     fail(err.status === 0 ? 'errNetwork' : AUTH_ERRORS[err.message] || (session.mode === 'demo' && err.message === 'login' ? 'errLogin' : 'errServer'));
   } finally {
