@@ -1757,3 +1757,32 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 #setup > .quick-row { justify-content: flex-start; }
 #restartYes { background: var(--bad); border-color: var(--bad); color: #fff; }
 #sheetFoot:has(#restartYes) { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Barre rapide : toujours en haut, sur chaque écran après la connexion. */
+.quick-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.quick-bar[hidden] { display: none; }
+.qb-left, .qb-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qb-tools { margin-left: auto; }
+.quick-bar.no-tools .qb-tools { display: none; }
+.quick-bar .theme-btn { width: 40px; height: 40px; }
+.quick-bar .lang-switch button { min-height: 34px; min-width: 40px; }
+.qb-boss { background: var(--brand); border-color: var(--brand); color: var(--surface); }
+.qb-visit { gap: 8px; background: color-mix(in srgb, var(--plate-y, #f2b705) 22%, var(--surface)); border-color: color-mix(in srgb, var(--plate-y, #f2b705) 60%, transparent); }
+.qb-visit b { text-decoration: underline; text-underline-offset: 3px; }
+.pool-visit { background: none; border: 0; color: #fff; opacity: .92; font: 500 14px/1 var(--font); min-height: 40px; text-decoration: underline; text-underline-offset: 4px; }
+.auth-visit { display: block; margin: 14px auto 0; min-height: 44px; font-weight: 600; }
+/* Compacte : une seule rangée pour l'employé; le visiteur a une mince bande en haut. */
+.quick-bar { gap: 6px; margin-bottom: 8px; }
+.quick-bar .qb-left, .quick-bar .qb-tools { gap: 6px; }
+.quick-bar .quick-btn { min-height: 38px; padding: 0 12px 0 9px; font-size: 13.5px; gap: 5px; }
+.quick-bar .quick-btn svg { width: 16px; height: 16px; }
+.quick-bar .theme-btn { width: 38px; height: 38px; }
+.quick-bar .theme-btn svg { width: 19px; height: 19px; }
+.quick-bar .lang-switch { padding: 2px; }
+.quick-bar .lang-switch button { min-height: 32px; min-width: 36px; padding: 4px 8px; }
+.quick-bar .qb-left { display: contents; }
+.quick-bar .qb-visit { order: -1; flex: 1 0 100%; justify-content: center; min-height: 32px; border-radius: 10px; font-size: 13px; }
+.quick-bar .quick-btn { padding: 0 11px 0 8px; }
+.quick-bar .theme-btn { width: 34px; height: 34px; }
+.quick-bar .theme-btn svg { width: 17px; height: 17px; }
+.quick-bar .lang-switch button { min-height: 30px; min-width: 30px; padding: 3px 6px; font-size: 11.5px; }

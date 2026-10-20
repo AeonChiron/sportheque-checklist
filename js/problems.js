@@ -1,13 +1,13 @@
 // Signalements : envoyés au serveur du site (avec leurs photos), lus par les
 // superviseurs. En démo, ils restent sur ce téléphone.
 
-import { session, request } from './auth.js';
+import { session, request, ns } from './auth.js';
 import { blobToBase64 } from './photos.js';
 import { problemId } from './problem-shape.js';
 
 const DEMO = 'gym-demo-problems';
-const readDemo = () => { try { return JSON.parse(localStorage.getItem(DEMO)) || {}; } catch { return {}; } };
-const writeDemo = (all) => { try { localStorage.setItem(DEMO, JSON.stringify(all)); } catch { /* plein : les photos sont lourdes */ } };
+const readDemo = () => { try { return JSON.parse(localStorage.getItem(ns(DEMO))) || {}; } catch { return {}; } };
+const writeDemo = (all) => { try { localStorage.setItem(ns(DEMO), JSON.stringify(all)); } catch { /* plein : les photos sont lourdes */ } };
 const dataURL = (blob) => new Promise((resolve, reject) => {
   const r = new FileReader();
   r.onload = () => resolve(String(r.result));

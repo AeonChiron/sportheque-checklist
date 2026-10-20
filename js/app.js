@@ -5,7 +5,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
-import { session, accounts, isBoss, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
+import { session, accounts, isBoss, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
@@ -21,10 +21,10 @@ const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').match
 
 // ---------- Persistance (un rechargement de Safari ne perd rien) ----------
 function read(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+  try { return JSON.parse(localStorage.getItem(ns(key))) ?? fallback; } catch { return fallback; }
 }
 function write(key, value) {
-  try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, JSON.stringify(value)); } catch { /* mode privé */ }
+  try { value == null ? localStorage.removeItem(ns(key)) : localStorage.setItem(ns(key), JSON.stringify(value)); } catch { /* mode privé */ }
 }
 
 // prefs : langue, dernier nom, dernier superviseur, langue de rapport par superviseur.
@@ -64,6 +64,7 @@ function show(id) {
   paintShiftPill();
   const target = document.getElementById(id);
   if (id === 'auth') pool().start(); else poolCtl?.stop();
+  placeQuickBar(id);
   if (!target.hidden) return;
   const swap = () => {
     for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -2178,6 +2179,7 @@ function openAuth() {
   if (fromLink) authUI.role = 'boss'; // le lien d'un courriel va aux superviseurs
   $('#poolStart').querySelector('[data-t]').dataset.t = 'getStarted';
   $('#poolLogin').hidden = false;
+  $('#poolVisit').hidden = false;
   paintAuth();
   $('#authError').innerHTML = '';
   show('auth');
@@ -2208,6 +2210,36 @@ $('#poolStart').addEventListener('click', (e) => {
   setTimeout(() => { go(); btn.classList.remove('lifting'); }, 1150);
 });
 $('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
+// Barre rapide : Accueil, Mes tâches, Recommencer, Superviseur, visiteur,
+// thème et langue. Un seul élément, déplacé en haut de l'écran affiché
+// (dans l'en-tête collant de la checklist, pour qu'il reste visible).
+function placeQuickBar(id) {
+  const bar = $('#quickBar');
+  const on = id !== 'auth' && Boolean(session.user || !accounts());
+  bar.hidden = !on;
+  if (!on) return;
+  const target = document.getElementById(id);
+  const host = target.querySelector(':scope > .topbar:not(.plain)') || target;
+  if (bar.parentElement !== host) host.prepend(bar);
+  $('#restartBtn').hidden = id !== 'checklist';
+  $('#qbTasks').hidden = !state || id === 'checklist';
+  $('#qbBoss').hidden = !isBoss() || id === 'boss';
+  $('#qbVisit').hidden = !isVisitor();
+  bar.classList.toggle('no-tools', id === 'setup'); // l'accueil a déjà ses boutons
+}
+$('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
+
+// Visiteur : essaie l'app sans compte; rien ne part vers l'équipe.
+function enterVisitor() { startVisitor(t('visitorName')); location.reload(); }
+$('#poolVisit').addEventListener('click', enterVisitor);
+$('#authVisit').addEventListener('click', enterVisitor);
+$('#qbVisit').addEventListener('click', () => {
+  openSheet(`<div class="sheet-head"><h2>${t('visitorLeave')}</h2></div><p class="lede">${t('visitorLeaveBody')}</p>`, () => {
+    $('#visitYes').onclick = async () => { await signOut(); location.reload(); };
+    $('#visitNo').onclick = closeSheet;
+  }, `<button type="button" class="btn ghost" id="visitNo">${t('cancel2')}</button><button type="button" class="btn primary" id="visitYes">${t('visitorExit')}</button>`);
+});
+
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {
   const inside = Boolean(session.user);
@@ -2215,6 +2247,7 @@ function goFront() {
   $('#poolStart').querySelector('[data-t]').dataset.t = inside ? 'resumeShift' : 'getStarted';
   paintStatic();
   $('#poolLogin').hidden = inside;
+  $('#poolVisit').hidden = inside;
   authSheet(false);
   show('auth');
 }
@@ -2305,7 +2338,9 @@ function paintAccount() {
       setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = t('signOut'); } }, 3000);
       return;
     }
+    const wasVisitor = isVisitor();
     await signOut();
+    if (wasVisitor) { location.reload(); return; }
     boss.problems = [];
     boss.team = [];
     boss.loaded = false;
@@ -2775,6 +2810,11 @@ document.addEventListener('visibilitychange', () => document.body.classList.togg
 
 paintStatic();
 initAuth(() => { route(); flushQueue(); refreshAlerts(); }); // le serveur a répondu autre chose que prévu
+if (isVisitor()) {
+  let seen = false;
+  try { seen = sessionStorage.getItem('visit-hello') === '1'; sessionStorage.setItem('visit-hello', '1'); } catch { /* ignore */ }
+  if (!seen) setTimeout(() => toast(t('visitorHello'), 'muted'), 700);
+}
 route();
 
 // Un quart ou un signalement enregistré sans réseau part tout seul dès que le réseau revient.

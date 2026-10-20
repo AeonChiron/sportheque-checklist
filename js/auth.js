@@ -11,6 +11,13 @@ const MODE = 'gym-auth-mode';
 const DEMO_USERS = 'gym-demo-users';
 
 export const session = { mode: 'none', user: null, token: '' };
+
+// Visiteur : essaie l'app sans compte. Tout reste sur ce téléphone, dans un
+// espace à part (clés « visit: »), et s'efface quand il quitte.
+const VISITOR = (() => { try { return Boolean(JSON.parse(localStorage.getItem('gym-auth'))?.visitor); } catch { return false; } })();
+const SHARED_KEYS = new Set(['gym-auth', 'gym-auth-mode', 'gym-shift-prefs']);
+export const ns = (k) => (VISITOR && !SHARED_KEYS.has(k) ? `visit:${k}` : k);
+export const isVisitor = () => Boolean(session.user?.visitor);
 export const accounts = () => session.mode !== 'none';
 export const isBoss = () => session.user?.role === 'boss';
 
@@ -57,6 +64,11 @@ export async function request(path, { method = 'GET', body, timeout = 8000, raw 
 // vérifie auprès du serveur; onChange() si la réponse change quelque chose.
 export function initAuth(onChange) {
   const saved = load();
+  if (saved?.visitor) {
+    session.mode = 'demo';
+    session.user = saved.user;
+    return;
+  }
   if (CONFIG.demo || !CONFIG.api) {
     session.mode = 'demo';
     session.user = saved?.demo ? saved.user : null;
@@ -117,7 +129,15 @@ export async function signIn(action, fields, remember = true) {
   return user;
 }
 
+export function startVisitor(name) {
+  keep({ visitor: true, user: { name, email: 'visiteur', role: 'employee', visitor: true } });
+}
+function clearVisitor() {
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith('visit:')) localStorage.removeItem(k); } catch { /* ignore */ }
+}
+
 export async function signOut() {
+  if (session.user?.visitor) clearVisitor();
   if (session.mode === 'accounts' && session.token) {
     try { await request('auth', { method: 'POST', body: { action: 'logout' }, timeout: 4000 }); } catch { /* le jeton s'oublie quand même */ }
   }

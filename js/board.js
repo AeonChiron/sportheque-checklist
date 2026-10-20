@@ -4,7 +4,7 @@
 // sinon (GitHub Pages, démo), on reste discrètement en mode local. Un envoi
 // raté (pas de réseau, session expirée) est gardé en file et renvoyé plus tard.
 
-import { session, request } from './auth.js';
+import { session, request, ns } from './auth.js';
 import { sanitizeShift, mergeShift, combineDay, recentShifts } from './board-shape.js';
 
 const LOCAL = 'gym-board-local';
@@ -12,8 +12,8 @@ const QUEUE = 'gym-board-queue';
 const KEEP_DAYS = 42; // six semaines dans l'historique de ce téléphone
 const CODE = /^[A-Za-z0-9_-]{1,40000}$/;
 
-const readJSON = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
-const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* mode privé */ } };
+const readJSON = (k, fallback) => { try { return JSON.parse(localStorage.getItem(ns(k))) ?? fallback; } catch { return fallback; } };
+const writeJSON = (k, v) => { try { localStorage.setItem(ns(k), JSON.stringify(v)); } catch { /* mode privé */ } };
 
 function readLocal() { return readJSON(LOCAL, {}); }
 function writeLocal(all) {
