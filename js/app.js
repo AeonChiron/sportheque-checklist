@@ -585,6 +585,7 @@ function paintSetupSched() {
 function maybeWelcome() {
   const key = session.user?.email;
   if (!key || prefs.welcomed?.[key] || $('#tour')) return;
+  if (isRealAdmin() && curView() === 'admin') return; // l'admin connaît son app : le tutoriel ne part que pour un aperçu (employé, superviseur, nouveau)
   if (!$('#sheet').hidden) { setTimeout(maybeWelcome, 600); return; } // attend qu'un panneau se ferme
   if (current === 'auth') startTour();
 }
@@ -600,14 +601,13 @@ function startTour() {
     ['#poolStart', bossWatching() ? 'tourStartBoss' : 'tourStart'],
     ['#poolDash .dash-shifts', isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
     ['#dashFlag', 'tourFlag'],
-    ['#dashBoss', isAdmin() ? 'tourBossAdmin' : 'tourBoss'],
+    ['#dashBoss', 'tourBoss'],
     ['#poolAccount', 'tourAccount'],
   ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
   const inside = session.user.visitor ? [] : [
     ...(isBoss() ? [['#acWork', 'tourWork', true]] : []),
     ...(bossWatching() ? [] : [['#acSched', 'tourSched', true]]),
     ['#acPic', 'tourPic', true],
-    ...(isRealAdmin() ? [['.view-as', 'tourViewAs', true]] : []),
     ['#acTour', 'tourAgain', true],
   ];
   const steps = [...home, ...inside];
