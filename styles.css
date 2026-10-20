@@ -1472,7 +1472,7 @@ html[data-nav="theme"]::view-transition-new(root) { animation: theme-reveal .7s 
 /* Calme : après 12 s sans toucher, les lumières décoratives se figent là où elles
    sont (batterie, téléphones lents); elles repartent au premier toucher. Mesuré sur un
    Android d'entrée de gamme : environ 2 s de travail du processeur toutes les 4 s → presque rien. */
-body.calm *::before, body.calm *::after, body.calm .env i, body.calm .alive * { animation-play-state: paused !important; }
+body.calm *::before, body.calm *::after, body.calm .env i { animation-play-state: paused !important; }
 
 
 /* =====================================================================
@@ -2344,3 +2344,5 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .qs-custom { display: block; margin: 16px auto 4px; }
 .qs-shifts + .block-label { margin-top: 14px; }
 .sheet .sched-mascot { width: 72px; }
+/* Pointage avant l'heure : pas de case, juste l'heure où il se cochera. */
+.check-wait { flex: none; align-self: center; margin-right: 10px; padding: 6px 10px; border-radius: 99px; border: 1.5px dashed var(--line); color: var(--muted); font-size: 13px; font-weight: 700; white-space: nowrap; }

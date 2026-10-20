@@ -831,6 +831,8 @@ $('#setupForm').addEventListener('submit', (ev) => {
 });
 
 // ---------- 2. Checklist ----------
+// Le quart a-t-il commencé (l'heure du début est passée)? Le pointage attend ce moment.
+const shiftStarted = () => Boolean(state) && Date.now() >= new Date(`${state.date}T${state.start}`).getTime();
 // Le mot laissé par le quart d'avant (2 derniers jours), en haut des tâches.
 let handoff = null;
 async function loadHandoff() {
@@ -894,7 +896,7 @@ function taskRow(it, { extra = false } = {}) {
           ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
         </span>
       </button>
-      <button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>
+      ${it.id === 'pointage' && !shiftStarted() ? `<span class="check-wait num" aria-label="${esc(t('punchAt', f(toMin(state.start))))}">${nb(f(toMin(state.start)))}</span>` : `<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
     </div>
   </li>`;
 }
@@ -1025,7 +1027,8 @@ function renderNow() {
 function renderChecklist() {
   const lock = shiftLocked();
   // Le pointage se coche seulement à l'heure du début du quart (pas avant, même si le quart est ouvert).
-  if (!lock && !state.tasks.pointage?.done && Date.now() >= new Date(`${state.date}T${state.start}`).getTime()) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); setTimeout(() => sfx('punch'), 350); }
+  if (state.tasks.pointage?.done && !shiftStarted()) { delete state.tasks.pointage; save(); } // coché trop tôt par une ancienne version
+  if (!lock && !state.tasks.pointage?.done && shiftStarted()) { state.tasks.pointage = { done: true, doneAt: new Date().toISOString() }; save(); setTimeout(() => sfx('punch'), 350); }
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -1218,7 +1221,7 @@ $('#flagsBlock').addEventListener('click', (ev) => {
 // « En cours » et le couloir avancent toutes les 30 secondes.
 setInterval(() => {
   if (current !== 'checklist' || !plan) return;
-  if (state && !state.tasks.pointage?.done && Date.now() >= new Date(`${state.date}T${state.start}`).getTime()) { renderChecklist(); return; } // l'heure du début : on pointe
+  if (state && !state.tasks.pointage?.done && shiftStarted()) { renderChecklist(); return; } // l'heure du début : on pointe
   renderTimeline(); renderNow();
 }, 30_000);
 
@@ -2994,6 +2997,7 @@ function paintViewAs() {
   b.textContent = `${[v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
 }
 function openAccount() {
+  let pendingView = '';
   const u = session.user;
   if (!u) return;
   const admin = isAdmin();
@@ -3045,7 +3049,14 @@ function openAccount() {
       savePrefs(); sfx('save'); toast(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsOff'));
       paintViewAs(); paintFront(); closeSheet(); setTimeout(openAccount, 360);
     });
-    root.querySelectorAll('[data-viewas]').forEach((b) => { b.onclick = () => { setViewAs(b.dataset.viewas); sfx('toggle'); paintViewAs(); closeSheet(); goFront(); paintFront(); setTimeout(openAccount, 360); }; });
+    // Choisir un rôle le sélectionne seulement; « Appliquer » (le bouton du bas) le met en place.
+    root.querySelectorAll('[data-viewas]').forEach((b) => { b.onclick = () => {
+      pendingView = b.dataset.viewas;
+      root.querySelectorAll('[data-viewas]').forEach((o) => o.setAttribute('aria-checked', String(o === b)));
+      const foot = $('#sheetFoot [data-close-sheet]');
+      if (foot) foot.textContent = t(pendingView === (viewAs() || 'admin') ? 'close' : 'apply');
+      sfx('tab');
+    }; });
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
     $('#acSignOut').onclick = (e) => {
       const b = e.currentTarget;
@@ -3073,7 +3084,14 @@ function openAccount() {
       try { await request('auth', { method: 'POST', body: { action: 'codes', team: $('#acTeam').value, boss: $('#acBossCode').value, admin: $('#acAdminCode').value } }); msg.textContent = t('adminCodesSaved'); sfx('save'); } catch (err) { msg.textContent = t(err.status === 400 ? 'adminCodesBad' : 'adminCodesLater'); sfx('locked'); }
     });
   }, `<button type="button" class="btn ghost danger" id="acSignOut">${t('signOut')}</button><button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
-  $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
+  $('#sheetFoot [data-close-sheet]')?.addEventListener('click', () => {
+    if (pendingView && pendingView !== (viewAs() || 'admin')) {
+      setViewAs(pendingView); sfx('save'); paintViewAs(); closeSheet(); goFront(); paintFront();
+      toast(pendingView === 'admin' ? t('viewAsBack') : t('viewAsNow', roleName(pendingView)));
+      return;
+    }
+    closeSheet();
+  });
 }
 
 // ---------- 8. Espace superviseur : les signalements, l'équipe ----------
