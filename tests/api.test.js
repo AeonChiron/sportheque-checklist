@@ -142,6 +142,9 @@ test('Admin : son propre code; seul l’admin change les codes d’équipe', asy
   assert.equal(up.data.user.role, 'admin');
   for (let i = 0; i < 10; i++) await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: `x${i}` } });
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: '1758' } })).status, 429);
+  // Inscription : 10 mauvais codes par jour par connexion, puis même le bon est refusé.
+  for (let i = 0; i < 10; i++) await c2('auth', { method: 'POST', body: { action: 'signup', name: 'G', email: 'g@t.ca', password: 'secret12', role: 'boss', code: `n${i}` } });
+  assert.equal((await c2('auth', { method: 'POST', body: { action: 'signup', name: 'G', email: 'g@t.ca', password: 'secret12', role: 'boss', code: 'Patron' } })).status, 429);
   // Photo de profil : une mascotte ou une petite image; rien d'autre.
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: 'm:ours' } })).data.user.avatar, 'm:ours');
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: 'javascript:alert(1)' } })).status, 400);

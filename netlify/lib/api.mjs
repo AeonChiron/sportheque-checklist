@@ -114,7 +114,15 @@ export function createApi({ getStore, env }) {
       if (!name) return json({ error: 'name' }, 400);
       if (!EMAIL.test(email)) return json({ error: 'email' }, 400);
       if (password.length < 6 || password.length > 200) return json({ error: 'password' }, 400);
-      if (!sameText(String(b.code || '').trim().toLowerCase(), String(want).trim().toLowerCase())) return json({ error: 'code' }, 403);
+      // Mauvais code : 10 essais par jour par connexion (300 en tout) pour qu'un code court ne se devine pas.
+      const day = localDay(new Date());
+      const ip = (req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || '?').split(',')[0].trim().slice(0, 60);
+      const tries = (await settings().get(`tries:${day}`, { type: 'json' })) || {};
+      if ((tries[ip] || 0) >= 10 || (tries._all || 0) >= 300) return json({ error: 'tries' }, 429);
+      if (!sameText(String(b.code || '').trim().toLowerCase(), String(want).trim().toLowerCase())) {
+        await settings().setJSON(`tries:${day}`, { ...tries, [ip]: (tries[ip] || 0) + 1, _all: (tries._all || 0) + 1 });
+        return json({ error: 'code' }, 403);
+      }
       const old = await users().get(email, { type: 'json' });
       if (old && !old.removed) return json({ error: 'exists' }, 409);
       const salt = randomBytes(16).toString('hex');

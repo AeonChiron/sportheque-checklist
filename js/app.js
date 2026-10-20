@@ -2518,7 +2518,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cu
 
 // ---------- 0. Connexion : une fois, le téléphone s'en souvient ----------
 const authUI = { tab: 'login', role: 'employee' };
-const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing' };
+const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing', tries: 'codeTries' };
 
 // Le plancher mouillé de la connexion (créé au premier affichage).
 let poolCtl = null;
