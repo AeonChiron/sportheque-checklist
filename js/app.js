@@ -46,10 +46,13 @@ function shiftPlan(st) {
 const ensurePlan = () => { if (state && !plan) plan = shiftPlan(state); };
 
 const lang = () => (prefs.lang === 'en' ? 'en' : 'fr');
+// Un superviseur ne fait pas le ménage : il lit le rapport de son équipe,
+// sauf s'il coche « Travailler comme employé·e » (ou l'admin qui fait un quart au nom de quelqu'un).
+function bossWatching() { return isBoss() && !prefs.workAsEmp && !(isRealAdmin() && prefs.actAs?.trim()); }
 const t = (key, ...args) => {
   const d = UI[lang()];
   // Un patron qui regarde un quart lit les tâches de son équipe, pas les siennes.
-  const v = isBoss() && !(isRealAdmin() && prefs.actAs?.trim()) && d[key + 'Boss'] !== undefined ? d[key + 'Boss'] : d[key];
+  const v = bossWatching() && d[key + 'Boss'] !== undefined ? d[key + 'Boss'] : d[key];
   return typeof v === 'function' ? v(...args) : v;
 };
 const f = (min) => fmt(min, lang());
@@ -594,14 +597,15 @@ function startTour() {
   savePrefs();
   // Les étapes de l'accueil, puis on entre dans « Mon compte » pour montrer l'horaire et ce tutoriel.
   const home = [
-    ['#poolStart', 'tourStart'],
+    ['#poolStart', bossWatching() ? 'tourStartBoss' : 'tourStart'],
     ['#poolDash .dash-shifts', isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
     ['#dashFlag', 'tourFlag'],
     ['#dashBoss', isAdmin() ? 'tourBossAdmin' : 'tourBoss'],
     ['#poolAccount', 'tourAccount'],
   ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
   const inside = session.user.visitor ? [] : [
-    ['#acSched', 'tourSched', true],
+    ...(isBoss() ? [['#acWork', 'tourWork', true]] : []),
+    ...(bossWatching() ? [] : [['#acSched', 'tourSched', true]]),
     ['#acPic', 'tourPic', true],
     ...(isRealAdmin() ? [['.view-as', 'tourViewAs', true]] : []),
     ['#acTour', 'tourAgain', true],
@@ -628,7 +632,7 @@ function startTour() {
     hole.style.cssText = `left:${innerWidth / 2}px;top:${innerHeight / 2}px;width:0;height:0`; // tout reste sombre derrière le bravo
     tip.className = 'tour-tip done';
     tip.style.cssText = '';
-    const need = !hasSched();
+    const need = !hasSched() && !bossWatching();
     tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t(need ? 'tourDoneSched' : 'tourDoneText'))}</p>
       <div class="tour-btns"><button type="button" class="btn primary" data-tour="${need ? 'sched' : 'end'}">${esc(t(need ? 'tourDoneSchedGo' : 'tourDoneGo'))}</button></div>`;
     celebrate(); sfx('full'); buzz('plate');
@@ -858,8 +862,6 @@ async function loadHandoff() {
   handoff = h ? { text: h.handoff, by: h.name, date: h.date } : null;
   if (current === 'checklist') renderChecklist();
 }
-// Un superviseur ne fait pas le ménage : il lit le rapport de son équipe à la place.
-const bossWatching = () => isBoss() && !(isRealAdmin() && prefs.actAs?.trim());
 function openChecklist() {
   if (bossWatching()) { openHistory({ team: true }); return; }
   paintStatic();
@@ -2527,7 +2529,7 @@ function openHistory({ keep = false, team = false } = {}) {
   paintStatic();
   if (!keep || !hist.week) hist.week = mondayOf(todayISO());
   if (!keep || !hist.up) { hist.up = mondayOf(todayISO()); hist.mode = 'upcoming'; }
-  if (team || (!keep && isBoss())) { hist.mode = 'recent'; hist.period = 'day'; hist.who = ''; } // le patron arrive sur la journée de toute l'équipe
+  if (team || (!keep && bossWatching())) { hist.mode = 'recent'; hist.period = 'day'; hist.who = ''; } // le patron arrive sur la journée de toute l'équipe
   renderHistory({ animate: !keep });
   show('history');
   refreshHistory();
@@ -2638,7 +2640,13 @@ function renderHistory({ animate = true } = {}) {
       r.n++; if (it.status === 'done') r.done++;
     }
     const rows = [...by.values()].sort((a, b) => a.done / a.n - b.done / b.n || a.title.localeCompare(b.title));
-    tally = `<section class="hi-tally"><h2>${esc(t('teamReport'))}</h2><ul>${rows.map((r) => `<li class="${r.done === r.n ? 'ok' : r.done ? '' : 'bad'}"><span>${esc(r.title)}</span><b class="num">${r.done}/${r.n}</b></li>`).join('')}</ul></section>`;
+    const li = (r) => `<li class="${r.done === r.n ? 'ok' : r.done ? '' : 'bad'}"><span>${esc(r.title)}</span><b class="num">${r.done}/${r.n}</b></li>`;
+    // D'abord ce qui demande l'attention; le reste se déplie au besoin.
+    const missed = rows.filter((r) => r.done < r.n);
+    tally = `<section class="hi-tally"><h2>${esc(t(missed.length ? 'teamWatch' : 'teamAllDone'))}</h2>${missed.length ? `<ul>${missed.slice(0, 6).map(li).join('')}</ul>` : `<p class="section-note">${esc(t('teamAllDoneSub'))}</p>`}
+      <details><summary>${esc(t('teamSeeAll', rows.length))}</summary><ul>${rows.map(li).join('')}</ul></details></section>`;
+    const tot = rows.reduce((a, r) => a + r.n, 0), dn = rows.reduce((a, r) => a + r.done, 0);
+    hist.pctDone = tot ? Math.round((100 * dn) / tot) : 0;
   }
 
   let k = 0;
@@ -2646,6 +2654,24 @@ function renderHistory({ animate = true } = {}) {
       <div class="hi-dayhead"><h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
       ${byDate.get(d).map((s) => { const i = k++; return isAdmin() ? `<div class="hi-row">${histCard(s, i)}<button type="button" class="hi-del" data-hdel="${i}" aria-label="${esc(t('histDelete'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>` : histCard(s, i); }).join('')}
     </section>`).join('');
+
+  if (bossWatching()) {
+    // La page du patron : une phrase, les filtres, ce qui manque, puis les quarts. Rien d'autre.
+    const per = `<div class="segmented hi-period" role="tablist">${['day', 'week', 'month', 'all'].map((k2) => `<button type="button" role="tab" data-hper="${k2}" aria-selected="${hist.period === k2}">${esc(t(`per_${k2}`))}</button>`).join('')}</div>`;
+    const sum = !ready ? '' : span.length ? t('teamSum', span.length, hist.pctDone, nFlags) : t('teamNone');
+    const bstrip = span.length ? `<div class="ap-stats hi-stats">
+      <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts', span.length))}</span></div>
+      <div class="${hist.pctDone === 100 ? 'ok' : ''}"><b class="num">${hist.pctDone}%</b><span>${esc(t('statTasksDone'))}</span></div>
+      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags', nFlags))}</span></div>
+    </div>` : '';
+    $('#historyBody').innerHTML = `${per}${ready ? `<p class="team-sum">${esc(sum)}</p>${whoBar}${bstrip}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
+      <div class="hi-links">
+        <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
+        <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
+      </div>`;
+    if (animate && ready) countUp($('#historyBody'));
+    return;
+  }
 
   $('#historyBody').innerHTML = `
     ${schedCard()}
@@ -2750,6 +2776,7 @@ $('#poolStart').addEventListener('click', (e) => {
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
     window.history.replaceState(null, '', location.pathname);
+    if (bossWatching()) { openHistory({ team: true }); return; } // le patron : la journée de l'équipe
     if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
     if (state) { route(); return; } // quart en cours : retour aux tâches
     // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
@@ -2822,7 +2849,8 @@ function paintFront() {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
     let sub = t('wbStart');
     const nx = !state && nextShift();
-    if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = t('wbUnsent', n); }
+    if (bossWatching()) sub = t('wbTeam');
+    else if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = t('wbUnsent', n); }
     else if (state && plan) { const ts = planTasks(); sub = counting() ? t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length) : t('wbWaiting'); }
     else if (nx?.ready) sub = t('wbReady');
     else if (nx) sub = t('wbPeek');
@@ -3017,7 +3045,7 @@ async function doSignOut() {
   const wasVisitor = isVisitor();
   const hadClock = prefs.clockOffset;
   if (prefs.simNew) { saveSchedule(prefs.simNew.sched, { push: false }); delete prefs.simNew; }
-  delete prefs.clockOffset; delete prefs.actAs; setViewAs(''); // l'heure simulée, l'aperçu et le nom emprunté ne restent pas pour la prochaine personne
+  delete prefs.clockOffset; delete prefs.actAs; delete prefs.workAsEmp; setViewAs(''); // l'heure simulée, l'aperçu et le nom emprunté ne restent pas pour la prochaine personne
   savePrefs();
   await signOut();
   if (wasVisitor || hadClock) { location.reload(); return; }
@@ -3090,6 +3118,7 @@ function openAccount() {
     <label class="field act-as"><span>${esc(t('actAsLabel'))}</span><div class="acct-btns"><input id="acActAs" autocomplete="off" maxlength="40" value="${esc(prefs.actAs || '')}" placeholder="${esc(u.name)}"><button type="button" class="btn ghost" id="acActAsSave">${esc(t('save'))}</button></div></label>
     <p class="section-note">${esc(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsNote'))}</p>` : ''}
     <div class="acct-list">
+      ${isBoss() && !u.visitor ? `<button type="button" class="acct-row work-row" id="acWork" role="switch" aria-checked="${Boolean(prefs.workAsEmp)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21v-6l-2-3 3-6h8l3 6-2 3v6M9 6l3 4 3-4"/></svg><span>${esc(t('workAsEmp'))}<small>${esc(t(prefs.workAsEmp ? 'workAsEmpOn' : 'workAsEmpOff'))}</small></span><i class="switch" aria-hidden="true"></i></button>` : ''}
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
         <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
@@ -3114,6 +3143,7 @@ function openAccount() {
     </div>` : ''}`,
   (root) => {
     $('#acSched').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 320); };
+    if ($('#acWork')) $('#acWork').onclick = () => { prefs.workAsEmp = !prefs.workAsEmp; savePrefs(); sfx('toggle'); paintStatic(); paintFront(); toast(t(prefs.workAsEmp ? 'workAsEmpOn' : 'workAsEmpOff')); closeSheet(); setTimeout(openAccount, 340); };
     $('#acPic').onclick = () => { closeSheet(); setTimeout(openAvatarPicker, 320); };
     $('#acRoleGo')?.addEventListener('click', async () => {
       const code = $('#acRoleCode').value.trim(), msg = $('#acRoleMsg');

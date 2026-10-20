@@ -2391,3 +2391,12 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .hi-tally li.bad b { color: var(--bad, #c0392b); }
 .tour.away { opacity: 0; pointer-events: none; }
 .hi-by { margin: 0 0 8px; }
+.team-sum { font-size: 17px; font-weight: 600; margin: 4px 0 12px; }
+.hi-tally details { margin-top: 8px; }
+.hi-tally summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }
+.work-row span { display: flex; flex-direction: column; flex: 1; }
+.work-row small { color: var(--muted); font-size: 13px; font-weight: 400; }
+.work-row .switch { flex: none; width: 44px; height: 26px; border-radius: 999px; background: var(--line); position: relative; transition: background .2s; }
+.work-row .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+.work-row[aria-checked="true"] .switch { background: var(--ink); }
+.work-row[aria-checked="true"] .switch::after { transform: translateX(18px); }
