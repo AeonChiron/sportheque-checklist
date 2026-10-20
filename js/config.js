@@ -70,7 +70,9 @@ export const CONFIG = {
   // chaque téléphone ne voit que ses propres quarts. Pour garder GitHub Pages,
   // on peut mettre ici l'adresse du site Netlify : https://<site>.netlify.app/api
   // Codes d'inscription : variables TEAM_CODE et BOSS_CODE dans Netlify.
-  api: '/api',
+  // Sur la copie GitHub Pages, on parle au serveur Netlify (mêmes comptes,
+  // même historique) : la copie GitHub se met à jour gratuitement.
+  api: globalThis.location?.hostname?.endsWith('github.io') ? 'https://sportheque-checklist.netlify.app/api' : '/api',
 
   // Démo : aucun courriel n'est envoyé.
   demo: false,
