@@ -119,10 +119,10 @@ export function mountPool(root) {
       let ax = 0, ay = 0;
       if (hold.on) {
         const dx = hold.x - s.x, dy = hold.y - s.y, d = Math.max(1, Math.hypot(dx, dy));
-        const pull = Math.min(1, d / 140) * 900;
+        const pull = Math.min(1, d / 160) * 320; // doux : il glisse lentement vers le doigt
         ax = (dx / d) * pull; ay = (dy / d) * pull;
       }
-      const drag = Math.exp(-1.7 * dt);
+      const drag = Math.exp(-2.8 * dt); // il s'arrête plus vite (eau plus « épaisse »)
       s.vx = (s.vx + ax * dt) * drag; s.vy = (s.vy + ay * dt) * drag;
       if (Math.abs(s.vx) < 0.5 && !ax) s.vx = 0;
       if (Math.abs(s.vy) < 0.5 && !ay) s.vy = 0;
@@ -183,7 +183,7 @@ export function mountPool(root) {
     if (!s.drag || e.pointerId !== s.drag.id) return;
     s.drag = null;
     hero.classList.remove('held');
-    s.vx = Math.max(-500, Math.min(500, s.vx)); s.vy = Math.max(-500, Math.min(500, s.vy));
+    s.vx = Math.max(-200, Math.min(200, s.vx)); s.vy = Math.max(-200, Math.min(200, s.vy));
   }
   root.addEventListener('pointerdown', down);
   root.addEventListener('pointermove', move);

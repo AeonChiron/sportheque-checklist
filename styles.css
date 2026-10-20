@@ -2021,3 +2021,56 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 :root[data-theme="dark"] .wb-text em { color: #5cc8e6; }
 @media (prefers-reduced-motion: reduce) { #auth.inside .pool-cta::after, .wb-go::before { animation: none; } }
 html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
+
+/* Mode clair : la semaine de l'Aperçu prend le bleu de l'app (pas noir). */
+:root:not([data-theme="dark"]) .week::before { background: var(--accent); box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--accent) 70%, transparent); }
+:root:not([data-theme="dark"]) .wk-day[aria-selected="true"] { color: #fff; }
+:root:not([data-theme="dark"]) .wk-day[aria-selected="true"] .wk-dots i { box-shadow: 0 0 0 1.5px var(--accent); }
+/* Mode clair : la 3D reste sombre, mais un ardoise plus douce (pas noir). */
+:root:not([data-theme="dark"]) .gym3d { background: #2c3a47; }
+:root:not([data-theme="dark"]) .gym3d canvas { filter: brightness(1.45) saturate(1.08); }
+
+/* ---------- Chaque section a son visage ---------- */
+#history .review-top, #apercu .review-top { position: relative; margin: 0 calc(-1 * var(--gutter-r)) 16px calc(-1 * var(--gutter-l)); padding: 18px var(--gutter-r) 22px var(--gutter-l); border-radius: 0 0 28px 28px; color: #fff; overflow: hidden; }
+#history .review-top { background: linear-gradient(140deg, #3fb3e6, #1d5fc4); }
+#apercu.mode-overview .review-top { background: linear-gradient(140deg, #2bb38a, #137a6a); }
+#apercu.mode-tips .review-top { background: linear-gradient(140deg, #ffc93c, #f08a24); color: #3a2400; }
+:is(#history, #apercu) .review-top :is(h1, .eyebrow, .back) { color: inherit; position: relative; }
+:is(#history, #apercu) .review-top .eyebrow { opacity: .85; }
+:is(#history, #apercu) .review-top .mark { display: none; }
+.hero-icon { position: absolute; right: -10px; bottom: -18px; width: 132px; height: 132px; opacity: .2; pointer-events: none; }
+.hero-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Bons trucs : seulement les trucs (pas la semaine ni les onglets). */
+#apercu.mode-tips :is(.ap-weekbar, .week, .ap-tabs) { display: none; }
+#apercu.mode-tips #apercuBody > .btn.primary.big { display: none; }
+#apercu.mode-tips .tipcard { border-left: 4px solid #f5b326; }
+/* Signaler : la feuille porte une bande rouge. */
+#sheet:has(.cat-grid) { border-top: 6px solid var(--bad); }
+#sheet:has(.cat-grid) .sheet-head .eyebrow { color: var(--bad); }
+
+/* ---------- Mon horaire ---------- */
+.sched-card { display: grid; gap: 10px; padding: 14px; margin-bottom: 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 24px -18px rgba(20, 60, 120, .5); }
+.sched-card.empty { grid-template-columns: 1fr auto; align-items: center; background: color-mix(in srgb, #3fb3e6 12%, var(--surface)); border-color: color-mix(in srgb, #3fb3e6 35%, transparent); }
+.sched-card.empty p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.sch-top { display: flex; justify-content: space-between; align-items: center; }
+.sch-top b, .sched-card.empty b { font: 750 18px/1.1 var(--serif); font-variation-settings: 'SOFT' 100; }
+.sch-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.sch-pill { display: grid; justify-items: center; gap: 2px; padding: 7px 0; border-radius: 12px; background: var(--sunk); color: var(--muted); }
+.sch-pill small { font: 600 10.5px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.sch-pill b { font: 700 15px/1 var(--display); }
+.sch-pill.on { background: color-mix(in srgb, #3fb3e6 18%, var(--surface)); color: #1d5fc4; }
+.sch-pill.today { outline: 2px solid #1d5fc4; outline-offset: -2px; }
+:root[data-theme="dark"] .sch-pill.on { color: #7fd0f0; }
+.sch-today { margin: 0; font-weight: 600; font-size: 14px; color: var(--ink); }
+.sch-edit { display: grid; gap: 8px; }
+.sch-row { display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 8px; }
+.sch-day { font: 600 14px/1.1 var(--font); }
+.sch-opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.sch-opts button { display: grid; justify-items: center; gap: 1px; min-height: 44px; padding: 4px 2px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.sch-opts button b { font: 650 12.5px/1.1 var(--font); color: var(--ink); }
+.sch-opts button small { font-size: 10px; }
+.sch-opts button[aria-checked="true"] { background: linear-gradient(145deg, #3fb3e6, #1d5fc4); border-color: transparent; color: #e8f5ff; }
+.sch-opts button[aria-checked="true"] b { color: #fff; }
+.sch-opts button[data-sopt="off"][aria-checked="true"] { background: var(--sunk); border-color: var(--line); color: var(--muted); }
+.sch-opts button[data-sopt="off"][aria-checked="true"] b { color: var(--ink); }
+.sched-head .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #1d5fc4; }

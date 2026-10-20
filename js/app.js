@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
-import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey } from './manual.js';
+import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS } from './manual.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
@@ -363,6 +363,79 @@ function syncPresets() {
   if (!match && $('#timeRow').hidden) showHours(true); // heures personnalisées : on les montre
   return match;
 }
+// ---------- Mon horaire (la semaine type de l'employé) ----------
+// Gardé sur le téléphone, par compte. Un jour de travail : un toucher sur
+// « Bon retour » part le quart avec les bonnes heures, sans formulaire.
+const schedKey = () => session.user?.email || 'local';
+const mySchedule = () => (prefs.schedules || {})[schedKey()] || null;
+function saveSchedule(sc) { prefs.schedules = { ...(prefs.schedules || {}), [schedKey()]: sc }; savePrefs(); }
+const dowOf = (iso) => (dateOf(iso).getDay() + 6) % 7; // 0 = lundi
+const presetOf = (id) => PRESETS.find((p) => p.id === id) || null;
+const todaySched = () => presetOf(mySchedule()?.[dowOf(todayISO())]);
+const presetName = (id) => (t('presets') || {})[id] || id;
+const SCHED_SHORT = { jour: 'J', soir: 'S', 'soir-court': 'SC' };
+function schedEditor(sc) {
+  const days = WEEKDAYS[lang()];
+  return `<div class="sch-edit">${days.map((d, i) => `<div class="sch-row"><span class="sch-day">${esc(cap(d))}</span>
+    <div class="sch-opts" role="radiogroup" aria-label="${esc(cap(d))}">${['off', ...PRESETS.map((p) => p.id)].map((o) => {
+      const on = (sc[i] || 'off') === o;
+      const p = presetOf(o);
+      return `<button type="button" role="radio" data-sday="${i}" data-sopt="${o}" aria-checked="${on}"><b>${esc(o === 'off' ? t('schedOff') : presetName(o))}</b>${p ? `<small class="num">${f(toMin(p.start))}</small>` : ''}</button>`;
+    }).join('')}</div></div>`).join('')}</div>`;
+}
+function openScheduleSheet({ first = false } = {}) {
+  const sc = { ...(mySchedule() || {}) };
+  openSheet(`<div class="sheet-head sched-head"><p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${t(first ? 'schedFirstTitle' : 'schedTitle')}</h2><p class="lede">${t('schedLede')}</p></div>${schedEditor(sc)}`, (root) => {
+    for (const b of root.querySelectorAll('[data-sopt]')) {
+      b.onclick = () => {
+        const i = Number(b.dataset.sday);
+        if (b.dataset.sopt === 'off') delete sc[i]; else sc[i] = b.dataset.sopt;
+        for (const o of root.querySelectorAll(`[data-sday="${i}"]`)) o.setAttribute('aria-checked', String(o === b));
+        clank('step');
+      };
+    }
+    $('#schedDone').onclick = () => {
+      saveSchedule(sc); closeSheet(); toast(t('schedSaved'));
+      if (current === 'history') renderHistory({ animate: false });
+      if (current === 'auth') paintFront();
+    };
+    $('#schedLater')?.addEventListener('click', closeSheet);
+  }, `${first ? `<button type="button" class="btn ghost" id="schedLater">${t('schedLater')}</button>` : ''}<button type="button" class="btn primary" id="schedDone">${t(first ? 'schedDoneFirst' : 'save')}</button>`);
+}
+// Carte « Mon horaire » en haut de Mes shifts.
+function schedCard() {
+  const sc = mySchedule();
+  const days = WEEKDAYS[lang()];
+  const ti = dowOf(todayISO());
+  if (!sc || !Object.keys(sc).length) {
+    return `<div class="sched-card empty"><div><b>${t('schedTitle')}</b><p>${t('schedEmpty')}</p></div><button type="button" class="btn primary" data-sched>${t('schedSet')}</button></div>`;
+  }
+  const tp = todaySched();
+  return `<div class="sched-card"><div class="sch-top"><b>${t('schedTitle')}</b><button type="button" class="link" data-sched>${t('schedEdit')}</button></div>
+    <div class="sch-week">${days.map((d, i) => `<span class="sch-pill${i === ti ? ' today' : ''}${sc[i] ? ' on' : ''}"><small>${esc(cap(d).slice(0, 3))}</small><b>${sc[i] ? SCHED_SHORT[sc[i]] || '•' : '–'}</b></span>`).join('')}</div>
+    <p class="sch-today">${tp ? esc(t('schedTodayIs', presetName(tp.id), f(toMin(tp.start)), f(toMin(tp.end)))) : esc(t('schedTodayOff'))}</p></div>`;
+}
+document.addEventListener('click', (ev) => { if (ev.target.closest('[data-sched]')) openScheduleSheet(); });
+// Un jour prévu à l'horaire : le quart part tout seul, avec les bonnes heures.
+function startScheduled(p) {
+  state = {
+    name: session.user?.name || prefs.name || '',
+    supervisor: '',
+    date: todayISO(),
+    start: p.start,
+    end: p.end,
+    shift: detectShift(p.start, p.end),
+    tasks: {},
+    flags: [],
+    notes: '',
+    view: 'time',
+    createdAt: new Date().toISOString(),
+  };
+  save();
+  window.history.replaceState(null, '', location.pathname);
+  openChecklist();
+}
+
 function pickPreset(id) {
   const p = PRESETS.find((x) => x.id === id);
   if (!p) return;
@@ -387,8 +460,9 @@ function setupScreen() {
   $('#fDate').value = todayISO();
   $('#fDate').hidden = true;
   $('#dateChange').hidden = false;
-  $('#fStart').value = last?.start || SHIFTS[defShift].start;
-  $('#fEnd').value = last?.end || SHIFTS[defShift].end;
+  const planned = todaySched();
+  $('#fStart').value = planned?.start || last?.start || SHIFTS[defShift].start;
+  $('#fEnd').value = planned?.end || last?.end || SHIFTS[defShift].end;
   showHours(false);
   renderPresets();
   paintDate();
@@ -1696,7 +1770,14 @@ function metrics(s) {
 // Rouge : urgent ou pas fait. Ambre : il reste quelque chose à voir. Vert : tout fait, rien à signaler.
 const tone = (m) => (m.urgent || m.notdone ? 'bad' : m.flags || m.pct < 100 ? 'warn' : 'ok');
 
+const HERO_ICONS = {
+  shifts: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17h6"/></svg>',
+  tips: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>',
+  overview: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>',
+};
 async function openApercu({ keep = false } = {}) {
+  if (!ap.modeSet) ap.mode = 'overview';
+  ap.modeSet = false;
   // Pendant un quart, « retour » ramène à la checklist : on le dit.
   $('#apercu .back span').dataset.t = state ? 'myShift' : 'home';
   paintStatic();
@@ -1722,8 +1803,14 @@ async function refreshWeek() {
 
 function renderApercu({ animate = true, dir = 0 } = {}) {
   const today = todayISO();
+  const tipsMode = ap.mode === 'tips';
+  $('#apercu').classList.toggle('mode-tips', tipsMode);
+  $('#apercu').classList.toggle('mode-overview', !tipsMode);
+  $('#apTitle').textContent = t(tipsMode ? 'dashTips' : 'overview');
+  $('#apIcon').innerHTML = tipsMode ? HERO_ICONS.tips : HERO_ICONS.overview;
+  if (tipsMode) ap.tab = 'tips';
   const dates = weekDates(ap.week);
-  $('#apEyebrow').textContent = [CONFIG.gymName, ap.week === mondayOf(today) ? t('thisWeek') : weekRange(ap.week)].filter(Boolean).join(' · ');
+  $('#apEyebrow').textContent = tipsMode ? [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ') : [CONFIG.gymName, ap.week === mondayOf(today) ? t('thisWeek') : weekRange(ap.week)].filter(Boolean).join(' · ');
   const dayBtn = (d) => {
     const info = dayInfo(d);
     const dt = dateOf(d);
@@ -2127,6 +2214,7 @@ function renderHistory({ animate = true } = {}) {
     </section>`).join('');
 
   $('#historyBody').innerHTML = `
+    ${schedCard()}
     <div class="segmented hi-mode" role="tablist">
       <button type="button" role="tab" data-hmode="recent" aria-selected="${!isWeek}">${esc(t('recent'))}</button>
       <button type="button" role="tab" data-hmode="week" aria-selected="${isWeek}">${esc(t('byWeek'))}</button>
@@ -2201,7 +2289,13 @@ function authSheet(open, tab) {
 $('#poolStart').addEventListener('click', (e) => {
   const btn = e.currentTarget;
   if (btn.classList.contains('lifting')) return;
-  const go = () => { if (!session.user) { authSheet(true, 'signup'); return; } window.history.replaceState(null, '', location.pathname); route(); };
+  const go = () => {
+    if (!session.user) { authSheet(true, 'signup'); return; }
+    const tp = !state && todaySched();
+    if (tp) { startScheduled(tp); return; } // jour prévu : le quart part tout seul
+    window.history.replaceState(null, '', location.pathname);
+    route();
+  };
   if (reducedMotion()) { go(); return; }
   btn.classList.add('lifting');
   clank('plate'); buzz('plate');
@@ -2257,7 +2351,10 @@ function paintFront() {
   if (inside) {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
     let sub = t('wbStart');
+    const tp = todaySched();
     if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
+    else if (tp) sub = t('wbToday', presetName(tp.id).toLowerCase(), f(toMin(tp.start)));
+    else if (mySchedule()) sub = t('wbOff');
     label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
   } else {
@@ -2270,9 +2367,9 @@ function paintFront() {
   $('#poolVisit').hidden = inside;
   $('#auth').classList.toggle('inside', inside);
 }
-$('#dashTips').addEventListener('click', () => { ap.tab = 'tips'; prefs.apTab = 'tips'; savePrefs(); openApercu(); });
+$('#dashTips').addEventListener('click', () => { ap.mode = 'tips'; ap.modeSet = true; ap.tab = 'tips'; openApercu(); });
 $('#dashFlag').addEventListener('click', () => openFlag());
-$('#dashOverview').addEventListener('click', () => { ap.tab = 'day'; prefs.apTab = 'day'; savePrefs(); openApercu(); });
+$('#dashOverview').addEventListener('click', () => { ap.mode = 'overview'; ap.modeSet = true; ap.tab = 'day'; prefs.apTab = 'day'; savePrefs(); openApercu(); });
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {
@@ -2342,6 +2439,7 @@ $('#authForm').addEventListener('submit', async (ev) => {
     refreshAlerts().then(retryLoose);
     toast(t('welcomeName', user.name));
     route();
+    if (authUI.tab === 'signup' && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 700);
   } catch (err) {
     fail(err.status === 0 ? 'errNetwork' : AUTH_ERRORS[err.message] || (session.mode === 'demo' && err.message === 'login' ? 'errLogin' : 'errServer'));
   } finally {
@@ -2843,6 +2941,7 @@ if (isVisitor()) {
   let seen = false;
   try { seen = sessionStorage.getItem('visit-hello') === '1'; sessionStorage.setItem('visit-hello', '1'); } catch { /* ignore */ }
   if (!seen) setTimeout(() => toast(t('visitorHello'), 'muted'), 700);
+  if (!seen && !mySchedule()) setTimeout(() => openScheduleSheet({ first: true }), 1600);
 }
 route();
 
