@@ -3,6 +3,10 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+  # Le site se met à jour sur GitHub Pages à chaque changement. Netlify ne
+  # republie que si le message du commit contient [netlify] (économise les
+  # crédits). Le serveur (comptes, historique) reste en ligne sur Netlify.
+  ignore = "git log -1 --pretty=%B | grep -qF '[netlify]' && exit 1 || exit 0"
 
 [[headers]]
   for = "/sw.js"
