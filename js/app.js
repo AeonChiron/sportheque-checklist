@@ -832,6 +832,8 @@ $('#setupForm').addEventListener('submit', (ev) => {
 
 // ---------- 2. Checklist ----------
 // Le quart a-t-il commencé (l'heure du début est passée)? Le pointage attend ce moment.
+// Avant le début (et sans pointage), aucun chiffre de tâches : rien à compter encore.
+const counting = () => shiftStarted() || Boolean(state?.tasks?.pointage?.done);
 const shiftStarted = () => Boolean(state) && Date.now() >= new Date(`${state.date}T${state.start}`).getTime();
 // Le mot laissé par le quart d'avant (2 derniers jours), en haut des tâches.
 let handoff = null;
@@ -941,6 +943,7 @@ function renderTimeline() {
     glass = mountGlass(box);
     box.insertAdjacentHTML('beforeend', '<div class="glass-count"><b class="num"></b><span></span></div>');
   }
+  box.querySelector('.glass-count').hidden = !counting();
   box.querySelector('.glass-count b').textContent = `${done}/${tasks.length}`;
   box.querySelector('.glass-count span').textContent = t('tasks');
   const w = (it) => (it.id === 'pointage' ? PUNCH_W : 1);
@@ -1060,11 +1063,11 @@ function renderChecklist() {
   $('#cEyebrow').textContent = `${SHIFTS[plan.shift][lang()].short} · ${dayMonth(state.date)}`;
   $('#cTitle').textContent = state.name;
   $('#rangeLabel').textContent = `${f(plan.start)} → ${f(plan.end)}`;
-  $('#progressLabel').textContent = done === tasks.length && tasks.length ? t('allDone') : t('leftOf', tasks.length - done, done, tasks.length);
+  $('#progressLabel').textContent = !counting() ? '' : done === tasks.length && tasks.length ? t('allDone') : t('leftOf', tasks.length - done, done, tasks.length);
   renderTimeline();
   renderNow();
 
-  $('#listCount').textContent = `${done}/${tasks.length}`;
+  $('#listCount').textContent = counting() ? `${done}/${tasks.length}` : '';
   const ready = tasks.length > 0 && done === tasks.length;
   $('#finishBtn').classList.toggle('ready', ready);
   $('#finishBtn').textContent = t(ready ? 'finishReady' : 'finish');
@@ -2780,7 +2783,7 @@ function paintFront() {
     let sub = t('wbStart');
     const nx = !state && nextShift();
     if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = t('wbUnsent', n); }
-    else if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
+    else if (state && plan) { const ts = planTasks(); sub = counting() ? t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length) : t('wbWaiting'); }
     else if (nx?.ready) sub = t('wbReady');
     else if (nx) sub = t('wbPeek');
     label.innerHTML = `<span class="wb-avatar">${avatarHTML(session.user, esc((first[0] || '?').toUpperCase()))}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
@@ -3009,6 +3012,21 @@ function openAvatarPicker() {
   }, `<button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
 }
+// Le choix « Voir comme » actuel : nouveau (première visite), employé, superviseur ou admin.
+const curView = () => (prefs.simNew ? 'new' : viewAs() || 'admin');
+// Revivre la première visite : vu comme un employé, sans horaire, le tutoriel au début.
+// L'horaire réel est gardé de côté; « revenir » le remet.
+function startNewbie() {
+  const u = session.user;
+  if (!u) return;
+  if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {} };
+  delete prefs.welcomed?.[u.email];
+  savePrefs();
+  saveSchedule({}, { push: false });
+  setViewAs('employee');
+  closeSheet(); paintViewAs(); goFront(); paintFront();
+  setTimeout(startTour, 420);
+}
 // Pastille « Aperçu : Employé » tant que l'admin regarde l'app avec un autre rôle; un toucher revient à Admin.
 function paintViewAs() {
   let b = $('#viewAsBadge');
@@ -3017,7 +3035,7 @@ function paintViewAs() {
   const fresh = isRealAdmin() && prefs.simNew;
   if (!v && !who && !fresh) { b?.remove(); return; }
   if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'viewAsBadge'; b.className = 'view-badge'; $('.pool-head').prepend(b); b.onclick = () => { setViewAs(''); delete prefs.actAs; if (prefs.simNew) { const back = prefs.simNew.sched; delete prefs.simNew; saveSchedule(back, { push: false }); } savePrefs(); paintViewAs(); goFront(); paintFront(); toast(t('viewAsBack')); }; }
-  b.textContent = `${[v && t('viewAsNow', roleName(v)), fresh && t('simNewBadge'), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
+  b.textContent = `${[fresh ? t('viewAsNow', t('viewAsNew')) : v && t('viewAsNow', roleName(v)), who && t('actAsBadge', who)].filter(Boolean).join(' · ')} · ${t('viewAsExit')}`;
 }
 function openAccount() {
   let pendingView = '';
@@ -3028,7 +3046,7 @@ function openAccount() {
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span>${viewAs() ? ` <span class="pill sim">${esc(t('viewAsNow', roleName(viewAs())))}</span>` : ''}</p></div></div>
-    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="segmented view-as" role="radiogroup">${['employee', 'boss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${(viewAs() || 'admin') === r}">${esc(roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
+    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="view-as" role="radiogroup">${['employee', 'boss', 'admin', 'new'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${curView() === r}">${esc(r === 'new' ? t('viewAsNew') : roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
     <label class="field act-as"><span>${esc(t('actAsLabel'))}</span><div class="acct-btns"><input id="acActAs" autocomplete="off" maxlength="40" value="${esc(prefs.actAs || '')}" placeholder="${esc(u.name)}"><button type="button" class="btn ghost" id="acActAsSave">${esc(t('save'))}</button></div></label>
     <p class="section-note">${esc(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsNote'))}</p>` : ''}
     <div class="acct-list">
@@ -3045,7 +3063,6 @@ function openAccount() {
       <p class="section-note">${esc(t('adminUnlock'))}</p>
       <div class="acct-btns">
         ${state ? `<button type="button" class="btn ghost" id="acFill">${esc(t('adminFill'))}</button>` : ''}
-        <button type="button" class="btn ghost" id="acNewbie">${esc(t('simNewBtn'))}</button>
         <button type="button" class="btn ghost" id="acWipe">${esc(t('adminWipe'))}</button>
       </div>
     </div>
@@ -3078,7 +3095,7 @@ function openAccount() {
       pendingView = b.dataset.viewas;
       root.querySelectorAll('[data-viewas]').forEach((o) => o.setAttribute('aria-checked', String(o === b)));
       const foot = $('#sheetFoot [data-close-sheet]');
-      if (foot) foot.textContent = t(pendingView === (viewAs() || 'admin') ? 'close' : 'apply');
+      if (foot) foot.textContent = t(pendingView === curView() ? 'close' : 'apply');
       sfx('tab');
     }; });
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
@@ -3092,15 +3109,6 @@ function openAccount() {
     $('#acClockSet').onclick = () => { const v = $('#acClock').value; if (v) setClock(new Date(v).getTime() - (Date.now() - (prefs.clockOffset || 0))); }; // décalage = heure voulue − heure réelle
     $('#acClockReal')?.addEventListener('click', () => setClock(0));
     $('#acFill')?.addEventListener('click', () => { for (const it of planTasks()) state.tasks[it.id] = { ...(state.tasks[it.id] || {}), done: true, skipped: false, doneAt: new Date().toISOString() }; save(); closeSheet(); openChecklist(); sfx('full'); });
-    // Revivre l'arrivée d'un nouvel employé : sans horaire, tutoriel au début. L'horaire réel est gardé de côté.
-    $('#acNewbie').onclick = () => {
-      if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {} };
-      delete prefs.welcomed?.[u.email];
-      savePrefs();
-      saveSchedule({}, { push: false });
-      closeSheet(); paintViewAs(); goFront(); paintFront();
-      setTimeout(startTour, 420);
-    };
     $('#acWipe').onclick = (e) => {
       const b = e.currentTarget;
       if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('adminWipeSure'); return; }
@@ -3118,7 +3126,9 @@ function openAccount() {
     });
   }, `<button type="button" class="btn ghost danger" id="acSignOut">${t('signOut')}</button><button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', () => {
-    if (pendingView && pendingView !== (viewAs() || 'admin')) {
+    if (pendingView && pendingView !== curView()) {
+      if (pendingView === 'new') { startNewbie(); return; } // première visite : employé, sans horaire, tutoriel
+      if (prefs.simNew) { saveSchedule(prefs.simNew.sched, { push: false }); delete prefs.simNew; savePrefs(); }
       setViewAs(pendingView); sfx('save'); paintViewAs(); closeSheet(); goFront(); paintFront();
       toast(pendingView === 'admin' ? t('viewAsBack') : t('viewAsNow', roleName(pendingView)));
       return;

@@ -2316,7 +2316,8 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .tour-dots { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
 .tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .tour-dots i.on { background: var(--ink); }
-.tour-cheer { display: block; width: 120px; height: auto; margin: -64px auto 6px; }
+.tour-cheer { display: block; width: 116px; height: auto; margin: 0 auto 10px; }
+.glass-count[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .tour-hole, .tour-tip { transition: none; animation: none; } .tour-hole::after { animation: none; } }
 .tour-tip.done ~ *, .tour-hole[style*="width:0"]::after { display: none; }
 /* Admin : la poubelle à côté de chaque quart (deux touchers). */
@@ -2374,3 +2375,6 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .glass-count b { font-size: 36px; }
 .check-wait { font-family: inherit; cursor: pointer; }
 .pic-opt img { width: 100%; max-width: 76px; aspect-ratio: 1; border-radius: 50%; object-fit: cover; display: block; }
+.view-as { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.view-as button { min-height: 46px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: 700 15px/1 var(--font); cursor: pointer; }
+.view-as button[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
