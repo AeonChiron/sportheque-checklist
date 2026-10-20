@@ -66,8 +66,8 @@ export const GEAR = [
   { t: 'aisle', x: 270, y: 34, w: 160, h: 36 },
   { t: 'aisle', x: 333, y: 89, w: 30, h: 74 },
   { t: 'rack', x: 270, y: 22, w: 150, h: 10 },
-  { t: 'press', x: 210, y: 41, w: 22, h: 26, rot: 90 },
-  { t: 'press', x: 240, y: 41, w: 22, h: 26, rot: 90 },
+  { t: 'press', x: 210, y: 41, w: 22, h: 26 }, // face vers le haut (vers les haltères)
+  { t: 'press', x: 240, y: 41, w: 22, h: 26 }, // face vers le haut (vers les haltères)
   ...[270, 290, 310].map((x) => ({ t: 'bench', x, y: 41, w: 7, h: 16 })),
   { t: 'squat', x: 333, y: 62, w: 18, h: 18 },
   { t: 'smith', x: 333, y: 86, w: 18, h: 22 },

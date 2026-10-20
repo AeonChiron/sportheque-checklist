@@ -188,7 +188,13 @@ function paintStatic() {
   paintThemeButtons();
   if ($('#poolStartLabel')) paintFront();
   const gym = $('#poolGym');
-  if (gym) { gym.textContent = CONFIG.gymName || ''; gym.hidden = !CONFIG.gymName; }
+  if (gym && gym.dataset.txt !== (CONFIG.gymName || '')) {
+    // Le nom du gym lettre par lettre : elles tombent en place, puis font la vague de temps en temps.
+    const name = CONFIG.gymName || '';
+    gym.dataset.txt = name;
+    gym.innerHTML = `<span class="sr-only">${esc(name)}</span><span aria-hidden="true">${[...name].map((c, i) => `<i style="--i:${i}">${esc(c)}</i>`).join('')}</span>`;
+    gym.hidden = !name;
+  }
   const lines = t('dailyLines'), day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
   if ($('#poolCheer') && Array.isArray(lines)) $('#poolCheer').textContent = lines[day % lines.length];
   $('#manualVersion').textContent = [CONFIG.gymName && CONFIG.since ? `${CONFIG.gymName} · ${t('since', CONFIG.since)}` : '', t('manual', MANUAL_VERSION)].filter(Boolean).join(' · ');
@@ -2472,14 +2478,15 @@ function paintFront() {
     let sub = t('wbStart');
     const nx = !state && nextShift();
     if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
-    else if (nx?.ready) sub = t('wbReady', nb(f(toMin(nx.start))), nb(f(toMin(nx.end))));
-    else if (nx) sub = t('wbNext', whenLabel(nx.date), nb(f(toMin(nx.start))));
+    else if (nx?.ready) sub = t('wbReady');
+    else if (nx) sub = t('wbPeek');
     label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
   } else {
     label.textContent = t('getStarted');
     $('#poolStart').removeAttribute('aria-label');
   }
+  paintNextBox(inside);
   $('#poolDash').hidden = !inside;
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
@@ -2487,8 +2494,38 @@ function paintFront() {
   $('#auth').classList.toggle('inside', inside);
 }
 $('#dashFlag').addEventListener('click', () => openFlag());
-// La carte suit l'heure : 30 min avant, « Prochain quart » devient « On y va ».
-setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 30000);
+// La boîte du prochain quart, sous « Bon retour » : le jour, les heures et le
+// compte à rebours. Un toucher fait la même chose que la carte.
+function countdown(min) {
+  if (min >= 1440) return t('cdDays', Math.floor(min / 1440), Math.floor((min % 1440) / 60));
+  if (min >= 60) return t('cdHours', Math.floor(min / 60), String(min % 60).padStart(2, '0'));
+  return t('cdMin', Math.max(1, min));
+}
+// « Aujourd'hui », « Demain », sinon le jour de la semaine.
+function dayWord(iso) {
+  const today = todayISO();
+  if (iso === today) return t('today');
+  if (iso === addDays(today, 1)) return t('tomorrow');
+  return cap(dateOf(iso).toLocaleDateString(locale(), { weekday: 'long' }));
+}
+function paintNextBox(inside) {
+  const box = $('#poolNext');
+  const nx = inside && !state && nextShift();
+  box.hidden = !nx;
+  if (!nx) return;
+  const at = dateOf(nx.date);
+  at.setHours(0, toMin(nx.start), 0, 0);
+  const left = Math.ceil((at - Date.now()) / 6e4);
+  const go = left <= 0;
+  box.classList.toggle('ready', nx.ready);
+  box.setAttribute('aria-label', `${t(nx.ready ? 'nbNow' : 'nbNext')} : ${whenLabel(nx.date)}, ${f(toMin(nx.start))} – ${f(toMin(nx.end))}. ${go ? t('nbGo') : `${t('nbIn')} ${countdown(left)}`}`);
+  box.innerHTML = `<span class="nb-ico" aria-hidden="true">${ICON.clock}</span>
+    <span class="nb-text"><small>${esc(t(nx.ready ? 'nbNow' : 'nbNext'))}</small><b>${esc(dayWord(nx.date))}</b><em>${nx.date === todayISO() ? `${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}` : `${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))} · ${nb(f(toMin(nx.start)))}`}</em></span>
+    <span class="nb-count"><small>${esc(go ? t('nbGo') : t('nbIn'))}</small><b class="num">${esc(go ? t('nbGoBig') : countdown(left))}</b></span>`;
+}
+$('#poolNext').addEventListener('click', () => $('#poolStart').click());
+// Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
+setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 20000);
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {

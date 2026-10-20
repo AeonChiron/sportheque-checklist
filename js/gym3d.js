@@ -158,7 +158,12 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     rower: (g) => { part(g, 0, 0, 6, 40, 3, C.metal); part(g, 0, 5, 5, 6, 3, C.dark, { y: y0 + 3 }); part(g, 0, 17, 8, 6, 7, C.dark); },
     bike: (g) => { part(g, 0, 0, 6, 18, 3, C.metal); rod(g, 0, 5, 3.5, 1.5, C.dark, { y: y0 + 5, axis: 'x' }); part(g, 0, -4, 2, 2, 11, C.dark); part(g, 0, -4, 4, 6, 1.2, C.dark, { y: y0 + 11 }); part(g, 0, 6, 2, 2, 13, C.dark); part(g, 0, 6, 8, 2, 1, C.dark, { y: y0 + 13 }); },
     machine: (g, it) => { part(g, 0, 0, it.w, it.h, 3, C.metal); part(g, 0, -it.h / 2 + 2, 3, 3, 16, C.dark); part(g, 0, it.h / 2 - 3, it.w - 4, 4, 6, C.dark); },
-    bench: (g, it) => { part(g, 0, 0, it.w, 6, 5, C.dark); part(g, -it.w / 2 + 3, 0, 2, 4, 3, C.metal); part(g, it.w / 2 - 3, 0, 2, 4, 3, C.metal); },
+    bench: (g, it) => {
+      // Le banc suit son plus long côté : en long sur le plan (h > w), il fait face vers le haut.
+      const up = it.h > it.w, len = Math.max(it.w, it.h);
+      part(g, 0, 0, up ? 6 : len, up ? len : 6, 5, C.dark);
+      for (const k of [-1, 1]) part(g, up ? 0 : k * (len / 2 - 3), up ? k * (len / 2 - 3) : 0, up ? 4 : 2, up ? 2 : 4, 3, C.metal);
+    },
     squat: (g) => { for (const [dx, dz] of [[-8, -8], [8, -8], [-8, 8], [8, 8]]) part(g, dx, dz, 2, 2, 26, C.dark); part(g, 0, -8, 18, 2, 1.5, C.dark, { y: y0 + 26 }); part(g, 0, 8, 18, 2, 1.5, C.dark, { y: y0 + 26 }); rod(g, 0, 0, 0.8, 30, C.metal, { y: y0 + 16, axis: 'x' }); },
     press: (g) => { part(g, -8, -11, 3.5, 3.5, 20, C.dark); part(g, 8, -11, 3.5, 3.5, 20, C.dark); rod(g, 0, -11, 0.8, 30, C.metal, { y: y0 + 18, axis: 'x' }); part(g, 0, 3, 6.5, 20, 5, C.dark); },
     plates: (g) => { rod(g, 0, 0, 7, 2, C.dark); rod(g, 0, 0, 1.4, 14, C.metal); },

@@ -277,7 +277,9 @@ const GEAR_SVG = {
   rower: () => `${r(-3, -20, 6, 40, 3, 'eq')}<circle cy="6" r="2.4" class="eq-dark"/>${r(-4, 15, 8, 5, 2, 'eq-dark')}`,
   bike: () => `${r(-3, -9, 6, 18, 3, 'eq')}<circle cy="5" r="3" class="eq-dark"/><path d="M-4 -6h8" class="eq-bar"/>`,
   machine: (g) => `${r(-g.w / 2, -g.h / 2, g.w, g.h, 2.5, 'eq')}${r(-g.w / 2 + 3, g.h / 2 - 5, g.w - 6, 3, 1.5, 'eq-seat')}`,
-  bench: (g) => `${r(-g.w / 2, -3, g.w, 6, 3, 'eq')}${r(-g.w / 2 + 2, -1.5, 10, 3, 1.5, 'eq-seat')}`,
+  bench: (g) => (g.h > g.w // en long sur le plan : le banc fait face vers le haut
+    ? `${r(-3, -g.h / 2, 6, g.h, 3, 'eq')}${r(-1.5, -g.h / 2 + 2, 3, Math.min(10, g.h - 4), 1.5, 'eq-seat')}`
+    : `${r(-g.w / 2, -3, g.w, 6, 3, 'eq')}${r(-g.w / 2 + 2, -1.5, 10, 3, 1.5, 'eq-seat')}`),
   squat: () => `${r(-9, -9, 18, 18, 1.5, 'eq frame')}<path d="M-12 0h24" class="eq-bar"/>`,
   press: () => `${r(-9.75, -13, 3.5, 3.5, 1, 'eq-dark')}${r(6.25, -13, 3.5, 3.5, 1, 'eq-dark')}<path d="M-13 -11.25h26" class="eq-bar"/>${r(-3.25, -7, 6.5, 20, 3, 'eq')}`,
   plates: () => `<circle r="7" class="eq"/><circle r="3" class="eq-seat"/>`,
