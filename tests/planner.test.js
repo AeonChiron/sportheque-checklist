@@ -20,13 +20,13 @@ test('Quart 1 7:30–15:30 reproduit exactement la fiche 1', () => {
   assert.equal(p.totals.paid, 420); // 7 h payées
 });
 
-test('Quart 2 16:30–23:00 : fiche 2, tuiles/miroirs en un seul bloc de 20 min', () => {
+test('Quart 2 16:30–23:00 : fiche 2 à la minute près (pause fixe à 20 h 30)', () => {
   const p = buildPlan({ shift: 2, date: '2026-10-19', start: '16:30', end: '23:00' });
   assert.deepEqual(rows(p), [
     '16 h 30–16 h 45 q2-inspection', '16 h 45–17 h 15 q2-guenilles-1', '17 h 15–17 h 45 q2-desinfection',
     '17 h 45–18 h q2-rangement', '18 h–19 h q2-souper', '19 h–19 h 20 q2-poubelles',
-    '19 h 20–20 h 20 q2-profondeur', '20 h 20–20 h 40 q2-surfaces', '20 h 40–20 h 55 q2-pause',
-    '20 h 55–21 h 45 q2-aspirateur', '21 h 45–22 h 15 q2-guenilles-2',
+    '19 h 20–20 h 20 q2-profondeur', '20 h 20–20 h 30 q2-surfaces', '20 h 30–20 h 45 q2-pause',
+    '20 h 45–21 h 35 q2-aspirateur', '21 h 35–21 h 45 q2-surfaces-2', '21 h 45–22 h 15 q2-guenilles-2',
     '22 h 15–22 h 45 q2-hebdo', '22 h 45–23 h q2-fermeture',
   ]);
   assert.equal(p.totals.paid, 330); // 5 h 30 payées
@@ -101,8 +101,8 @@ test('Détection du quart', () => {
 
 test('Contenu du jour : zone, hebdo, mercredi compost', () => {
   const p = buildPlan({ shift: 2, date: '2026-10-21', start: '16:30', end: '23:00' });
-  assert.equal(p.items.find((i) => i.deep).title, 'Nettoyage en profondeur — Zone C');
-  assert.ok(p.items.find((i) => i.id === 'q2-poubelles').steps.some((x) => /bordure de rue/.test(x)));
+  assert.equal(p.items.find((i) => i.deep).title, 'Nettoyage en profondeur : zone C');
+  assert.ok(p.items.find((i) => i.id === 'q2-poubelles').steps.some((x) => /au chemin/.test(x)));
   assert.match(p.items.find((i) => i.id === 'q2-hebdo').steps[0], /entraîneurs/);
 });
 
@@ -118,7 +118,7 @@ test('Version anglaise : même plan, textes traduits', () => {
   const fr = buildPlan({ shift: 2, date: '2026-10-21', start: '16:30', end: '23:00' });
   const en = buildPlan({ shift: 2, date: '2026-10-21', start: '16:30', end: '23:00', lang: 'en' });
   assert.deepEqual(en.items.map((i) => [i.id, i.start, i.end]), fr.items.map((i) => [i.id, i.start, i.end]));
-  assert.equal(en.items.find((i) => i.id === 'q2-profondeur').title, 'Deep clean — Zone C');
+  assert.equal(en.items.find((i) => i.id === 'q2-profondeur').title, 'Deep clean: zone C');
   assert.equal(en.shiftName, 'Evening shift');
   assert.equal(en.weekdayName, 'Wednesday');
   for (const it of en.items.filter((i) => i.kind === 'task')) assert.ok(it.steps.length > 0, it.id);
