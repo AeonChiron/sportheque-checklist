@@ -470,33 +470,57 @@ function schedEditor(sc) {
 // Pas encore d'horaire : un choix rapide (le quart habituel + les jours, lundi à vendredi déjà cochés).
 // L'horaire jour par jour reste à un toucher, mais ce n'est pas le chemin par défaut.
 function openQuickSchedule({ first = false } = {}) {
+  // Les jours d'abord : touche un jour, il demande « de quelle heure à quelle heure ».
+  // Les quarts habituels (Jour, Soir…) servent juste à remplir les heures d'un toucher.
   const days = WEEKDAYS[lang()];
-  const pick = { preset: PRESETS[0].id, days: new Set([0, 1, 2, 3, 4]), start: '08:00', end: '16:00' };
+  const old = mySchedule() || {};
+  const p0 = PRESETS[0];
+  const pick = Object.fromEntries(days.map((_, i) => {
+    const v = presetOf(old[i]);
+    return [i, v?.start ? { on: true, start: v.start, end: v.end } : { on: !Object.keys(old).length && i < 5, start: p0.start, end: p0.end }];
+  }));
+  const ok = (d) => d.start && d.end && d.start !== d.end;
+  const row = (d, i) => `<div class="qs-row${pick[i].on ? ' on' : ''}" data-row="${i}">
+      <button type="button" class="qs-day" data-qd="${i}" aria-pressed="${pick[i].on}"><span class="qs-box" aria-hidden="true"></span><b>${esc(cap(d))}</b></button>
+      <div class="qs-times"${pick[i].on ? '' : ' hidden'}><span>${esc(t('qsFromShort'))}</span><input type="time" step="900" data-qt="start" data-i="${i}" value="${pick[i].start}" aria-label="${esc(`${cap(d)} · ${t('qsFrom')}`)}"><span>${esc(t('qsToShort'))}</span><input type="time" step="900" data-qt="end" data-i="${i}" value="${pick[i].end}" aria-label="${esc(`${cap(d)} · ${t('qsTo')}`)}"></div>
+    </div>`;
   const paint = (root) => {
-    for (const b of root.querySelectorAll('[data-qs]')) b.setAttribute('aria-checked', String(b.dataset.qs === pick.preset));
-    for (const b of root.querySelectorAll('[data-qd]')) b.setAttribute('aria-pressed', String(pick.days.has(Number(b.dataset.qd))));
-    root.querySelector('#qsOwn').hidden = pick.preset !== 'own';
-    root.querySelector('#qsSave').disabled = !pick.days.size || (pick.preset === 'own' && !(pick.start && pick.end && pick.start !== pick.end));
+    for (const [i, d] of Object.entries(pick)) {
+      const r = root.querySelector(`[data-row="${i}"]`);
+      r.classList.toggle('on', d.on);
+      r.querySelector('[data-qd]').setAttribute('aria-pressed', String(d.on));
+      r.querySelector('.qs-times').hidden = !d.on;
+      for (const inp of r.querySelectorAll('[data-qt]')) if (inp.value !== d[inp.dataset.qt]) inp.value = d[inp.dataset.qt];
+    }
+    const on = Object.values(pick).filter((d) => d.on);
+    $('#qsSave').disabled = !on.length || !on.every(ok);
   };
   openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${esc(t('qsTitle'))}</h2><p class="lede">${esc(t('qsLede'))}</p></div>
-    <p class="block-label">${esc(t('qsShift'))}</p>
-    <div class="qs-shifts" role="radiogroup">${PRESETS.map((p) => `<button type="button" role="radio" data-qs="${p.id}" aria-checked="false"><b>${esc(presetName(p.id))}</b><span class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</span></button>`).join('')}
-      <button type="button" role="radio" data-qs="own" aria-checked="false" class="qs-own-btn"><b>${esc(t('qsOwn'))}</b><span>${esc(t('qsOwnSub'))}</span></button></div>
-    <div class="qs-own" id="qsOwn" hidden><label class="field"><span>${esc(t('qsFrom'))}</span><input type="time" id="qsStart" value="${pick.start}" step="900"></label><label class="field"><span>${esc(t('qsTo'))}</span><input type="time" id="qsEnd" value="${pick.end}" step="900"></label></div>
-    <p class="block-label">${esc(t('qsDays'))}</p>
-    <div class="qs-days">${days.map((d, i) => `<button type="button" data-qd="${i}" aria-pressed="false" aria-label="${esc(cap(d))}">${esc(cap(d).slice(0, 3))}</button>`).join('')}</div>
-    <button type="button" class="btn ghost qs-custom" id="qsCustom">${esc(t('qsCustom'))}</button>`, (root) => {
+    <div class="qs-list">${days.map(row).join('')}</div>
+    <p class="block-label">${esc(t('qsFill'))}</p>
+    <div class="qs-fill">${PRESETS.map((p) => `<button type="button" class="chip" data-qs="${p.id}"><b>${esc(presetName(p.id))}</b> ${nb(f(toMin(p.start)))}–${nb(f(toMin(p.end)))}</button>`).join('')}</div>`, (root) => {
     paint(root);
     root.addEventListener('click', (e) => {
-      const s1 = e.target.closest('[data-qs]'), d1 = e.target.closest('[data-qd]');
-      if (s1) { pick.preset = s1.dataset.qs; clank('step'); paint(root); if (pick.preset === 'own') root.querySelector('#qsStart').focus(); }
-      if (d1) { const n = Number(d1.dataset.qd); if (pick.days.has(n)) pick.days.delete(n); else pick.days.add(n); sfx('toggle'); paint(root); }
+      const d1 = e.target.closest('[data-qd]'), s1 = e.target.closest('[data-qs]');
+      if (d1) {
+        const i = Number(d1.dataset.qd);
+        pick[i].on = !pick[i].on; sfx('toggle'); paint(root);
+        if (pick[i].on) root.querySelector(`[data-row="${i}"] [data-qt="start"]`).focus({ preventScroll: true });
+      }
+      if (s1) { // remplit les jours cochés avec ce quart
+        const p = presetOf(s1.dataset.qs);
+        for (const d of Object.values(pick)) if (d.on) { d.start = p.start; d.end = p.end; }
+        clank('step'); paint(root);
+      }
     });
-    for (const id of ['qsStart', 'qsEnd']) root.querySelector(`#${id}`).oninput = (e) => { pick[id === 'qsStart' ? 'start' : 'end'] = e.target.value; paint(root); };
-    root.querySelector('#qsCustom').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet({ first, full: true }), 340); };
-    root.querySelector('#qsSave').onclick = () => {
-      const p = pick.preset === 'own' ? { start: pick.start, end: pick.end } : presetOf(pick.preset);
-      saveSchedule(Object.fromEntries([...pick.days].map((d) => [d, { start: p.start, end: p.end }])));
+    root.addEventListener('input', (e) => {
+      const inp = e.target.closest('[data-qt]');
+      if (!inp) return;
+      pick[inp.dataset.i][inp.dataset.qt] = inp.value;
+      paint(root);
+    });
+    $('#qsSave').onclick = () => {
+      saveSchedule(Object.fromEntries(Object.entries(pick).filter(([, d]) => d.on).map(([i, d]) => [i, { start: d.start, end: d.end }])));
       closeSheet(); toast(t('qsSaved')); setTimeout(() => sfx('save'), 120);
       if (current === 'auth') paintFront();
       if (current === 'history') renderHistory({ animate: false });
@@ -506,7 +530,7 @@ function openQuickSchedule({ first = false } = {}) {
 function openScheduleSheet({ first = false, full = false } = {}) {
   const sc = {};
   for (const [k, v] of Object.entries(mySchedule() || {})) { const h = hoursOf(v); if (h) sc[k] = { start: h.start, end: h.end }; }
-  if (!full && !Object.keys(sc).length) { openQuickSchedule({ first }); return; }
+  if (!full) { openQuickSchedule({ first }); return; }
   let lastHours = Object.values(sc).at(-1) || { start: PRESETS[0].start, end: PRESETS[0].end };
   openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${t(first ? 'schedFirstTitle' : 'schedTitle')}</h2><p class="lede">${t('schedLede')}</p></div>${schedEditor(sc)}`, (root) => {
     const paintRow = (i) => {

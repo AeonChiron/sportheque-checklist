@@ -2408,3 +2408,21 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .qs-own[hidden] { display: none; }
 .qs-own input { font-size: 20px; font-weight: 700; width: 100%; }
 .qs-custom { display: block; margin: 18px auto 0; }
+/* Horaire : une ligne par jour, ses heures juste à côté */
+.qs-list { display: grid; gap: 8px; }
+.qs-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; border: 2px solid var(--line); border-radius: 16px; background: var(--surface); }
+.qs-row.on { border-color: var(--ink); }
+.qs-day { display: flex; align-items: center; gap: 12px; min-height: 44px; flex: 1 1 140px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 18px; text-align: left; cursor: pointer; padding: 0 4px; }
+.qs-box { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--muted); flex: none; display: grid; place-items: center; }
+.qs-day[aria-pressed="true"] .qs-box { background: var(--ink); border-color: var(--ink); }
+.qs-day[aria-pressed="true"] .qs-box::after { content: '✓'; color: var(--surface); font-weight: 800; font-size: 16px; }
+.qs-times { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; }
+.qs-times[hidden] { display: none; }
+.qs-times span { color: var(--muted); }
+.qs-times input { flex: 1; min-width: 0; font-size: 18px; font-weight: 700; min-height: 44px; }
+.qs-fill { display: flex; flex-wrap: wrap; gap: 8px; }
+.qs-fill .chip { cursor: pointer; font-size: 14px; padding: 8px 12px; }
+.qs-list + .block-label { margin-top: 16px; }
+.qs-row { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.qs-times { min-width: 0; max-width: 100%; }
+.qs-times input { flex: 1 1 0; width: 0; padding-left: 10px; padding-right: 6px; }
