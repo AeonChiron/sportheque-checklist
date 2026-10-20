@@ -97,3 +97,8 @@ Plain static site + one serverless function. No build step.
 - Class `.break` is the break *row*; timeline segments use `.seg.rest`.
 - New decorative animations must be pausable by `body.calm` (pseudo-elements are covered; anything else add to that rule).
 - GitHub push from cloud sessions needs the Claude GitHub App installed on the repo.
+
+## Source rules (owner-confirmed)
+- The training manual (RÉFÉRENCE-IA-2026-10-17) is the only source for times, durations, rotations and responsibilities. Break and meal times are fixed and never move (Q1: pause 10 h 30, dîner 12 h 30; Q2: souper 18 h, pause 20 h 30).
+- The team's own sheet (« Fiche d'entretien », proposed 7 h 30–15 h 30) is for extra tips and wording only; never take its schedule, zone-by-weekday table, morning compost or morning office vacuuming.
+- Wording: short, plain Gatineau French, tutoiement; use the team's words: guenilles, tuiles, machines de bench, tapis gris, tapis noirs. Dust dry first, then a barely damp rag with product (product on the rag, never sprayed on a screen).
