@@ -2389,3 +2389,5 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .hi-tally li:first-child { border-top: 0; }
 .hi-tally li.ok b::before { content: '✓ '; }
 .hi-tally li.bad b { color: var(--bad, #c0392b); }
+.tour.away { opacity: 0; pointer-events: none; }
+.hi-by { margin: 0 0 8px; }

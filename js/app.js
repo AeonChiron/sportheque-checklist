@@ -655,11 +655,13 @@ function startTour() {
     $(sel)?.scrollIntoView({ block: 'center' });
     tip.className = 'tour-tip';
     tip.innerHTML = `<p class="tour-count">${i + 1} / ${steps.length}</p><h2 id="tourH">${esc(t(`${k}T`))}</h2><p>${esc(t(k))}</p>
-      <div class="tour-btns"><button type="button" class="link" data-tour="skip">${esc(t('tourSkip'))}</button><button type="button" class="btn primary" data-tour="next">${esc(t(i === steps.length - 1 ? 'tourLast' : 'tourNext'))}</button></div>
+      <div class="tour-btns">${k === 'tourPic' // la photo : on la choisit tout de suite, une peluche de préférence
+        ? `<button type="button" class="link" data-tour="next">${esc(t('tourLater'))}</button><button type="button" class="btn primary" data-tour="pic">${esc(t('tourPicGo'))}</button>`
+        : `<button type="button" class="link" data-tour="skip">${esc(t('tourSkip'))}</button><button type="button" class="btn primary" data-tour="next">${esc(t(i === steps.length - 1 ? 'tourLast' : 'tourNext'))}</button>`}</div>
       <div class="tour-dots">${steps.map((st, j) => `<button type="button" data-tour-go="${j}" class="${j <= i ? 'on' : ''}" aria-label="${esc(t(`${st[1]}T`))}"${j === i ? ' aria-current="step"' : ''}></button>`).join('')}</div>`;
     place();
     sfx('tick');
-    tip.querySelector('[data-tour="next"]').focus({ preventScroll: true });
+    tip.querySelector('.btn[data-tour]').focus({ preventScroll: true });
   };
   box.addEventListener('click', (e) => {
     if (box.classList.contains('wait')) return;
@@ -669,6 +671,15 @@ function startTour() {
     const act = b?.dataset.tour || (e.target === hole || e.target === box ? 'next' : '');
     if (act === 'next') { i += 1; show(); }
     else if (act === 'skip') { i = steps.length; finish(); }
+    else if (act === 'pic') {
+      // Le tutoriel s'efface le temps de choisir, puis reprend à l'étape suivante.
+      box.classList.add('away');
+      let back = false;
+      const resume = () => { if (back) return; back = true; clearInterval(watch); box.classList.remove('away'); i += 1; setTimeout(show, 360); };
+      closeSheet();
+      setTimeout(() => openAvatarPicker({ after: resume }), 320);
+      const watch = setInterval(() => { if (!back && !sheetOpen() && !$('#sheet').classList.contains('closing')) resume(); }, 700);
+    }
     else if (act === 'end') end();
     else if (act === 'sched') end(() => openScheduleSheet({ first: true }));
   });
@@ -2556,7 +2567,7 @@ function histCard(s, i) {
   return `<button type="button" class="rp-card hi-card ${tone(m)}" data-hi="${i}" style="--k:${Math.min(i, 8)}">
     <span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>
     <span class="rp-main">
-      <span class="hi-top"><b>${esc(s.name)}</b><span class="hi-meta num">${esc(SHIFTS[s.shift][L].short)}${s.start ? ` · ${hhmm(s.start)} – ${hhmm(s.end)}` : ''}</span></span>
+      <span class="hi-top"><b>${esc(s.name?.trim() || t('employeeUnknown'))}</b><span class="hi-meta num">${esc(SHIFTS[s.shift][L].short)}${s.start ? ` · ${hhmm(s.start)} – ${hhmm(s.end)}` : ''}</span></span>
       <span class="hi-result ${all ? 'ok' : ''}">${all ? '✓ ' : ''}${esc(t('tasksDone', m.done, m.total))}</span>
       ${tags ? `<span class="tags">${tags}</span>` : ''}
     </span>${CHEV_R}</button>`;
@@ -2590,10 +2601,14 @@ function renderHistory({ animate = true } = {}) {
   let shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
     .filter((x) => isBoss() || !me || (x.name || '').trim().toLowerCase() === me);
   // Le patron voit toute l'équipe par défaut, ou un·e employé·e à la fois.
-  const names = isBoss() ? [...new Set(shifts.map((x) => x.name))].sort((a, b) => a.localeCompare(b)) : [];
+  // Par employé·e ou par quart (matin, soir). Sans nom connu, on écrit simplement « Employé·e ».
+  const keyOf = (x) => (hist.by === 'shift' ? String(x.shift) : (x.name || '').trim() || '?');
+  const labelOf = (v) => (hist.by === 'shift' ? SHIFTS[v]?.[lang()].short || v : v === '?' ? t('employeeUnknown') : v);
+  const names = isBoss() ? [...new Set(shifts.map(keyOf))].sort((a, b) => a.localeCompare(b)) : [];
   if (hist.who && !names.includes(hist.who)) hist.who = '';
-  const whoBar = names.length > 1 ? `<div class="hi-who">${['', ...names].map((n) => `<button type="button" class="chip" data-hwho="${esc(n)}" aria-pressed="${hist.who === n}">${esc(n || t('teamAll'))}</button>`).join('')}</div>` : '';
-  if (hist.who) shifts = shifts.filter((x) => x.name === hist.who);
+  const whoBar = isBoss() && shifts.length ? `<div class="segmented hi-by" role="tablist">${['who', 'shift'].map((b) => `<button type="button" role="tab" data-hby="${b}" aria-selected="${(hist.by || 'who') === b}">${esc(t(b === 'who' ? 'byEmployee' : 'byShift'))}</button>`).join('')}</div>
+    <div class="hi-who">${['', ...names].map((n) => `<button type="button" class="chip" data-hwho="${esc(n)}" aria-pressed="${hist.who === n}">${esc(n ? labelOf(n) : t('teamAll'))}</button>`).join('')}</div>` : '';
+  if (hist.who) shifts = shifts.filter((x) => keyOf(x) === hist.who);
   $('#hiEyebrow').textContent = [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ');
 
   // Par jour, le plus récent en haut; dans un jour, le dernier enregistré en haut.
@@ -2660,7 +2675,7 @@ function renderHistory({ animate = true } = {}) {
 }
 
 $('#historyBody').addEventListener('click', (ev) => {
-  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel], [data-hwho]');
+  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel], [data-hwho], [data-hby]');
   if (!el || el.disabled) return;
   const ds = el.dataset;
   if (ds.hdel !== undefined) { // admin seulement : deux touchers pour effacer un quart de l'historique
@@ -2678,6 +2693,7 @@ $('#historyBody').addEventListener('click', (ev) => {
   if (ds.up) { const p = presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
   if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
+  if (ds.hby) { hist.by = ds.hby; hist.who = ''; sfx('tab'); renderHistory({ animate: false }); return; }
   if (ds.hwho !== undefined) { hist.who = ds.hwho; sfx('tab'); renderHistory({ animate: false }); return; }
   if (ds.hper) { hist.period = ds.hper; renderHistory({ animate: false }); return; }
   if (ds.hmode) {
@@ -3015,7 +3031,7 @@ async function doSignOut() {
 
 // ---------- Mon compte : nom, statut, déconnexion; pour l'admin, les codes et les outils de test ----------
 // Choisir sa photo : une mascotte en peluche, une photo du téléphone, ou rien (l'initiale).
-function openAvatarPicker() {
+function openAvatarPicker({ after } = {}) {
   const u = session.user;
   if (!u) return;
   const cur = u.avatar || '';
@@ -3024,7 +3040,7 @@ function openAvatarPicker() {
     <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
     <p class="section-note" id="picMsg" aria-live="polite"></p>`, (root) => {
     const pick = async (v) => {
-      try { await updateMe('avatar', { avatar: v }); sfx('save'); closeSheet(); paintFront(); setTimeout(openAccount, 360); }
+      try { await updateMe('avatar', { avatar: v }); sfx('save'); closeSheet(); paintFront(); if (after) after(); else setTimeout(openAccount, 360); }
       catch { $('#picMsg').textContent = t('adminCodesLater'); sfx('locked'); }
     };
     root.addEventListener('click', (e) => { const b = e.target.closest('[data-pic]'); if (b) pick(b.dataset.pic); });
