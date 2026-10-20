@@ -48,7 +48,7 @@ const ensurePlan = () => { if (state && !plan) plan = shiftPlan(state); };
 const lang = () => (prefs.lang === 'en' ? 'en' : 'fr');
 // Un superviseur ne fait pas le ménage : il lit le rapport de son équipe,
 // sauf s'il coche « Travailler comme employé·e » (ou l'admin qui fait un quart au nom de quelqu'un).
-function bossWatching() { return isBoss() && !prefs.workAsEmp && !(isRealAdmin() && prefs.actAs?.trim()); }
+function bossWatching() { return isBoss() && !prefs.workAsEmp && !(isRealAdmin() && !viewAs() && prefs.actAs?.trim()); }
 const t = (key, ...args) => {
   const d = UI[lang()];
   // Un patron qui regarde un quart lit les tâches de son équipe, pas les siennes.
@@ -585,7 +585,9 @@ function paintSetupSched() {
 function maybeWelcome() {
   const key = session.user?.email;
   if (!key || prefs.welcomed?.[key] || $('#tour')) return;
-  if (isRealAdmin() && curView() === 'admin') return; // l'admin connaît son app : le tutoriel ne part que pour un aperçu (employé, superviseur, nouveau)
+  // Le tutoriel part tout seul une seule fois, à la toute première connexion. L'admin connaît son app :
+  // jamais tout seul pour lui (l'aperçu « Nouveau » ou « Revoir le tutoriel » le relancent).
+  if (isRealAdmin()) { prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true }; savePrefs(); return; }
   if (!$('#sheet').hidden) { setTimeout(maybeWelcome, 600); return; } // attend qu'un panneau se ferme
   if (current === 'auth') startTour();
 }
@@ -2776,7 +2778,7 @@ $('#poolStart').addEventListener('click', (e) => {
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
     window.history.replaceState(null, '', location.pathname);
-    if (bossWatching()) { openHistory({ team: true }); return; } // le patron : la journée de l'équipe
+    if (bossWatching()) { if (e.target.closest('#poolNext')) $('#dashBoss').click(); else openHistory({ team: true }); return; } // le patron : sa bande ouvre l'espace superviseur, le reste la journée de l'équipe
     if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
     if (state) { route(); return; } // quart en cours : retour aux tâches
     // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
@@ -2866,7 +2868,7 @@ function paintFront() {
   $('#poolDash').hidden = !inside;
   $('#poolAccount').hidden = !inside;
   if (inside) { $('#poolAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase())); $('#poolAccount').setAttribute('aria-label', t('account')); }
-  $('#dashBoss').hidden = !isBoss();
+  $('#dashBoss').hidden = !isBoss() || bossWatching(); // en suivi, l'espace superviseur est dans la grande carte
   $('#poolLogin').hidden = inside;
   $('#poolVisit').hidden = inside;
   $('#auth').classList.toggle('inside', inside);
@@ -2897,6 +2899,17 @@ function dayWord(iso) {
 function startAt(nx) { const at = dateOf(nx.date); at.setHours(0, toMin(nx.start), 0, 0); return at; }
 function paintNextBox(inside) {
   const box = $('#poolNext');
+  if (inside && bossWatching()) {
+    // Le superviseur ne fait pas de quart : à la place, l'accès direct à l'espace superviseur.
+    box.hidden = false;
+    box.classList.add('ready', 'nb-boss');
+    box.dataset.boss = '1';
+    box.innerHTML = `<span class="nb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
+      <span class="nb-text"><small>${esc(t(isAdmin() ? 'roleAdmin' : 'bossMode'))}</small><b>${esc(t('dashBossSub'))}</b></span>`;
+    return;
+  }
+  box.classList.remove('nb-boss');
+  delete box.dataset.boss;
   const nx = inside && nextShift();
   box.hidden = !nx;
   if (!nx) return;
