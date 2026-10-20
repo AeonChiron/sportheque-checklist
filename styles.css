@@ -2205,3 +2205,13 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .up-left { font: 700 13px/1.1 var(--display); padding: 6px 9px; border-radius: 999px; background: color-mix(in srgb, #f5b326 22%, var(--surface)); white-space: nowrap; }
 .up-card svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; opacity: .5; }
 .hi-period { margin: 0 0 10px; }
+#sheet .ov-list li.task { display: block; padding: 0; }
+#sheet .ov-list details summary { display: grid; grid-template-columns: 62px 1fr 16px; gap: 10px; align-items: center; padding: 9px 2px; cursor: pointer; list-style: none; }
+#sheet .ov-list details summary::-webkit-details-marker { display: none; }
+#sheet .ov-list details summary svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; opacity: .5; transition: transform .2s; }
+#sheet .ov-list details[open] summary svg { transform: rotate(90deg); }
+#sheet .ov-more { padding: 0 4px 12px 72px; font-size: 14px; line-height: 1.45; color: var(--ink, inherit); }
+#sheet .ov-more p { margin: 0 0 6px; color: var(--muted); }
+#sheet .ov-more ol, #sheet .ov-more ul { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 4px; }
+#sheet .ov-more li { display: list-item; padding: 0; border: 0; grid-template-columns: none; font-size: 14px; }
+#sheet .ov-more .ov-tips-h { margin-top: 8px; font: 650 11px/1.2 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }

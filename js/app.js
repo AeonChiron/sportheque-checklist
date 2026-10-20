@@ -2572,7 +2572,10 @@ function openNextOverview(pick) {
   if (!nx) return;
   const live = Boolean(state) && nx.date === todayISO(); // le quart en cours
   const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
-  const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`).join('');
+  // Chaque tâche s'ouvre pour lire ses étapes et ses trucs (rien à cocher ici).
+  const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => (it.kind === 'task' && (it.steps?.length || it.summary)
+    ? `<li class="task"><details><summary><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b>${CHEV_R}</summary><div class="ov-more">${it.summary ? `<p>${md(it.summary)}</p>` : ''}${it.steps?.length ? `<ol>${it.steps.map((x) => `<li>${md(x)}</li>`).join('')}</ol>` : ''}${tipsOf(it).length ? `<p class="ov-tips-h">${esc(t('tips'))}</p><ul>${tipsOf(it).map((x) => `<li>${md(x)}</li>`).join('')}</ul>` : ''}</div></details></li>`
+    : `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`)).join('');
   openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))}${nx.date > addDays(todayISO(), 1) ? ` ${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}` : ''} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${live || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
     $('#ovGo').onclick = () => { closeSheet(); if (live) openChecklist(); else if (nx.ready && !state) startScheduled(nx); };
     $('#ovTime').onclick = () => { closeSheet(); window.history.replaceState(null, '', location.pathname); setupScreen(); };

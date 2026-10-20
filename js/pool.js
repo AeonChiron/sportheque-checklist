@@ -115,6 +115,12 @@ export function mountPool(root) {
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now; t += dt;
     const b = bounds();
+    if (s.drag) {
+      const a = 1 - Math.exp(-22 * dt); // suit le doigt sans à-coups
+      const nx = s.x + (s.drag.tx - s.x) * a, ny = s.y + (s.drag.ty - s.y) * a;
+      s.vx = (nx - s.x) / Math.max(dt, 1e-3); s.vy = (ny - s.y) / Math.max(dt, 1e-3);
+      s.x = nx; s.y = ny;
+    }
     if (!s.drag) {
       // Glisse sur l'eau : accélère doucement, puis s'arrête tout seul. Aucun déplacement sans geste.
       let ax = 0, ay = 0;
@@ -160,31 +166,34 @@ export function mountPool(root) {
     const [x, y] = pt(e);
     s.touched = true;
     const h = s.size * RATIO;
+    // Seulement si on touche le lapin lui-même; ailleurs, rien ne bouge.
+    if (!(Math.abs(x - s.x) < s.size * 0.55 && y < s.y + 24 && y > s.y - h - 10)) return;
     try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    if (Math.abs(x - s.x) < s.size * 0.5 && y < s.y + 10 && y > s.y - h) {
-      s.drag = { id: e.pointerId, ox: x - s.x, oy: y - s.y, px: x, py: y, pt: performance.now() };
-      hero.classList.add('held');
-      return;
-    }
-    hold.on = true; hold.x = x; hold.y = y; hold.id = e.pointerId;
+    s.drag = { id: e.pointerId, ox: x - s.x, oy: y - s.y, tx: s.x, ty: s.y, px: x, py: y, pt: performance.now(), vx: 0, vy: 0 };
+    s.vx = 0; s.vy = 0;
+    hero.classList.add('held');
   }
   function move(e) {
     const [x, y] = pt(e);
     if (hold.on && e.pointerId === hold.id) { hold.x = x; hold.y = y; }
     if (!s.drag || e.pointerId !== s.drag.id) return;
-    const now = performance.now(), k = Math.max(16, now - s.drag.pt);
-    s.vx = ((x - s.drag.px) / k) * 1000; s.vy = ((y - s.drag.py) / k) * 1000;
+    const now = performance.now(), k = Math.max(8, now - s.drag.pt);
+    // Vitesse lissée (pour le lancer) et cible : le lapin suit le doigt en douceur dans step().
+    s.drag.vx = s.drag.vx * 0.6 + ((x - s.drag.px) / k) * 1000 * 0.4;
+    s.drag.vy = s.drag.vy * 0.6 + ((y - s.drag.py) / k) * 1000 * 0.4;
     s.drag.px = x; s.drag.py = y; s.drag.pt = now;
     const b = bounds();
-    s.x = Math.min(b.maxX, Math.max(b.minX, x - s.drag.ox));
-    s.y = Math.min(b.maxY, Math.max(b.minY, y - s.drag.oy));
+    s.drag.tx = Math.min(b.maxX, Math.max(b.minX, x - s.drag.ox));
+    s.drag.ty = Math.min(b.maxY, Math.max(b.minY, y - s.drag.oy));
   }
   function up(e) {
     if (hold.on && e.pointerId === hold.id) hold.on = false;
     if (!s.drag || e.pointerId !== s.drag.id) return;
+    const stale = performance.now() - s.drag.pt > 90; // doigt arrêté avant de lâcher : pas de lancer
+    s.vx = stale ? 0 : Math.max(-520, Math.min(520, s.drag.vx));
+    s.vy = stale ? 0 : Math.max(-520, Math.min(520, s.drag.vy));
     s.drag = null;
     hero.classList.remove('held');
-    s.vx = Math.max(-200, Math.min(200, s.vx)); s.vy = Math.max(-200, Math.min(200, s.vy));
   }
   root.addEventListener('pointerdown', down);
   root.addEventListener('pointermove', move);
