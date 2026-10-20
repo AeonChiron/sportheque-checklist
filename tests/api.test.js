@@ -96,7 +96,7 @@ test('Un quart se modifie le jour même seulement; photos effacées après 90 jo
   const shift = { date: '2026-10-20', shift: 1, name: 'Léa', items: [], flags: [] };
   assert.equal((await go('board', { ...shift, submittedAt: new Date().toISOString() }, token)).status, 200);
   assert.equal((await go('board', { ...shift, submittedAt: new Date().toISOString() }, token)).status, 200); // même jour : OK
-  await stores('board').setJSON('2026-10-20', [{ ...shift, submittedAt: '2026-10-20T20:00:00Z' }]);
+  await stores('board').setJSON('2026-10-20', [{ ...shift, submittedAt: new Date(Date.now() - 2 * 864e5).toISOString() }]); // enregistré un autre jour
   assert.equal((await go('board', shift, token)).status, 409); // un autre jour : verrouillé
 
   const oldId = `${(Date.now() - 91 * 864e5).toString(36).padStart(9, '0')}abcde`;

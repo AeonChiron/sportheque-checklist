@@ -370,18 +370,27 @@ const schedKey = () => session.user?.email || 'local';
 const mySchedule = () => (prefs.schedules || {})[schedKey()] || null;
 function saveSchedule(sc) { prefs.schedules = { ...(prefs.schedules || {}), [schedKey()]: sc }; savePrefs(); }
 const dowOf = (iso) => (dateOf(iso).getDay() + 6) % 7; // 0 = lundi
-const presetOf = (id) => PRESETS.find((p) => p.id === id) || null;
+// Un jour = un quart habituel (id) ou des heures perso { start, end }.
+const presetOf = (v) => (v && typeof v === 'object' ? { id: 'custom', start: v.start, end: v.end } : PRESETS.find((p) => p.id === v) || null);
 const todaySched = () => presetOf(mySchedule()?.[dowOf(todayISO())]);
-const presetName = (id) => (t('presets') || {})[id] || id;
+const presetName = (id) => (id === 'custom' ? t('schedCustom') : (t('presets') || {})[id] || id);
 const SCHED_SHORT = { jour: 'J', soir: 'S', 'soir-court': 'SC' };
+const schedShort = (v) => (v && typeof v === 'object' ? f(toMin(v.start)).replace(' h ', 'h').replace(' h', 'h') : SCHED_SHORT[v] || '•');
 function schedEditor(sc) {
   const days = WEEKDAYS[lang()];
-  return `<div class="sch-edit">${days.map((d, i) => `<div class="sch-row"><span class="sch-day">${esc(cap(d))}</span>
-    <div class="sch-opts" role="radiogroup" aria-label="${esc(cap(d))}">${['off', ...PRESETS.map((p) => p.id)].map((o) => {
-      const on = (sc[i] || 'off') === o;
-      const p = presetOf(o);
-      return `<button type="button" role="radio" data-sday="${i}" data-sopt="${o}" aria-checked="${on}"><b>${esc(o === 'off' ? t('schedOff') : presetName(o))}</b>${p ? `<small class="num">${f(toMin(p.start))}</small>` : ''}</button>`;
-    }).join('')}</div></div>`).join('')}</div>`;
+  const cur = (i) => (sc[i] && typeof sc[i] === 'object' ? 'custom' : sc[i] || 'off');
+  return `<div class="sch-edit">${days.map((d, i) => {
+    const c = sc[i] && typeof sc[i] === 'object' ? sc[i] : { start: '09:00', end: '17:00' };
+    return `<div class="sch-row"><span class="sch-day">${esc(cap(d))}</span>
+    <div class="sch-opts" role="radiogroup" aria-label="${esc(cap(d))}">${['off', ...PRESETS.map((p) => p.id), 'custom'].map((o) => {
+      const p = o === 'custom' ? null : presetOf(o);
+      return `<button type="button" role="radio" data-sday="${i}" data-sopt="${o}" aria-checked="${cur(i) === o}"><b>${esc(o === 'off' ? t('schedOff') : presetName(o))}</b>${p ? `<small class="num">${f(toMin(p.start))}</small>` : o === 'custom' ? '<small>✎</small>' : ''}</button>`;
+    }).join('')}</div>
+    <div class="sch-custom" data-cday="${i}" ${cur(i) === 'custom' ? '' : 'hidden'}>
+      <label><span>${t('start')}</span><input type="time" data-cstart="${i}" value="${c.start}"></label>
+      <label><span>${t('end')}</span><input type="time" data-cend="${i}" value="${c.end}"></label>
+    </div></div>`;
+  }).join('')}</div>`;
 }
 function openScheduleSheet({ first = false } = {}) {
   const sc = { ...(mySchedule() || {}) };
@@ -389,12 +398,26 @@ function openScheduleSheet({ first = false } = {}) {
     for (const b of root.querySelectorAll('[data-sopt]')) {
       b.onclick = () => {
         const i = Number(b.dataset.sday);
-        if (b.dataset.sopt === 'off') delete sc[i]; else sc[i] = b.dataset.sopt;
-        for (const o of root.querySelectorAll(`[data-sday="${i}"]`)) o.setAttribute('aria-checked', String(o === b));
+        const o = b.dataset.sopt;
+        const box = root.querySelector(`[data-cday="${i}"]`);
+        if (o === 'off') delete sc[i];
+        else if (o === 'custom') sc[i] = { start: root.querySelector(`[data-cstart="${i}"]`).value || '09:00', end: root.querySelector(`[data-cend="${i}"]`).value || '17:00' };
+        else sc[i] = o;
+        box.hidden = o !== 'custom';
+        for (const x of root.querySelectorAll(`[data-sday="${i}"]`)) x.setAttribute('aria-checked', String(x === b));
+        if (o === 'custom') box.querySelector('input').focus({ preventScroll: true });
         clank('step');
       };
     }
+    // Heures perso : chaque changement est gardé.
+    for (const inp of root.querySelectorAll('[data-cstart], [data-cend]')) {
+      inp.addEventListener('input', () => {
+        const i = Number(inp.dataset.cstart ?? inp.dataset.cend);
+        sc[i] = { start: root.querySelector(`[data-cstart="${i}"]`).value, end: root.querySelector(`[data-cend="${i}"]`).value };
+      });
+    }
     $('#schedDone').onclick = () => {
+      for (const k of Object.keys(sc)) if (typeof sc[k] === 'object' && !(sc[k].start && sc[k].end)) delete sc[k];
       saveSchedule(sc); closeSheet(); toast(t('schedSaved'));
       if (current === 'history') renderHistory({ animate: false });
       if (current === 'auth') paintFront();
@@ -412,7 +435,7 @@ function schedCard() {
   }
   const tp = todaySched();
   return `<div class="sched-card"><div class="sch-top"><b>${t('schedTitle')}</b><button type="button" class="link" data-sched>${t('schedEdit')}</button></div>
-    <div class="sch-week">${days.map((d, i) => `<span class="sch-pill${i === ti ? ' today' : ''}${sc[i] ? ' on' : ''}"><small>${esc(cap(d).slice(0, 3))}</small><b>${sc[i] ? SCHED_SHORT[sc[i]] || '•' : '–'}</b></span>`).join('')}</div>
+    <div class="sch-week">${days.map((d, i) => `<span class="sch-pill${i === ti ? ' today' : ''}${sc[i] ? ' on' : ''}"><small>${esc(cap(d).slice(0, 3))}</small><b>${sc[i] ? schedShort(sc[i]) : '–'}</b></span>`).join('')}</div>
     <p class="sch-today">${tp ? esc(t('schedTodayIs', presetName(tp.id), f(toMin(tp.start)), f(toMin(tp.end)))) : esc(t('schedTodayOff'))}</p></div>`;
 }
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-sched]')) openScheduleSheet(); });
@@ -2353,7 +2376,7 @@ function paintFront() {
     let sub = t('wbStart');
     const tp = todaySched();
     if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
-    else if (tp) sub = t('wbToday', presetName(tp.id).toLowerCase(), f(toMin(tp.start)));
+    else if (tp) sub = tp.id === 'custom' ? t('wbTodayAt', f(toMin(tp.start))) : t('wbToday', presetName(tp.id).toLowerCase(), f(toMin(tp.start)));
     else if (mySchedule()) sub = t('wbOff');
     label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));

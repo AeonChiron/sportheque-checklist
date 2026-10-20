@@ -2074,3 +2074,11 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .sch-opts button[data-sopt="off"][aria-checked="true"] { background: var(--sunk); border-color: var(--line); color: var(--muted); }
 .sch-opts button[data-sopt="off"][aria-checked="true"] b { color: var(--ink); }
 .sched-head .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #1d5fc4; }
+/* Horaire : 5 choix par jour (Congé, Jour, Soir, Soir court, Autre) + heures perso. */
+.sch-row { grid-template-columns: 1fr; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.sch-row:last-child { border-bottom: 0; }
+.sch-opts { grid-template-columns: repeat(5, 1fr); }
+.sch-custom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sch-custom[hidden] { display: none; }
+.sch-custom label { display: grid; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.sch-custom input { min-height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--sunk); padding: 0 10px; font: 600 16px var(--font); color: var(--ink); }
