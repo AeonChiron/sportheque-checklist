@@ -2266,12 +2266,13 @@ $('#apercuBody').addEventListener('click', (ev) => {
 // ---------- 7. Historique : chaque quart enregistré, le plus récent en haut ----------
 // Pas de journées vides ni de « manqué » : seulement ce qui a été enregistré.
 // Le superviseur ouvre la page et voit d'un coup d'œil si tout a été fait.
-const hist = { mode: prefs.histMode === 'week' ? 'week' : 'recent', week: '', recent: [], days: {}, weekLoaded: '', loaded: false, live: false, sig: '', view: [] };
+const hist = { mode: 'upcoming', period: 'all', up: '', week: '', recent: [], days: {}, weekLoaded: '', loaded: false, live: false, sig: '', view: [] };
 
 function openHistory({ keep = false } = {}) {
   $('#history .back span').dataset.t = state ? 'myShift' : 'home';
   paintStatic();
   if (!keep || !hist.week) hist.week = mondayOf(todayISO());
+  if (!keep || !hist.up) { hist.up = mondayOf(todayISO()); hist.mode = 'upcoming'; }
   renderHistory({ animate: !keep });
   show('history');
   refreshHistory();
@@ -2279,7 +2280,8 @@ function openHistory({ keep = false } = {}) {
 
 async function refreshHistory() {
   const { mode, week } = hist;
-  const res = mode === 'week' ? await loadWeek(weekDates(week)) : await loadRecent(60);
+  if (mode === 'upcoming') return;
+  const res = mode === 'week' ? await loadWeek(weekDates(week)) : await loadRecent(500);
   if (current !== 'history' || hist.mode !== mode || hist.week !== week) return; // parti entre-temps
   const fresh = mode === 'week' ? hist.weekLoaded !== week : !hist.loaded;
   if (mode === 'week') { hist.days = res.days; hist.weekLoaded = week; } else { hist.recent = res.shifts; hist.loaded = true; }
@@ -2316,11 +2318,30 @@ function histCard(s, i) {
     </span>${CHEV_R}</button>`;
 }
 
+// À venir : les quarts de l'horaire, semaine par semaine, sans fin.
+function upcomingList() {
+  const sc = mySchedule();
+  if (!sc || !Object.keys(sc).length) return `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t('upEmpty'))}</p></div>`;
+  const today = todayISO();
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const rows = weekDates(hist.up).map((d) => {
+    const p = presetOf(sc[dowOf(d)]);
+    if (!p?.start || d < today) return '';
+    if (d === today && (editableShift() || nowMin >= toMin(p.end))) return '';
+    const left = Math.ceil((startAt({ date: d, start: p.start }) - Date.now()) / 6e4);
+    return `<button type="button" class="up-card" data-up="${d}"><span class="up-day"><b>${esc(dayWord(d))}</b><small>${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small></span><span class="up-main"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc(SHIFTS[detectShift(p.start, p.end)][lang()].short)}</small></span><span class="up-left num">${left > 0 ? esc(countdown(left)) : esc(t('nbGo'))}</span>${CHEV_R}</button>`;
+  }).join('');
+  return rows || `<p class="section-note">${esc(t('upNoneWeek'))}</p>`;
+}
+
 function renderHistory({ animate = true } = {}) {
   const isWeek = hist.mode === 'week';
-  const ready = isWeek ? hist.weekLoaded === hist.week : hist.loaded;
+  const isUp = hist.mode === 'upcoming';
+  const ready = isUp || (isWeek ? hist.weekLoaded === hist.week : hist.loaded);
   const today = todayISO();
-  const shifts = isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent;
+  const since = hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
+  const shifts = isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since);
   $('#hiEyebrow').textContent = [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ');
 
   // Par jour, le plus récent en haut; dans un jour, le dernier enregistré en haut.
@@ -2330,12 +2351,11 @@ function renderHistory({ animate = true } = {}) {
   hist.view = dates.flatMap((d) => byDate.get(d).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')));
 
   // Le coup d'œil : les 7 derniers jours (Récents) ou la semaine choisie.
-  const span = isWeek ? shifts : shifts.filter((s) => s.date >= addDays(today, -6));
+  const span = shifts;
   const ms = span.map(metrics);
   const complete = ms.filter((m) => m.total && m.done === m.total).length;
   const nFlags = ms.reduce((a, m) => a + m.flags, 0);
   const strip = span.length ? `
-    ${isWeek ? '' : `<p class="block-label hi-span">${esc(t('last7'))}</p>`}
     <div class="ap-stats hi-stats">
       <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts', span.length))}</span></div>
       <div class="${complete === span.length ? 'ok' : ''}"><b class="num">${complete}/${span.length}</b><span>${esc(t('statComplete'))}</span></div>
@@ -2355,7 +2375,8 @@ function renderHistory({ animate = true } = {}) {
       <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
     </div>
     <div class="segmented hi-mode" role="tablist">
-      <button type="button" role="tab" data-hmode="recent" aria-selected="${!isWeek}">${esc(t('recent'))}</button>
+      <button type="button" role="tab" data-hmode="upcoming" aria-selected="${isUp}">${esc(t('upcoming'))}</button>
+      <button type="button" role="tab" data-hmode="recent" aria-selected="${hist.mode === 'recent'}">${esc(t('recent'))}</button>
       <button type="button" role="tab" data-hmode="week" aria-selected="${isWeek}">${esc(t('byWeek'))}</button>
     </div>
     ${isWeek ? `<div class="ap-weekbar">
@@ -2363,23 +2384,28 @@ function renderHistory({ animate = true } = {}) {
       <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.week))}</b>${hist.week !== mondayOf(today) ? `<button type="button" class="link" data-hwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
       <button type="button" class="icon-btn" data-hwk="1" aria-label="${esc(t('nextWeek'))}" ${hist.week >= mondayOf(today) ? 'disabled' : ''}>${CHEV_R}</button>
     </div>` : ''}
-    <div class="hi-list${animate && ready ? ' cascade' : ''}">
+    ${isUp ? `<div class="ap-weekbar">
+      <button type="button" class="icon-btn" data-upwk="-1" aria-label="${esc(t('prevWeek'))}" ${hist.up <= mondayOf(today) ? 'disabled' : ''}>${CHEV_L}</button>
+      <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.up))}</b>${hist.up !== mondayOf(today) ? `<button type="button" class="link" data-upwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
+      <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
+    </div><div class="up-list">${upcomingList()}</div>` : `<div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${strip}${groups || `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
-    </div>
-    ${ready ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
+        : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${['week', 'month', 'all'].map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${strip}${groups || `<div class="folder-empty alive">${illustration('dossier')}<p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+    </div>`}
+    ${ready && !isUp ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
 }
 
 $('#historyBody').addEventListener('click', (ev) => {
-  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi]');
+  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper]');
   if (!el || el.disabled) return;
   const ds = el.dataset;
+  if (ds.up) { const p = presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
+  if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
+  if (ds.hper) { hist.period = ds.hper; renderHistory({ animate: false }); return; }
   if (ds.hmode) {
     if (ds.hmode === hist.mode) return;
     hist.mode = ds.hmode;
-    prefs.histMode = hist.mode;
-    savePrefs();
     renderHistory();
     refreshHistory();
   } else if (ds.hwk !== undefined) {
@@ -2541,17 +2567,18 @@ function paintNextBox(inside) {
     <span class="nb-count"><small>${esc(go ? t('nbGo') : t('nbIn'))}</small><b class="num">${esc(go ? t('nbGoBig') : countdown(left))}</b></span>`;
 }
 // La boîte dorée : l'aperçu du quart en bref, puis « Commencer » ou « Changer l'heure ».
-function openNextOverview() {
-  const nx = nextShift();
+function openNextOverview(pick) {
+  const nx = pick?.date ? pick : nextShift();
   if (!nx) return;
+  const live = Boolean(state) && nx.date === todayISO(); // le quart en cours
   const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
   const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`).join('');
-  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${state || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
-    $('#ovGo').onclick = () => { closeSheet(); if (state) openChecklist(); else if (nx.ready) startScheduled(nx); };
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))}${nx.date > addDays(todayISO(), 1) ? ` ${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}` : ''} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${live || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
+    $('#ovGo').onclick = () => { closeSheet(); if (live) openChecklist(); else if (nx.ready && !state) startScheduled(nx); };
     $('#ovTime').onclick = () => { closeSheet(); window.history.replaceState(null, '', location.pathname); setupScreen(); };
-  }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${state || nx.ready ? '' : ' disabled'}>${state ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
+  }, `<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || (nx.ready && !state) ? '' : ' disabled'}>${live ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
 }
-$('#poolNext').addEventListener('click', openNextOverview);
+$('#poolNext').addEventListener('click', () => openNextOverview());
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
 setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 20000);
 
