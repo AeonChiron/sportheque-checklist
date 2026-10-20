@@ -225,7 +225,7 @@ function paintCrew() {
     $('#bucketArt').setAttribute('aria-label', pr ? t('barLabel', pr.done, pr.total) : t('bucketReady'));
   }
   const sent = $('#sentCrew');
-  if (sent && !sent.firstChild) sent.innerHTML = '<img class="mascot-img rest" src="icons/rabbit-rest.webp" alt="" draggable="false">';
+  if (sent && !sent.firstChild) sent.innerHTML = '<img class="mascot-img rest" src="icons/rabbit-rest.svg" alt="" draggable="false">';
 }
 // Toucher la mascotte : il saute et dit un mot d'encouragement.
 let sayTimer = 0;
