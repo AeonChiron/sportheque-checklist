@@ -1076,10 +1076,12 @@ function openTask(id) {
     : '';
   const tips = tipsCallout(it);
   const skipped = e.skipped && !e.done;
+  // Le plan ou la 3D de la zone vient à la fin : les étapes d'abord.
+  const mapLast = it.deep || (it.zone && it.photo === 'miroirs');
 
   openSheet(`
     <div class="sheet-hero">
-      ${taskVisual(it)}
+      ${mapLast ? '' : taskVisual(it)}
       <div class="sheet-head">
         <p class="eyebrow">${esc(AREAS[it.area]?.[lang()] || '')}</p>
         <h2>${esc(it.title)}</h2>
@@ -1097,6 +1099,7 @@ function openTask(id) {
       <textarea id="remark" rows="2" placeholder="${esc(t(e.skipped ? 'remarkSkipPh' : 'remarkPh'))}">${esc(e.remark || '')}</textarea>
     </label>
     <button type="button" class="link flag-link" data-flagtask>${ICON.flag}${t('flagThisTask')}</button>
+    ${mapLast ? taskVisual(it) : ''}
   `, (root) => {
     const mapBox = root.querySelector('[data-map]');
     if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: state.date } : { mirrors: it.zone, date: state.date });
@@ -1655,7 +1658,10 @@ function refPlan(date, shift) {
 const TIP_AREAS = { buanderie: ['buanderie'], gym: ['gym'], cardio: ['cardio'], muscu: ['muscu'], zone: ['zone', 'gym'], surfaces: ['surfaces'], dechets: ['dechets'], spinning: ['gym'] };
 function tipsOf(it) {
   const extra = TECHNIQUES[lang()].filter((x) => (TIP_AREAS[it.area] || []).includes(x.area) && (!x.key || x.key === it.photo)).map((x) => x.text);
-  return [...new Set([...(it.tips || []), ...extra])].slice(0, 3); // pas plus de 3 : un truc, pas un cours
+  // Même truc dit deux fois (« Miroirs : … » et « … ») : on le garde une seule fois.
+  const key = (x) => x.replace(/\*\*/g, '').replace(/^[^:]{2,28}:\s*/, '').toLowerCase().replace(/[^a-zà-ÿ0-9]/g, '');
+  const seen = new Set();
+  return [...(it.tips || []), ...extra].filter((x) => !seen.has(key(x)) && seen.add(key(x))).slice(0, 3); // pas plus de 3 : un truc, pas un cours
 }
 const tipsCallout = (it) => {
   const tips = tipsOf(it);
