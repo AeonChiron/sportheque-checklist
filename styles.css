@@ -1980,3 +1980,30 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 #checklist > .topbar { top: calc(var(--safe-t) - var(--tb-skip, 0px)); }
 #checklist > .topbar .quick-bar { margin: 10px 0 2px; }
 #checklist #timeline svg { max-height: 78px; }
+/* Vue 3D : toujours sombre, même en mode clair. */
+.gym3d { --bg: #050708; --surface: #0c1011; --sunk: #080b0c; --ink: #eef4f4; --muted: #8d9a9a; --line: #182022; --accent: #4fd8d2; background: #050708; color: #eef4f4; border-radius: 14px; }
+.map-wrap:has(.gym3d) .map-tip { color: #cfe0e0; background: rgba(5, 7, 8, .7); }
+
+/* Page du plancher, connecté : tableau de bord en tuiles. */
+.pool-dash { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pool-dash[hidden] { display: none; }
+.dash-tile { pointer-events: auto; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 12px; text-align: left; border-radius: 18px; border: 1px solid rgba(255, 255, 255, .45); background: rgba(255, 255, 255, .2); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #fff; box-shadow: 0 8px 20px -12px rgba(0, 30, 80, .6); transition: transform .15s var(--ease), background .2s; animation: rise-in .7s cubic-bezier(.2, .9, .3, 1.2) .4s both; }
+.dash-tile:active { transform: scale(.96); background: rgba(255, 255, 255, .3); }
+.dash-tile svg { flex: none; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dash-tile span { display: grid; gap: 2px; min-width: 0; }
+.dash-tile b { font: 700 15px/1.15 var(--font); }
+.dash-tile small { font: 500 12px/1.2 var(--font); opacity: .9; }
+.dash-boss { grid-column: 1 / -1; background: rgba(10, 30, 60, .55); border-color: rgba(255, 255, 255, .25); }
+.pool-dash .dash-tile:nth-child(2) { animation-delay: .45s; } .pool-dash .dash-tile:nth-child(3) { animation-delay: .5s; } .pool-dash .dash-tile:nth-child(4) { animation-delay: .55s; }
+#auth.inside .pool-cheer { padding: 8px 14px; }
+#auth.inside .pool-cheer strong { font-size: 17px; }
+#auth.inside .pool-cheer span { font-size: 14.5px; }
+@media (prefers-reduced-motion: reduce) { .dash-tile { animation: none; } }
+#auth.inside .pool-cheer span { display: none; }
+#auth.inside .pool-cheer { padding: 6px 14px; margin-bottom: 2px; }
+#auth.inside .pool-bottom { gap: 10px; }
+.dash-tile { min-height: 54px; padding: 8px 12px; gap: 9px; }
+.dash-tile b { font-size: 14.5px; }
+.dash-tile small { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#auth.inside .pool-cta { min-height: 64px; }
+:is(#apercu, #history, #boss):has(> .quick-bar:not([hidden])) .back { display: none; }

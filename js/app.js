@@ -184,6 +184,7 @@ function paintStatic() {
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
   for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(Boolean(prefs.large)));
   paintThemeButtons();
+  if ($('#poolStartLabel')) paintFront();
   const gym = $('#poolGym');
   if (gym) { gym.textContent = CONFIG.gymName || ''; gym.hidden = !CONFIG.gymName; }
   const lines = t('dailyLines'), day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
@@ -1516,7 +1517,7 @@ function winLine(name, summary) {
   return summary.total && summary.done === summary.total ? t('perfect', summary.total) : '';
 }
 
-$('#newShiftBtn').addEventListener('click', setupScreen);
+$('#newShiftBtn').addEventListener('click', () => goFront());
 $('#editShiftBtn').addEventListener('click', reopenShift);
 
 // Le quart enregistré aujourd'hui sur ce téléphone se modifie jusqu'à minuit
@@ -2164,9 +2165,6 @@ const pool = () => (poolCtl ||= mountPool($('#pool')));
 function openAuth() {
   const fromLink = location.hash.startsWith('#probleme=');
   if (fromLink) authUI.role = 'boss'; // le lien d'un courriel va aux superviseurs
-  $('#poolStart').querySelector('[data-t]').dataset.t = 'getStarted';
-  $('#poolLogin').hidden = false;
-  $('#poolVisit').hidden = false;
   paintAuth();
   $('#authError').innerHTML = '';
   show('auth');
@@ -2189,7 +2187,7 @@ function authSheet(open, tab) {
 $('#poolStart').addEventListener('click', (e) => {
   const btn = e.currentTarget;
   if (btn.classList.contains('lifting')) return;
-  const go = () => (session.user ? route() : authSheet(true, 'signup'));
+  const go = () => { if (!session.user) { authSheet(true, 'signup'); return; } window.history.replaceState(null, '', location.pathname); route(); };
   if (reducedMotion()) { go(); return; }
   btn.classList.add('lifting');
   clank('plate'); buzz('plate');
@@ -2236,14 +2234,25 @@ $('#qbVisit').addEventListener('click', () => {
   }, `<button type="button" class="btn ghost" id="visitNo">${t('cancel2')}</button><button type="button" class="btn primary" id="visitYes">${t('visitorExit')}</button>`);
 });
 
-// « Accueil » : retour à la page du plancher, toujours à portée de pouce.
-function goFront() {
+// La page du plancher : « Commencer » pour les nouveaux; une fois connecté,
+// « Bon retour » + le tableau de bord (quarts, trucs, signaler, aperçu).
+function paintFront() {
   const inside = Boolean(session.user);
-  paintStatic();
-  $('#poolStart').querySelector('[data-t]').dataset.t = inside ? 'resumeShift' : 'getStarted';
-  paintStatic();
+  const first = (session.user?.name || '').split(' ')[0];
+  $('#poolStartLabel').textContent = inside ? t('welcomeBackName', first) : t('getStarted');
+  $('#poolDash').hidden = !inside;
+  $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
   $('#poolVisit').hidden = inside;
+  $('#auth').classList.toggle('inside', inside);
+}
+$('#dashTips').addEventListener('click', () => { ap.tab = 'tips'; prefs.apTab = 'tips'; savePrefs(); openApercu(); });
+$('#dashFlag').addEventListener('click', () => openFlag());
+$('#dashOverview').addEventListener('click', () => { ap.tab = 'day'; prefs.apTab = 'day'; savePrefs(); openApercu(); });
+
+// « Accueil » : retour à la page du plancher, toujours à portée de pouce.
+function goFront() {
+  paintStatic();
   authSheet(false);
   show('auth');
 }

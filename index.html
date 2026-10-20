@@ -71,7 +71,14 @@
       </div>
       <div class="pool-bottom">
         <p class="pool-cheer"><strong data-t="thanksTeam"></strong><span id="poolCheer"></span></p>
-        <button type="button" class="pool-cta" id="poolStart"><span class="bb-plates l" aria-hidden="true"><i></i><i></i></span><span data-t="getStarted"></span><span class="bb-plates r" aria-hidden="true"><i></i><i></i></span></button>
+        <button type="button" class="pool-cta" id="poolStart"><span class="bb-plates l" aria-hidden="true"><i></i><i></i></span><span id="poolStartLabel"></span><span class="bb-plates r" aria-hidden="true"><i></i><i></i></span></button>
+        <nav class="pool-dash" id="poolDash" hidden>
+          <button type="button" class="dash-tile" data-go="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2"/></svg><span><b data-t="dashShifts"></b><small data-t="dashShiftsSub"></small></span></button>
+          <button type="button" class="dash-tile" id="dashTips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span><b data-t="dashTips"></b><small data-t="dashTipsSub"></small></span></button>
+          <button type="button" class="dash-tile" id="dashFlag"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span><b data-t="dashFlag"></b><small data-t="dashFlagSub"></small></span></button>
+          <button type="button" class="dash-tile" id="dashOverview"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg><span><b data-t="dashOverview"></b><small data-t="dashOverviewSub"></small></span></button>
+          <button type="button" class="dash-tile dash-boss" id="dashBoss" data-go="boss" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><span><b data-t="bossMode"></b><small data-t="dashBossSub"></small></span></button>
+        </nav>
         <button type="button" class="pool-login" id="poolLogin" data-t="haveAccount"></button>
         <button type="button" class="pool-visit" id="poolVisit" data-t="visitorTry"></button>
       </div>
@@ -297,7 +304,7 @@
     <h1 data-t="savedTitle"></h1>
     <p class="lede" id="sentText"></p>
     <p class="win-line" id="sentWin"></p>
-    <button class="btn primary big" id="newShiftBtn" data-t="newShift"></button>
+    <button class="btn primary big" id="newShiftBtn" data-t="backHome"></button>
     <button class="btn ghost big" type="button" data-go="history" data-t="seeHistory"></button>
     <button class="link edit-shift" type="button" id="editShiftBtn" data-t="editMine" hidden></button>
   </section>

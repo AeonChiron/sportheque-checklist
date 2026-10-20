@@ -6,12 +6,11 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { ZONES, ROOMS, DOORS, GEAR, PARTITIONS } from './floor-layout.js';
 
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
+// La 3D est toujours en mode sombre (plus lisible), quel que soit le thème de l'app.
+const DARK = { '--bg': '#050708', '--surface': '#0c1011', '--ink': '#eef4f4', '--accent': '#4fd8d2', '--sun': '#ffd166', '--ok': '#5cc28e', '--bad': '#f2867b', '--zA-strong': '#c99a33', '--zB-strong': '#7f78e6', '--zC-strong': '#2a9f9c' };
+const css = (name) => DARK[name] || getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const dark = () => {
-  const forced = document.documentElement.dataset.theme;
-  return forced ? forced === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-};
+const dark = () => true;
 
 // Une étiquette (texte sur une texture), à plat au sol ou face à la caméra.
 function labelTexture(lines, { bg, fg, pad = 18, size = 44 }) {
