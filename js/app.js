@@ -868,7 +868,7 @@ function nowMinutes() {
 // Chaque type de tâche a la couleur d'un disque olympique (rouge, bleu, jaune, vert…).
 const PLATE = { accueil: 'r', fermeture: 'r', buanderie: 'b', spinning: 'b', dechets: 'y', gym: 'g', zone: 'g', surfaces: 'g', cardio: 'w', muscu: 'w', bureaux: 'k' };
 const plateOf = (it) => PLATE[it?.area] || 'k';
-const icon = (it) => `<span class="t-icon" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? illustration('pointage') : illustration(it.photo)}</span>`;
+const icon = (it) => `<span class="t-icon${state?.tasks?.[it.id]?.done ? '' : ' alive'}" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? illustration('pointage') : illustration(it.photo)}</span>`;
 
 function taskRow(it, { extra = false } = {}) {
   const e = state.tasks[it.id] || {};

@@ -78,8 +78,10 @@ const P = {
   fr: {
     deepTitle: (z) => `Nettoyage en profondeur : zone ${z}`,
     deepSteps: (z) => [
-      `**Guenille propre**, puis la zone ${z} à fond : cadres, dessous, côtés, supports et **repose-pieds**.`,
-      'Va chercher les coins oubliés : derrière les sièges, autour des supports, les petits creux.',
+      `**Prends une guenille propre.** Commence par la **poussière, à sec**, partout dans la zone ${z}.`,
+      '**Une machine à la fois, de haut en bas** : le cadre, les côtés, les supports.',
+      '**Le bas ensuite** : en dessous des machines, les **repose-pieds**, les pieds des bancs.',
+      '**Les coins oubliés** : derrière les sièges, autour des supports, les petits creux. Vise ce qui est vraiment sale.',
     ],
     deepEnd: '**Fini? Change ta guenille pour une propre.**',
     deepMirrors: (z) => `Jour de miroirs : fais aussi les **miroirs de la zone ${z}** (mousse à l’éponge, puis raclette).`,
@@ -116,8 +118,10 @@ const P = {
   en: {
     deepTitle: (z) => `Deep clean: zone ${z}`,
     deepSteps: (z) => [
-      `**Clean rag**, then zone ${z} thoroughly: frames, underneath, sides, racks and **footrests**.`,
-      'Go after the missed spots: behind seats, around racks, the little gaps.',
+      `**Grab a clean rag.** Start with the **dust, dry**, all over zone ${z}.`,
+      '**One machine at a time, top to bottom**: the frame, the sides, the racks.',
+      '**Then the bottom**: under the machines, the **footrests**, the bench legs.',
+      '**The missed spots**: behind seats, around racks, the little gaps. Go for what’s really dirty.',
     ],
     deepEnd: '**Done? Swap your rag for a clean one.**',
     deepMirrors: (z) => `Mirror day: also do the **mirrors in zone ${z}** (foam with the sponge, then squeegee).`,
