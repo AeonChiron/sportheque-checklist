@@ -847,7 +847,10 @@ async function loadHandoff() {
   handoff = h ? { text: h.handoff, by: h.name, date: h.date } : null;
   if (current === 'checklist') renderChecklist();
 }
+// Un superviseur ne fait pas le ménage : il lit le rapport de son équipe à la place.
+const bossWatching = () => isBoss() && !(isRealAdmin() && prefs.actAs?.trim());
 function openChecklist() {
+  if (bossWatching()) { openHistory({ team: true }); return; }
   paintStatic();
   loadHandoff();
   plan = shiftPlan(state);
@@ -2506,13 +2509,14 @@ $('#apercuBody').addEventListener('click', (ev) => {
 // ---------- 7. Historique : chaque quart enregistré, le plus récent en haut ----------
 // Pas de journées vides ni de « manqué » : seulement ce qui a été enregistré.
 // Le superviseur ouvre la page et voit d'un coup d'œil si tout a été fait.
-const hist = { mode: 'upcoming', period: 'all', up: '', week: '', recent: [], days: {}, weekLoaded: '', loaded: false, live: false, sig: '', view: [] };
+const hist = { mode: 'upcoming', period: 'all', who: '', up: '', week: '', recent: [], days: {}, weekLoaded: '', loaded: false, live: false, sig: '', view: [] };
 
-function openHistory({ keep = false } = {}) {
+function openHistory({ keep = false, team = false } = {}) {
   $('#history .back span').dataset.t = state ? 'myShift' : 'home';
   paintStatic();
   if (!keep || !hist.week) hist.week = mondayOf(todayISO());
   if (!keep || !hist.up) { hist.up = mondayOf(todayISO()); hist.mode = 'upcoming'; }
+  if (team || (!keep && isBoss())) { hist.mode = 'recent'; hist.period = 'day'; hist.who = ''; } // le patron arrive sur la journée de toute l'équipe
   renderHistory({ animate: !keep });
   show('history');
   refreshHistory();
@@ -2580,11 +2584,16 @@ function renderHistory({ animate = true } = {}) {
   const isUp = hist.mode === 'upcoming';
   const ready = isUp || (isWeek ? hist.weekLoaded === hist.week : hist.loaded);
   const today = todayISO();
-  const since = hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
+  const since = hist.period === 'day' ? today : hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
   const me = shiftName().trim().toLowerCase();
   // Un employé voit ses quarts; les superviseurs et l'admin voient ceux de toute l'équipe.
-  const shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
+  let shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
     .filter((x) => isBoss() || !me || (x.name || '').trim().toLowerCase() === me);
+  // Le patron voit toute l'équipe par défaut, ou un·e employé·e à la fois.
+  const names = isBoss() ? [...new Set(shifts.map((x) => x.name))].sort((a, b) => a.localeCompare(b)) : [];
+  if (hist.who && !names.includes(hist.who)) hist.who = '';
+  const whoBar = names.length > 1 ? `<div class="hi-who">${['', ...names].map((n) => `<button type="button" class="chip" data-hwho="${esc(n)}" aria-pressed="${hist.who === n}">${esc(n || t('teamAll'))}</button>`).join('')}</div>` : '';
+  if (hist.who) shifts = shifts.filter((x) => x.name === hist.who);
   $('#hiEyebrow').textContent = [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ');
 
   // Par jour, le plus récent en haut; dans un jour, le dernier enregistré en haut.
@@ -2604,6 +2613,18 @@ function renderHistory({ animate = true } = {}) {
       <div class="${complete === span.length ? 'ok' : ''}"><b class="num">${complete}/${span.length}</b><span>${esc(t('statComplete'))}</span></div>
       <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags', nFlags))}</span></div>
     </div>` : '';
+
+  // Le rapport simple : chaque tâche, combien de fois faite sur la période (matin et soir ensemble).
+  let tally = '';
+  if (isBoss() && span.length) {
+    const by = new Map();
+    for (const s of span) for (const it of summaryReport(s).items) {
+      const r = by.get(it.title) || by.set(it.title, { title: it.title, done: 0, n: 0 }).get(it.title);
+      r.n++; if (it.status === 'done') r.done++;
+    }
+    const rows = [...by.values()].sort((a, b) => a.done / a.n - b.done / b.n || a.title.localeCompare(b.title));
+    tally = `<section class="hi-tally"><h2>${esc(t('teamReport'))}</h2><ul>${rows.map((r) => `<li class="${r.done === r.n ? 'ok' : r.done ? '' : 'bad'}"><span>${esc(r.title)}</span><b class="num">${r.done}/${r.n}</b></li>`).join('')}</ul></section>`;
+  }
 
   let k = 0;
   const groups = dates.map((d) => `<section class="hi-day">
@@ -2632,14 +2653,14 @@ function renderHistory({ animate = true } = {}) {
       <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
     </div><div class="up-list">${upcomingList()}</div>` : `<div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${['week', 'month', 'all'].map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${strip}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
+        : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${(isBoss() ? ['day', 'week', 'month', 'all'] : ['week', 'month', 'all']).map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${whoBar}${strip}${tally}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
     </div>`}
     ${ready && !isUp ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
 }
 
 $('#historyBody').addEventListener('click', (ev) => {
-  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel]');
+  const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel], [data-hwho]');
   if (!el || el.disabled) return;
   const ds = el.dataset;
   if (ds.hdel !== undefined) { // admin seulement : deux touchers pour effacer un quart de l'historique
@@ -2657,6 +2678,7 @@ $('#historyBody').addEventListener('click', (ev) => {
   if (ds.up) { const p = presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
   if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
+  if (ds.hwho !== undefined) { hist.who = ds.hwho; sfx('tab'); renderHistory({ animate: false }); return; }
   if (ds.hper) { hist.period = ds.hper; renderHistory({ animate: false }); return; }
   if (ds.hmode) {
     if (ds.hmode === hist.mode) return;

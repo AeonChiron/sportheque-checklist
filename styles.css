@@ -2378,3 +2378,14 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .view-as { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .view-as button { min-height: 46px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: 700 15px/1 var(--font); cursor: pointer; }
 .view-as button[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+/* Rapport d'équipe (superviseur) : filtre par employé·e et tâches faites */
+.hi-who { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; }
+.hi-who .chip { cursor: pointer; font-size: 14px; padding: 8px 14px; }
+.hi-who .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.hi-tally { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin: 0 0 16px; }
+.hi-tally h2 { font-size: 17px; margin: 0 0 8px; }
+.hi-tally ul { list-style: none; margin: 0; padding: 0; }
+.hi-tally li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.hi-tally li:first-child { border-top: 0; }
+.hi-tally li.ok b::before { content: '✓ '; }
+.hi-tally li.bad b { color: var(--bad, #c0392b); }
