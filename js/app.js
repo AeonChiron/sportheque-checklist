@@ -1,5 +1,5 @@
 import { simulated } from './clock.js';
-import { MASCOTS, mascotImg, avatarHTML, shrinkPhoto } from './avatars.js'; // en premier : l'heure simulée de l'admin
+import { MASCOTS, mascotImg, avatarHTML as avatarOf, shrinkPhoto } from './avatars.js'; // en premier : l'heure simulée de l'admin
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS } from './manual.js';
@@ -3180,14 +3180,15 @@ async function doSignOut() {
 function openAvatarPicker({ after } = {}) {
   const u = session.user;
   if (!u) return;
-  const cur = u.avatar || '';
+  const cur = (prefs.simNew ? prefs.simNew.avatar : u.avatar) || '';
   openSheet(`<div class="sheet-head"><h2>${esc(t('picTitle'))}</h2><p class="lede">${esc(t('picLede'))}</p></div>
     <div class="pic-grid">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotImg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
     <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
     <p class="section-note" id="picMsg" aria-live="polite"></p>`, (root) => {
     const pick = async (v) => {
       try {
-        await updateMe('avatar', { avatar: v }); sfx('save'); paintFront();
+        if (prefs.simNew) { prefs.simNew.avatar = v; savePrefs(); } else await updateMe('avatar', { avatar: v });
+        sfx('save'); paintFront();
         if (!after) { closeSheet(); setTimeout(openAccount, 360); return; }
         // Pendant le tutoriel : on reste ici, un mot d'encouragement, puis « Suivant » continue.
         for (const b of root.querySelectorAll('.pic-opt')) { const on = b.dataset.pic === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }
@@ -3213,11 +3214,18 @@ function openAvatarPicker({ after } = {}) {
 const curView = () => (prefs.simNew ? (prefs.simNew.role === 'boss' ? 'newBoss' : 'newEmployee') : viewAs() || 'admin');
 // Revivre la première visite : vu comme un employé, sans horaire, le tutoriel au début.
 // L'horaire réel est gardé de côté; « revenir » le remet.
+// L'aperçu « nouveau » montre la vraie première connexion : pas encore de photo
+// (celle choisie pendant l'aperçu reste sur ce téléphone, le vrai compte ne change pas).
+function avatarHTML(user, letter) {
+  if (prefs.simNew && user === session.user) return avatarOf({ avatar: prefs.simNew.avatar || '' }, letter);
+  return avatarOf(user, letter);
+}
 function startNewbie(role = 'employee') {
   const u = session.user;
   if (!u) return;
   if (!prefs.simNew) prefs.simNew = { sched: mySchedule() || {} };
   prefs.simNew.role = role; // nouvel employé ou nouveau superviseur
+  delete prefs.simNew.avatar;
   delete prefs.workAsEmp;
   delete prefs.welcomed?.[u.email];
   savePrefs();
@@ -3244,8 +3252,8 @@ function openAccount() {
   const live = session.mode === 'accounts';
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span>${viewAs() ? ` <span class="pill sim">${esc(t('viewAsNow', roleName(viewAs())))}</span>` : ''}</p></div></div>
-    ${isRealAdmin() ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="view-as" role="radiogroup">${['employee', 'boss', 'newEmployee', 'newBoss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${curView() === r}"${r === 'admin' ? ' class="va-wide"' : ''}>${esc(r.startsWith('new') ? t(r) : roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
+  openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(prefs.simNew ? viewAs() : u.role))}</span>${viewAs() && !prefs.simNew ? ` <span class="pill sim">${esc(t('viewAsNow', roleName(viewAs())))}</span>` : ''}</p></div></div>
+    ${isRealAdmin() && !prefs.simNew ? `<p class="block-label">${esc(t('viewAsTitle'))}</p><div class="view-as" role="radiogroup">${['employee', 'boss', 'newEmployee', 'newBoss', 'admin'].map((r) => `<button type="button" role="radio" data-viewas="${r}" aria-checked="${curView() === r}"${r === 'admin' ? ' class="va-wide"' : ''}>${esc(r.startsWith('new') ? t(r) : roleName(r))}</button>`).join('')}</div><p class="section-note">${esc(t('viewAsNote'))}</p>
     <label class="field act-as"><span>${esc(t('actAsLabel'))}</span><div class="acct-btns"><input id="acActAs" autocomplete="off" maxlength="40" value="${esc(prefs.actAs || '')}" placeholder="${esc(u.name)}"><button type="button" class="btn ghost" id="acActAsSave">${esc(t('save'))}</button></div></label>
     <p class="section-note">${esc(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsNote'))}</p>` : ''}
     <div class="acct-list">
