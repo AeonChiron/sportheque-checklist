@@ -65,6 +65,8 @@ function show(id) {
   paintShiftPill();
   const target = document.getElementById(id);
   if (id === 'auth') pool().start(); else poolCtl?.stop();
+  document.documentElement.classList.toggle('on-floor', id === 'auth'); // la page du plancher ne défile pas
+  if (id === 'auth') requestAnimationFrame(() => window.scrollTo(0, 0));
   placeQuickBar(id);
   if (!target.hidden) return;
   const swap = () => {
@@ -2249,7 +2251,17 @@ $('#qbVisit').addEventListener('click', () => {
 function paintFront() {
   const inside = Boolean(session.user);
   const first = (session.user?.name || '').split(' ')[0];
-  $('#poolStartLabel').textContent = inside ? t('welcomeBackName', first) : t('getStarted');
+  const label = $('#poolStartLabel');
+  if (inside) {
+    // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
+    let sub = t('wbStart');
+    if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
+    label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
+    $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
+  } else {
+    label.textContent = t('getStarted');
+    $('#poolStart').removeAttribute('aria-label');
+  }
   $('#poolDash').hidden = !inside;
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
