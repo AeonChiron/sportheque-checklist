@@ -2400,3 +2400,4 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .work-row .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
 .work-row[aria-checked="true"] .switch { background: var(--ink); }
 .work-row[aria-checked="true"] .switch::after { transform: translateX(18px); }
+.pic-cheer { font-size: 16px; font-weight: 600; color: var(--ink); text-align: center; }

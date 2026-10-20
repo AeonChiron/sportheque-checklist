@@ -3068,7 +3068,18 @@ function openAvatarPicker({ after } = {}) {
     <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
     <p class="section-note" id="picMsg" aria-live="polite"></p>`, (root) => {
     const pick = async (v) => {
-      try { await updateMe('avatar', { avatar: v }); sfx('save'); closeSheet(); paintFront(); if (after) after(); else setTimeout(openAccount, 360); }
+      try {
+        await updateMe('avatar', { avatar: v }); sfx('save'); paintFront();
+        if (!after) { closeSheet(); setTimeout(openAccount, 360); return; }
+        // Pendant le tutoriel : on reste ici, un mot d'encouragement, puis « Suivant » continue.
+        for (const b of root.querySelectorAll('.pic-opt')) { const on = b.dataset.pic === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }
+        const m = MASCOTS[v.slice(2)];
+        const msg = $('#picMsg');
+        msg.textContent = v.startsWith('m:') && m ? t('picCheerMascot', m[lang()] || m.fr) : t('picCheer');
+        msg.classList.add('pic-cheer');
+        buzz('tap');
+        $('#sheetFoot .btn')?.focus({ preventScroll: true });
+      }
       catch { $('#picMsg').textContent = t('adminCodesLater'); sfx('locked'); }
     };
     root.addEventListener('click', (e) => { const b = e.target.closest('[data-pic]'); if (b) pick(b.dataset.pic); });
@@ -3077,7 +3088,7 @@ function openAvatarPicker({ after } = {}) {
       if (!f) return;
       try { pick(await shrinkPhoto(f)); } catch { $('#picMsg').textContent = t('picBad'); }
     };
-  }, `<button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
+  }, `<button type="button" class="btn primary" data-close-sheet>${t(after ? 'tourNext' : 'close')}</button>`);
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
 }
 // Le choix « Voir comme » actuel : nouveau (première visite), employé, superviseur ou admin.
