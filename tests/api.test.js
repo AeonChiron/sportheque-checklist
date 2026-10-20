@@ -19,7 +19,7 @@ test('Inscription : il faut le bon code pour chaque rôle', async () => {
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'marie@x.ca', password: 'secret1', role: 'boss', code: 'equipe' } })).status, 403);
   const ok = await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'Marie@X.ca', password: 'secret1', role: 'employee', code: ' equipe ' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false, schedule: {} });
+  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false, schedule: {}, avatar: '' });
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'M', email: 'marie@x.ca', password: 'secret1', code: 'equipe' } })).status, 409);
   const me = await call('auth', { token: ok.data.token });
   assert.equal(me.data.user.name, 'Marie');
@@ -133,4 +133,17 @@ test('Admin : son propre code; seul l’admin change les codes d’équipe', asy
   assert.equal((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', team: 'neuf1', boss: 'neuf2' } })).status, 200);
   assert.equal((await c2('auth', { method: 'POST', body: { action: 'signup', name: 'F', email: 'f@t.ca', password: 'secret12', role: 'employee', code: 'Equipe' } })).status, 403);
   assert.equal((await c2('auth', { method: 'POST', body: { action: 'signup', name: 'F', email: 'f@t.ca', password: 'secret12', role: 'employee', code: 'neuf1' } })).status, 200);
+  // Un champ vide garde le code; l'admin change aussi le sien; trois codes différents.
+  assert.equal((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', admin: 'neuf1' } })).status, 400);
+  assert.equal((await c2('auth', { method: 'POST', token: admin.token, body: { action: 'codes', admin: '1758' } })).status, 200);
+  // Un compte existant devient admin avec le code; un mauvais code est refusé, 10 fois au plus par jour.
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: 'racine' } })).status, 403);
+  const up = await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: '1758' } });
+  assert.equal(up.data.user.role, 'admin');
+  for (let i = 0; i < 10; i++) await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: `x${i}` } });
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'role', code: '1758' } })).status, 429);
+  // Photo de profil : une mascotte ou une petite image; rien d'autre.
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: 'm:ours' } })).data.user.avatar, 'm:ours');
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: 'javascript:alert(1)' } })).status, 400);
+  assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: '' } })).data.user.avatar, '');
 });

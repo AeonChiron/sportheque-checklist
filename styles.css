@@ -1690,7 +1690,7 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .mascot-float { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
 .mascot-float img { display: block; width: 100%; height: auto; filter: drop-shadow(0 4px 6px rgba(6, 38, 79, .2)); transition: scale .25s cubic-bezier(.3, 1.6, .5, 1); }
 .mascot-float.held img { scale: 1.06; }
-.pool-ui .pool-top { justify-content: flex-end; }
+.pool-ui .pool-top { justify-content: space-between; }
 .mascot-home .mascot-img { display: block; width: 100%; height: auto; transform-origin: 50% 100%; animation: susie-idle 3.6s ease-in-out infinite; filter: drop-shadow(0 8px 12px rgba(20, 60, 120, .22)); }
 .mascot-home.hop .mascot-img { animation: susie-hop .7s cubic-bezier(.3, 1.5, .5, 1); }
 .mascot-home { width: 74%; bottom: 8%; }
@@ -2269,3 +2269,24 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .btn.danger { color: #c62828; }
 .sim-badge { position: fixed; z-index: 90; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); padding: 6px 12px; border-radius: 99px; border: 0; background: #7c3aed; color: #fff; font: 700 13px/1 var(--font); box-shadow: 0 8px 20px -8px rgba(60, 0, 120, .7); cursor: pointer; }
 #sheet .sheet-foot:has(#acSignOut) { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* Le lapin à la vadrouille accueille la première création d'horaire. */
+.sched-mascot { display: block; width: 96px; height: auto; margin: 0 auto 6px; }
+/* Photo de profil : mascotte, photo ou initiale, dans toutes les pastilles rondes. */
+.wb-avatar, .acct-btn { overflow: hidden; padding: 0; }
+.wb-avatar > svg, .wb-avatar > img, .acct-btn > svg, .acct-btn > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.acct-pic { position: relative; border: 0; cursor: pointer; overflow: visible; }
+.acct-pic > svg, .acct-pic > img { border-radius: inherit; }
+.acct-pic i { position: absolute; right: -6px; bottom: -6px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 700 12px/1 var(--font); font-style: normal; background: var(--ink); color: var(--surface); border: 2px solid var(--surface); }
+.pic-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.pic-opt { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 2px solid var(--line); border-radius: 18px; background: var(--surface); cursor: pointer; color: var(--ink); }
+.pic-opt svg { width: 100%; max-width: 72px; height: auto; }
+.pic-opt small { font-size: 12px; font-weight: 650; }
+.pic-opt.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink) inset; }
+.pic-more { margin-top: 14px; }
+.pic-upload { cursor: pointer; }
+.acct-code > summary { list-style: none; cursor: pointer; }
+.acct-code > summary::-webkit-details-marker { display: none; }
+.acct-code > summary::marker { content: ''; }
+.acct-code[open] > summary svg:last-child { transform: rotate(90deg); }
+.acct-code-body { padding: 10px 4px 4px; }
+.acct-code-body input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 12px; font: inherit; background: var(--surface); color: var(--ink); }

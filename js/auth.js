@@ -200,3 +200,20 @@ export async function setAlerts(on) {
   if (saved) keep({ ...saved, user: session.user }, saved.remember !== false);
   return session.user;
 }
+
+// Changer quelque chose à son compte : la photo (avatar) ou le rôle (avec un code).
+// En démo, rien ne part : tout reste sur le téléphone.
+export async function updateMe(action, fields) {
+  if (session.mode !== 'accounts') {
+    const patch = action === 'role' ? { role: fields.role } : { avatar: fields.avatar || '' };
+    const all = readJSON(localStorage, DEMO_USERS) || {};
+    if (all[session.user.email]) Object.assign(all[session.user.email], patch);
+    try { localStorage.setItem(DEMO_USERS, JSON.stringify(all)); } catch { /* ignore */ }
+    session.user = { ...session.user, ...patch };
+  } else {
+    session.user = (await request('auth', { method: 'POST', body: { action, ...fields } })).user;
+  }
+  const saved = load();
+  if (saved) keep({ ...saved, user: session.user }, saved.remember !== false);
+  return session.user;
+}

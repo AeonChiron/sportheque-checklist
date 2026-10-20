@@ -47,7 +47,9 @@ function cleanSchedule(raw) {
 }
 // Trois rôles : employé, superviseur, admin (la personne qui teste et règle le site; elle a tout ce qu'un superviseur a).
 const lead = (u) => u?.role === 'boss' || u?.role === 'admin';
-const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule) });
+// Photo de profil : une mascotte (« m:ours ») ou une petite image JPEG/WebP (96 px, ~10 ko).
+const cleanAvatar = (v) => (typeof v === 'string' && (/^m:[a-z]{2,12}$/.test(v) || (/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 40000)) ? v : '');
+const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule), avatar: cleanAvatar(u.avatar) });
 // Courriels des problèmes urgents : par défaut, les superviseurs marqués
 // alerts dans la config (Daniel); les autres peuvent s'abonner eux-mêmes.
 const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
@@ -64,7 +66,7 @@ export function createApi({ getStore, env }) {
   async function codes() {
     const e = env();
     const saved = (await settings().get('codes', { type: 'json' })) || {};
-    return { TEAM_CODE: saved.team || e.TEAM_CODE, BOSS_CODE: saved.boss || e.BOSS_CODE, ADMIN_CODE: e.ADMIN_CODE };
+    return { TEAM_CODE: saved.team || e.TEAM_CODE, BOSS_CODE: saved.boss || e.BOSS_CODE, ADMIN_CODE: saved.admin || e.ADMIN_CODE };
   }
 
   async function newSession(email) {
@@ -130,10 +132,44 @@ export function createApi({ getStore, env }) {
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
       if (u.role !== 'admin') return json({ error: 'admin' }, 403);
-      const team = String(b.team || '').trim().slice(0, 40), boss = String(b.boss || '').trim().slice(0, 40);
-      if (team.length < 4 || boss.length < 4 || team.toLowerCase() === boss.toLowerCase()) return json({ error: 'codes' }, 400);
-      await settings().setJSON('codes', { team, boss });
+      // Un champ vide garde le code actuel; les trois codes doivent rester différents.
+      const pick = (k) => String(b[k] || '').trim().slice(0, 40);
+      const now = await codes();
+      const saved = (await settings().get('codes', { type: 'json' })) || {};
+      const next = { team: pick('team') || now.TEAM_CODE || '', boss: pick('boss') || now.BOSS_CODE || '', admin: pick('admin') || now.ADMIN_CODE || '' };
+      const low = Object.values(next).filter(Boolean).map((x) => x.toLowerCase());
+      if (['team', 'boss', 'admin'].some((k) => pick(k) && pick(k).length < 4) || new Set(low).size !== low.length) return json({ error: 'codes' }, 400);
+      await settings().setJSON('codes', { ...saved, ...Object.fromEntries(['team', 'boss', 'admin'].filter((k) => pick(k)).map((k) => [k, pick(k)])) });
       return json({ ok: true });
+    }
+    // Entrer un code pour changer de rôle (ex. l'admin sur un compte déjà créé).
+    if (b.action === 'role') {
+      const u = await currentUser(req);
+      if (!u) return json({ error: 'auth' }, 401);
+      const { TEAM_CODE, BOSS_CODE, ADMIN_CODE } = await codes();
+      // 10 essais ratés par jour au plus : un code à 4 chiffres ne se devine pas à la chaîne.
+      const day = localDay(new Date());
+      if (u.roleTries?.day === day && u.roleTries.n >= 10) return json({ error: 'tries' }, 429);
+      const code = String(b.code || '').trim().toLowerCase();
+      const is = (c) => Boolean(code && c) && sameText(code, String(c).trim().toLowerCase());
+      const role = is(ADMIN_CODE) ? 'admin' : is(BOSS_CODE) ? 'boss' : is(TEAM_CODE) ? 'employee' : '';
+      if (!role) {
+        u.roleTries = { day, n: (u.roleTries?.day === day ? u.roleTries.n : 0) + 1 };
+        await users().setJSON(u.email, u);
+        return json({ error: 'code' }, 403);
+      }
+      u.role = role;
+      await users().setJSON(u.email, u);
+      return json({ user: publicUser(u) });
+    }
+    if (b.action === 'avatar') {
+      const u = await currentUser(req);
+      if (!u) return json({ error: 'auth' }, 401);
+      const avatar = cleanAvatar(b.avatar);
+      if (b.avatar && !avatar) return json({ error: 'avatar' }, 400);
+      u.avatar = avatar;
+      await users().setJSON(u.email, u);
+      return json({ user: publicUser(u) });
     }
     if (b.action === 'schedule') {
       const u = await currentUser(req);

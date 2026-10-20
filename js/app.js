@@ -1,4 +1,5 @@
-import { simulated } from './clock.js'; // en premier : l'heure simulée de l'admin
+import { simulated } from './clock.js';
+import { MASCOTS, mascotSvg, avatarHTML, shrinkPhoto } from './avatars.js'; // en premier : l'heure simulée de l'admin
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS } from './manual.js';
@@ -7,7 +8,7 @@ import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
 import { mountGlass, playFinish, fxSound } from './fx.js';
-import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents } from './auth.js';
+import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
@@ -465,7 +466,7 @@ function openScheduleSheet({ first = false } = {}) {
   const sc = {};
   for (const [k, v] of Object.entries(mySchedule() || {})) { const h = hoursOf(v); if (h) sc[k] = { start: h.start, end: h.end }; }
   let lastHours = Object.values(sc).at(-1) || { start: PRESETS[0].start, end: PRESETS[0].end };
-  openSheet(`<div class="sheet-head sched-head"><p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${t(first ? 'schedFirstTitle' : 'schedTitle')}</h2><p class="lede">${t('schedLede')}</p></div>${schedEditor(sc)}`, (root) => {
+  openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${t(first ? 'schedFirstTitle' : 'schedTitle')}</h2><p class="lede">${t('schedLede')}</p></div>${schedEditor(sc)}`, (root) => {
     const paintRow = (i) => {
       const row = root.querySelector(`[data-row="${i}"]`);
       const h = sc[i];
@@ -637,6 +638,7 @@ function setupScreen({ next = null } = {}) {
   renderPresets();
   paintDate();
   paintEditToday();
+  $('#editToday').hidden = true; // page « heures » seulement : pas de raccourci vers l'ancien quart
   paintSetupSched();
   manualShift = null;
   setTimeout(paintInstallTip, 0); // après show('setup')
@@ -1712,7 +1714,7 @@ $('#menuBtn').addEventListener('click', () => {
     const reset = root.querySelector('#mReset');
     reset.onclick = () => {
       if (!reset.dataset.armed) { reset.dataset.armed = '1'; reset.textContent = t('abandonSure'); return; }
-      state = null; save(); clearPhotos(); closeSheet(); setupScreen();
+      state = null; save(); clearPhotos(); closeSheet(); goFront();
     };
   });
 });
@@ -1846,7 +1848,7 @@ function paintEditToday() {
 }
 function reopenShift() {
   const last = editableShift();
-  if (!last) { toast(t('editLocked'), 'bad'); setupScreen(); return; }
+  if (!last) { toast(t('editLocked'), 'bad'); goFront(); return; }
   const { savedAt, ...rest } = last;
   state = rest;
   save();
@@ -2625,7 +2627,7 @@ function paintFront() {
     else if (state && plan) { const ts = planTasks(); sub = t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length); }
     else if (nx?.ready) sub = t('wbReady');
     else if (nx) sub = t('wbPeek');
-    label.innerHTML = `<span class="wb-avatar">${esc((first[0] || '?').toUpperCase())}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
+    label.innerHTML = `<span class="wb-avatar">${avatarHTML(session.user, esc((first[0] || '?').toUpperCase()))}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
     $('#poolStart').classList.toggle('unsent', Boolean(state && plan && shiftOver()));
   } else {
@@ -2636,7 +2638,7 @@ function paintFront() {
   if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
   $('#poolDash').hidden = !inside;
   $('#poolAccount').hidden = !inside;
-  if (inside) { $('#poolAccount').innerHTML = `<span>${esc((first[0] || '?').toUpperCase())}</span>`; $('#poolAccount').setAttribute('aria-label', t('account')); }
+  if (inside) { $('#poolAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase())); $('#poolAccount').setAttribute('aria-label', t('account')); }
   $('#dashBoss').hidden = !isBoss();
   $('#poolLogin').hidden = inside;
   $('#poolVisit').hidden = inside;
@@ -2817,6 +2819,28 @@ async function doSignOut() {
 }
 
 // ---------- Mon compte : nom, statut, déconnexion; pour l'admin, les codes et les outils de test ----------
+// Choisir sa photo : une mascotte en peluche, une photo du téléphone, ou rien (l'initiale).
+function openAvatarPicker() {
+  const u = session.user;
+  if (!u) return;
+  const cur = u.avatar || '';
+  openSheet(`<div class="sheet-head"><h2>${esc(t('picTitle'))}</h2><p class="lede">${esc(t('picLede'))}</p></div>
+    <div class="pic-grid">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotSvg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
+    <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
+    <p class="section-note" id="picMsg" aria-live="polite"></p>`, (root) => {
+    const pick = async (v) => {
+      try { await updateMe('avatar', { avatar: v }); sfx('save'); closeSheet(); paintFront(); setTimeout(openAccount, 360); }
+      catch { $('#picMsg').textContent = t('adminCodesLater'); sfx('locked'); }
+    };
+    root.addEventListener('click', (e) => { const b = e.target.closest('[data-pic]'); if (b) pick(b.dataset.pic); });
+    $('#picFile').onchange = async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      try { pick(await shrinkPhoto(f)); } catch { $('#picMsg').textContent = t('picBad'); }
+    };
+  }, `<button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
+  $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
+}
 function openAccount() {
   const u = session.user;
   if (!u) return;
@@ -2824,10 +2848,11 @@ function openAccount() {
   const live = session.mode === 'accounts';
   const sim = prefs.clockOffset ? new Date() : null;
   const local = (d) => `${isoOf(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  openSheet(`<div class="acct-head"><span class="wb-avatar">${esc((u.name[0] || '?').toUpperCase())}</span><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span></p></div></div>
+  openSheet(`<div class="acct-head"><button type="button" class="wb-avatar acct-pic" id="acPic" aria-label="${esc(t('picChange'))}">${avatarHTML(u, esc((u.name[0] || '?').toUpperCase()))}<i aria-hidden="true">✎</i></button><div><h2>${esc(u.name)}</h2><p>${u.email && !u.visitor ? `${esc(u.email)} · ` : ''}<span class="pill">${esc(u.visitor ? t('visitorMode') : roleName(u.role))}</span></p></div></div>
     <div class="acct-list">
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
-      ${isBoss() ? `<button type="button" class="acct-row" id="acBoss"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg><span>${esc(t('bossMode'))}</span>${CHEV_R}</button>` : ''}
+      ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
+        <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
       <button type="button" class="acct-row" id="acSound"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/>${prefs.sound === false ? '<path d="M17 9l4 6M21 9l-4 6"/>' : '<path d="M17 8a5 5 0 0 1 0 8"/>'}</svg><span>${esc(t(prefs.sound === false ? 'soundOff' : 'soundOn'))}</span></button>
     </div>
     ${admin ? `<p class="block-label">${esc(t('adminTools'))}</p>
@@ -2844,11 +2869,21 @@ function openAccount() {
     <p class="block-label">${esc(t('adminCodes'))}</p>
     <div class="panel acct-admin">
       ${live ? `<div class="row2"><label class="field"><span>${esc(t('teamCode'))}</span><input id="acTeam" autocomplete="off"></label><label class="field"><span>${esc(t('bossCode'))}</span><input id="acBossCode" autocomplete="off"></label></div>
+      <label class="field"><span>${esc(t('adminCodeLabel'))}</span><input id="acAdminCode" autocomplete="off"></label>
       <button type="button" class="btn ghost" id="acCodes">${esc(t('save'))}</button><p class="section-note" id="acCodesMsg">${esc(t('adminCodesNote'))}</p>` : `<p class="section-note">${esc(t('adminCodesDemo'))}</p>`}
     </div>` : ''}`,
   (root) => {
     $('#acSched').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 320); };
-    $('#acBoss')?.addEventListener('click', () => { closeSheet(); location.hash = 'superviseur'; route(); });
+    $('#acPic').onclick = () => { closeSheet(); setTimeout(openAvatarPicker, 320); };
+    $('#acRoleGo')?.addEventListener('click', async () => {
+      const code = $('#acRoleCode').value.trim(), msg = $('#acRoleMsg');
+      if (!code) return;
+      try {
+        if (session.mode === 'accounts') await updateMe('role', { code });
+        else await updateMe('role', { role: /admin/i.test(code) ? 'admin' : 'boss' }); // démo : rien n'est vérifié
+        sfx('save'); toast(t('codeOk', roleName(session.user.role))); closeSheet(); paintFront(); setTimeout(openAccount, 360);
+      } catch (err) { msg.textContent = t(err.status === 429 ? 'codeTries' : err.status === 403 ? 'codeBad' : 'adminCodesLater'); sfx('locked'); }
+    });
     $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
     $('#acSignOut').onclick = (e) => {
       const b = e.currentTarget;
@@ -2869,7 +2904,7 @@ function openAccount() {
     };
     $('#acCodes')?.addEventListener('click', async () => {
       const msg = $('#acCodesMsg');
-      try { await request('auth', { method: 'POST', body: { action: 'codes', team: $('#acTeam').value, boss: $('#acBossCode').value } }); msg.textContent = t('adminCodesSaved'); sfx('save'); } catch (err) { msg.textContent = t(err.status === 400 ? 'adminCodesBad' : 'adminCodesLater'); sfx('locked'); }
+      try { await request('auth', { method: 'POST', body: { action: 'codes', team: $('#acTeam').value, boss: $('#acBossCode').value, admin: $('#acAdminCode').value } }); msg.textContent = t('adminCodesSaved'); sfx('save'); } catch (err) { msg.textContent = t(err.status === 400 ? 'adminCodesBad' : 'adminCodesLater'); sfx('locked'); }
     });
   }, `<button type="button" class="btn ghost danger" id="acSignOut">${t('signOut')}</button><button type="button" class="btn primary" data-close-sheet>${t('close')}</button>`);
   $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
@@ -3317,6 +3352,7 @@ function route() {
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();
   if (state?.name && state?.date) return openChecklist();
+  if (session.user) return goFront(); // l'accueil (lapin, horaire) fait tout; la page « heures » sert aux heures spéciales
   return setupScreen();
 }
 window.addEventListener('hashchange', route);
