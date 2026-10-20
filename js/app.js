@@ -5,6 +5,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
+import { rackSVG, playFinish, fxSound } from './fx.js';
 import { session, accounts, isBoss, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
@@ -538,42 +539,21 @@ function breakRow(it) {
 // droite, comme au gym. Barre pleine = quart fini.
 let landId = null; // la tâche qui vient d'être cochée : son disque arrive en glissant
 let liftNext = false;
-function barbellSVG(plates, total, { land = -1, mini = false } = {}) {
-  const W = mini ? 120 : 340, H = mini ? 30 : 72, mid = W / 2;
-  const collar = mini ? 12 : 56, sleeve = mid - collar - (mini ? 6 : 10);
-  const per = Math.max(1, Math.ceil(total / 2));
-  const w = Math.max(mini ? 4 : 6, Math.min(mini ? 8 : 14, Math.floor(sleeve / per) - 2));
-  const ph = mini ? 22 : 60, py = (H - ph) / 2;
-  const slot = (j) => {
-    const side = j % 2 ? 1 : -1, k = Math.floor(j / 2);
-    const x = side < 0 ? mid - collar - 4 - k * (w + 2) - w : mid + collar + 4 + k * (w + 2);
-    return { x, side };
-  };
-  let out = '';
-  for (let j = 0; j < total; j++) {
-    const { x, side } = slot(j);
-    const p = plates[j];
-    if (!p) { out += `<rect class="ghost" x="${x}" y="${py}" width="${w}" height="${ph}" rx="${mini ? 1.5 : 3}"/>`; continue; }
-    out += `<g class="plate${j === land ? ' land' : ''}" style="--dir:${side};--pc:var(--plate-${p})"><rect x="${x}" y="${py}" width="${w}" height="${ph}" rx="${mini ? 1.5 : 3}"/>${mini ? '' : `<rect class="hub" x="${x + w / 2 - 1}" y="${H / 2 - 9}" width="2" height="18" rx="1"/>`}</g>`;
-  }
-  const bh = mini ? 3 : 6;
-  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
-    <rect class="bar" x="2" y="${(H - bh) / 2}" width="${W - 4}" height="${bh}" rx="${bh / 2}"/>
-    ${mini ? '' : `<rect class="grip" x="${mid - 44}" y="${(H - bh) / 2 - 1}" width="88" height="${bh + 2}" rx="2"/>`}
-    <rect class="collar" x="${mid - collar - 3}" y="${H / 2 - (mini ? 6 : 12)}" width="${mini ? 3 : 7}" height="${mini ? 12 : 24}" rx="1.5"/>
-    <rect class="collar" x="${mid + collar - (mini ? 0 : 4)}" y="${H / 2 - (mini ? 6 : 12)}" width="${mini ? 3 : 7}" height="${mini ? 12 : 24}" rx="1.5"/>
-    ${out}</svg>`;
+// Les étapes d'une tâche : une pastille de sa couleur par étape.
+function pipsHTML(done, total, plate, land = -1) {
+  return Array.from({ length: total }, (_, j) => `<i class="${j < done ? 'on' : ''}${j === land ? ' pop' : ''}"></i>`).join('');
 }
+const sfx = (name) => { if (prefs.sound !== false) fxSound(name); };
 function renderTimeline() {
   const tasks = planTasks();
   const done = tasks.filter((it) => state.tasks[it.id]?.done)
     .sort((a, b) => String(state.tasks[a.id].doneAt || '').localeCompare(String(state.tasks[b.id].doneAt || '')));
   const land = landId ? done.findIndex((it) => it.id === landId) : -1;
   const box = $('#timeline');
-  box.innerHTML = barbellSVG(done.map(plateOf), tasks.length, { land });
+  box.innerHTML = rackSVG(done.map(plateOf), tasks.length, { land });
   box.setAttribute('aria-label', t('barLabel', done.length, tasks.length));
   box.classList.toggle('full', tasks.length > 0 && done.length === tasks.length);
-  if (land >= 0 && !reducedMotion()) { box.classList.remove('clank'); void box.offsetWidth; box.classList.add('clank'); }
+  if (land >= 0 && !reducedMotion()) { box.classList.remove('thud'); void box.offsetWidth; box.classList.add('thud'); }
   if (liftNext && !reducedMotion()) { box.classList.remove('lift'); void box.offsetWidth; box.classList.add('lift'); }
   landId = null;
   liftNext = false;
@@ -717,8 +697,8 @@ function toggleDone(id) {
   if (e.done) landId = id;
   if (!wasAll && allDone()) liftNext = true;
   renderChecklist();
-  if (e.done) { clank('plate'); buzz('plate'); }
-  if (!wasAll && allDone()) setTimeout(() => { clank('lift'); buzz('lift'); }, reducedMotion() ? 0 : 650);
+  if (e.done) { sfx('rackLand'); buzz('plate'); }
+  if (!wasAll && allDone()) { sfx('rackFull'); setTimeout(() => buzz('lift'), reducedMotion() ? 0 : 650); }
   if (!wasAll && allDone()) setTimeout(showAllDone, reducedMotion() ? 0 : 900);
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
   const tasks = planTasks();
@@ -1101,7 +1081,7 @@ function openTask(id) {
         <div class="meta-row">${pills}</div>
       </div>
     </div>
-    <div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span><span class="mini-bar">${barbellSVG((e.steps || []).map(() => plateOf(it)), it.steps.length, { mini: true })}</span></p>
+    <div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span><span class="pips" style="--pc:var(--plate-${plateOf(it)})">${pipsHTML((e.steps || []).length, it.steps.length)}</span></p>
       <ol class="steps">${it.steps.map((s, i) => `<li><button type="button" class="step" data-step="${i}" aria-pressed="${Boolean(e.done || (e.steps || []).includes(i))}"><span class="step-text">${md(s)}</span><i aria-hidden="true">✓</i></button></li>`).join('')}</ol>
       <p class="hint">${t('stepsHint')}</p></div>
     ${tv}
@@ -1115,6 +1095,14 @@ function openTask(id) {
   `, (root) => {
     const mapBox = root.querySelector('[data-map]');
     if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: state.date } : { mirrors: it.zone, date: state.date });
+    // Tâche finie depuis la feuille : sa petite scène et son son, puis cochée.
+    let finishing = false;
+    const finishWithFx = () => {
+      if (finishing) return;
+      finishing = true;
+      playFinish({ ...it, plate: plateOf(it) }, $('#sheet'), { sound: prefs.sound !== false, still: reducedMotion() })
+        .then(() => { closeSheet(); toggleDone(id); });
+    };
     // Étapes : chaque toucher coche une étape; toutes faites = tâche cochée.
     for (const b of root.querySelectorAll('[data-step]')) {
       b.onclick = () => {
@@ -1125,19 +1113,18 @@ function openTask(id) {
         b.setAttribute('aria-pressed', String(set.has(i)));
         root.querySelector('.steps-count').textContent = `${set.size}/${it.steps.length}`;
         const added = set.has(i);
-        root.querySelector('.mini-bar').innerHTML = barbellSVG([...set].map(() => plateOf(it)), it.steps.length, { mini: true, land: added ? set.size - 1 : -1 });
+        root.querySelector('.pips').innerHTML = pipsHTML(set.size, it.steps.length, null, added ? set.size - 1 : -1);
         if (added) { clank('step'); buzz('step'); }
         save();
-        if (set.size === it.steps.length && !e.done) {
-          setTimeout(() => { closeSheet(); toggleDone(id); }, 450);
-        } else renderChecklist();
+        if (set.size === it.steps.length && !e.done) finishWithFx();
+        else renderChecklist();
       };
     }
     root.querySelector('#remark').addEventListener('input', (ev) => { e.remark = ev.target.value; save(); renderChecklist(); });
     root.querySelector('[data-flagtask]').onclick = () => openFlag({ where: it.title });
     root.querySelector('[data-status="done"]').onclick = () => {
-      closeSheet();
-      toggleDone(id);
+      if (e.done) { closeSheet(); toggleDone(id); return; }
+      finishWithFx();
     };
     root.querySelector('[data-status="skip"]').onclick = () => {
       const on = !(e.skipped && !e.done);
@@ -2219,8 +2206,12 @@ function placeQuickBar(id) {
   bar.hidden = !on;
   if (!on) return;
   const target = document.getElementById(id);
-  const host = target.querySelector(':scope > .topbar:not(.plain)') || target;
-  if (bar.parentElement !== host) host.prepend(bar);
+  const head = target.querySelector(':scope > .topbar:not(.plain)');
+  if (head) {
+    // Checklist : le titre défile, la barre et le support restent collés en haut.
+    const row = head.querySelector('.topbar-row');
+    if (bar.previousElementSibling !== row) row.after(bar);
+  } else if (bar.parentElement !== target) target.prepend(bar);
   $('#restartBtn').hidden = id !== 'checklist';
   $('#qbTasks').hidden = !state || id === 'checklist';
   $('#qbBoss').hidden = !isBoss() || id === 'boss';
@@ -2228,6 +2219,11 @@ function placeQuickBar(id) {
   bar.classList.toggle('no-tools', id === 'setup'); // l'accueil a déjà ses boutons
 }
 $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
+// La hauteur du titre de la checklist (il défile; le reste de l'en-tête colle).
+{
+  const head = $('#checklist > .topbar'), row = head.querySelector('.topbar-row');
+  new ResizeObserver(() => { if (row.offsetHeight) head.style.setProperty('--tb-skip', `${row.offsetHeight + 10}px`); }).observe(row);
+}
 
 // Visiteur : essaie l'app sans compte; rien ne part vers l'équipe.
 function enterVisitor() { startVisitor(t('visitorName')); location.reload(); }

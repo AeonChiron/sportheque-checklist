@@ -1786,3 +1786,197 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .quick-bar .theme-btn { width: 34px; height: 34px; }
 .quick-bar .theme-btn svg { width: 17px; height: 17px; }
 .quick-bar .lang-switch button { min-height: 30px; min-width: 30px; padding: 3px 6px; font-size: 11.5px; }
+
+/* ---------- Support à haltères (progrès du quart) ---------- */
+#timeline svg { display: block; width: 100%; height: auto; max-height: 96px; overflow: visible; }
+#timeline .rail { fill: #8f9297; }
+#timeline .leg { fill: #74777c; }
+#timeline .cradle { fill: none; stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 2; stroke-linecap: round; }
+#timeline .slot :is(.hd, .bar) { fill: none; stroke: color-mix(in srgb, var(--muted) 45%, transparent); stroke-width: 1.2; stroke-dasharray: 3 3; }
+#timeline .db .hd { fill: var(--pc); stroke: rgba(0, 0, 0, .28); stroke-width: 1; }
+#timeline .db .bar { fill: #9a9da2; }
+#timeline .db .shine { fill: rgba(255, 255, 255, .5); }
+:root[data-theme="dark"] #timeline .db .hd { stroke: rgba(255, 255, 255, .2); }
+#timeline .db { transform-box: fill-box; transform-origin: 50% 100%; }
+#timeline .db.land { animation: db-land .62s cubic-bezier(.3, 1.25, .5, 1) .12s both; }
+@keyframes db-land {
+  0% { transform: translateY(-46px) rotate(-16deg); opacity: 0; }
+  18% { opacity: 1; }
+  58% { transform: translateY(2px) rotate(2deg) scale(1.1, .84); }
+  78% { transform: translateY(-3px) scale(.96, 1.05); }
+  100% { transform: none; opacity: 1; }
+}
+#timeline .puff circle { fill: color-mix(in srgb, var(--muted) 55%, transparent); transform-box: fill-box; transform-origin: center; opacity: 0; animation: db-puff .55s ease-out .5s both; }
+@keyframes db-puff { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.4) translateY(-3px); } }
+#timeline.thud .rack-frame { animation: rack-thud .4s ease .48s; }
+@keyframes rack-thud { 30% { transform: translateY(2px); } 60% { transform: translateY(-.5px); } }
+#timeline .sweep { opacity: 0; }
+#timeline.lift .sweep { animation: rack-sweep 1.3s ease .35s; }
+@keyframes rack-sweep { 0% { opacity: 1; transform: translateX(0); } 100% { opacity: 1; transform: translateX(480px); } }
+#timeline.lift .db { animation: db-hop .5s cubic-bezier(.3, 1.6, .5, 1) calc(.5s + var(--i) * 55ms); }
+@keyframes db-hop { 40% { transform: translateY(-8px) scale(1.06); } }
+#timeline.full .db .hd { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--pc) 70%, transparent)); }
+
+/* Étapes d'une tâche : pastilles */
+.pips { margin-left: auto; display: inline-flex; gap: 5px; align-items: center; }
+.pips i { width: 14px; height: 14px; border-radius: 50%; border: 2px dashed color-mix(in srgb, var(--muted) 50%, transparent); }
+.pips i.on { border: 0; background: var(--pc); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .2); }
+.pips i.pop { animation: pip-pop .45s cubic-bezier(.3, 1.7, .5, 1); }
+@keyframes pip-pop { 0% { transform: scale(.2); } 60% { transform: scale(1.35); } 100% { transform: none; } }
+
+/* ---------- Fin de tâche : la scène ---------- */
+.fx-stage { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fx-in .2s ease both; border-radius: inherit; }
+.fx-stage.out { animation: fx-out .22s ease both; }
+@keyframes fx-in { from { opacity: 0; } }
+@keyframes fx-out { to { opacity: 0; transform: scale(.97); } }
+.fx-card { position: relative; width: min(80%, 320px); aspect-ratio: 200 / 160; animation: fx-pop .38s cubic-bezier(.3, 1.5, .5, 1) both; }
+@keyframes fx-pop { from { transform: scale(.7); opacity: 0; } }
+.fx-card > svg { width: 100%; height: 100%; overflow: visible; }
+.fx-card > svg :is(rect, path, circle, ellipse) { stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; fill: var(--surface); }
+.fx-card > svg * { transform-box: fill-box; transform-origin: center; }
+.fx-check { position: absolute; right: 2%; top: 0; width: 48px; height: 48px; border-radius: 50%; background: #1f8a4c; display: grid; place-items: center; box-shadow: 0 8px 18px -6px rgba(31, 138, 76, .6); transform: scale(0); animation: fx-check .45s cubic-bezier(.3, 1.7, .5, 1) 1s both; }
+.fx-check svg { width: 28px; height: 28px; }
+.fx-check path { fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes fx-check { to { transform: none; } }
+.fx-card .spark { fill: #f5c400; stroke: none; opacity: 0; animation: fx-spark .6s ease-out var(--d) both; }
+@keyframes fx-spark { 0% { opacity: 0; transform: scale(.2); } 45% { opacity: 1; transform: scale(1.25) rotate(40deg); } 100% { opacity: 0; transform: scale(.6) rotate(90deg); } }
+
+/* Guenilles : elle se plie deux fois et tombe sur la pile */
+.fx-rag .rag rect { fill: var(--plate-b); }
+.fx-rag .rag path { stroke: rgba(255, 255, 255, .55); stroke-width: 2; fill: none; }
+.fx-rag .pile { fill: color-mix(in srgb, var(--plate-b) 70%, #fff); }
+.fx-rag .rag { animation: fx-rag 1.1s cubic-bezier(.5, 0, .3, 1) both; }
+@keyframes fx-rag {
+  0% { transform: translateY(0) scale(1, 1); }
+  24% { transform: translateY(0) scale(.5, 1); }
+  30% { transform: translateY(-4px) scale(.53, 1.03); }
+  50% { transform: translateY(0) scale(.5, .5); }
+  76% { transform: translateY(21px) scale(.5, .5); }
+  86% { transform: translateY(23px) scale(.56, .42); }
+  100% { transform: translateY(22px) scale(.5, .5); }
+}
+
+/* Poubelles : le sac tombe, le couvercle claque */
+.fx-trash .bag path { fill: #2f3d35; }
+.fx-trash .bag .tie { fill: none; }
+.fx-trash .can-body { fill: #8b939c; }
+.fx-trash .ribs { stroke: rgba(0, 0, 0, .25); fill: none; }
+.fx-trash .lid rect { fill: #6f7780; }
+.fx-trash .bag { animation: fx-bag .55s cubic-bezier(.5, 0, .7, 1) .1s both; }
+@keyframes fx-bag { 0% { transform: translateY(-40px); opacity: 0; } 20% { opacity: 1; } 85% { transform: translateY(56px); } 100% { transform: translateY(52px); } }
+.fx-trash .lid { transform-origin: 0% 100%; animation: fx-lid .9s cubic-bezier(.3, 1.4, .5, 1) both; }
+@keyframes fx-lid { 0%, 50% { transform: rotate(-78deg); } 64% { transform: rotate(5deg); } 74% { transform: rotate(-2deg); } 100% { transform: none; } }
+.fx-trash .can { transform-origin: 50% 100%; animation: fx-squash .35s ease .6s; }
+@keyframes fx-squash { 40% { transform: scale(1.04, .94); } }
+
+/* Désinfection : pschitt, nuage et brillants */
+.fx-spray .label { fill: var(--plate-b); }
+.fx-spray .nozzle, .fx-spray .trigger { fill: none; }
+.fx-spray .bottle { animation: fx-shake .3s ease .1s; }
+@keyframes fx-shake { 30% { transform: rotate(-4deg); } 70% { transform: rotate(2deg); } }
+.fx-spray .trigger { animation: fx-trig .3s ease .08s; }
+@keyframes fx-trig { 50% { transform: translateX(-6px); } }
+.fx-spray .mist { fill: color-mix(in srgb, var(--accent) 35%, #fff); stroke: none; opacity: 0; animation: fx-mist .7s ease-out var(--d) both; }
+@keyframes fx-mist { 0% { opacity: 0; transform: scale(.3); } 25% { opacity: .95; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.5); } }
+
+/* Aspirateur : il passe et la poussière disparaît */
+.fx-vacuum .floor { fill: var(--line); stroke: none; }
+.fx-vacuum .vac rect { fill: var(--plate-r); }
+.fx-vacuum .vac circle { fill: var(--ink); }
+.fx-vacuum .pole { fill: none; stroke-width: 4; }
+.fx-vacuum .vac { animation: fx-vac .95s cubic-bezier(.45, 0, .35, 1) both; }
+@keyframes fx-vac { from { transform: translateX(6px); } to { transform: translateX(150px); } }
+.fx-vacuum .dust { fill: #8a7a66; stroke: none; animation: fx-dust .22s ease-in var(--d) both; }
+@keyframes fx-dust { to { opacity: 0; transform: translate(-6px, -4px) scale(0); } }
+
+/* Tuiles : la moppe passe, le plancher brille */
+.fx-mop .tile { fill: color-mix(in srgb, var(--surface) 55%, #b8ae9c); }
+.fx-mop .streak { fill: color-mix(in srgb, #bfe6ff 70%, #fff); stroke: none; opacity: .85; transform-origin: 0% 50%; animation: fx-streak .8s cubic-bezier(.45, 0, .35, 1) .05s both; }
+@keyframes fx-streak { from { transform: scaleX(0); } }
+.fx-mop .mophead rect { fill: #d9d4cb; }
+.fx-mop .pole { fill: none; stroke-width: 4; }
+.fx-mop .strands { fill: none; stroke: #bdb6aa; }
+.fx-mop .mophead { animation: fx-mophead .85s cubic-bezier(.45, 0, .35, 1) both; }
+@keyframes fx-mophead { from { transform: translateX(0); } to { transform: translateX(132px); } }
+.fx-mop .sign path:first-child { fill: #f5c400; }
+.fx-mop .sign .mark { fill: none; stroke-width: 3.5; }
+.fx-mop .sign { transform-origin: 50% 100%; animation: fx-popup .4s cubic-bezier(.3, 1.7, .5, 1) .8s both; }
+@keyframes fx-popup { from { transform: scale(0); } }
+
+/* Miroirs : les traces partent, un reflet traverse */
+.fx-mirror .frame { fill: #b9c0c8; }
+.fx-mirror .glass { fill: #d4ecfb; }
+.fx-mirror .smudge { fill: rgba(120, 105, 90, .38); stroke: none; animation: fx-fade .35s ease var(--d) both; }
+@keyframes fx-fade { to { opacity: 0; transform: scale(.4); } }
+.fx-mirror .glint { fill: rgba(255, 255, 255, .9); stroke: none; transform: translateX(-90px); animation: fx-glint .55s ease-in-out .55s both; }
+@keyframes fx-glint { from { transform: translateX(-90px); } to { transform: translateX(150px); } }
+
+/* Profondeur : la saleté s'en va, ça brille */
+.fx-sparkle .bench rect { fill: #5b616a; }
+.fx-sparkle .bench path { fill: none; stroke-width: 4; }
+.fx-sparkle .grime { fill: #7a6a55; stroke: none; animation: fx-fade .3s ease var(--d) both; }
+
+/* Spinning : la roue part en fou */
+.fx-bike .wheel circle:first-child { fill: none; stroke-width: 6; }
+.fx-bike .wheel path { stroke: var(--muted); stroke-width: 2.5; fill: none; }
+.fx-bike .hub { fill: var(--accent); }
+.fx-bike .wheel { animation: fx-spin 1.05s cubic-bezier(.15, .6, .3, 1) both; }
+@keyframes fx-spin { from { transform: rotate(0); } to { transform: rotate(1080deg); } }
+.fx-bike .speed path { stroke: var(--muted); fill: none; }
+.fx-bike .speed { animation: fx-speed .9s ease both; }
+@keyframes fx-speed { 0%, 100% { opacity: 0; } 20%, 60% { opacity: 1; transform: translateX(-6px); } }
+
+/* Tâche de la semaine : coup d'étampe */
+.fx-stamp .cal-top { fill: var(--plate-r); }
+.fx-stamp .rings { fill: none; }
+.fx-stamp .mark circle, .fx-stamp .mark path { fill: none; stroke: #1f8a4c; stroke-width: 4.5; }
+.fx-stamp .mark { opacity: 0; animation: fx-mark .3s cubic-bezier(.3, 1.7, .5, 1) .42s both; }
+@keyframes fx-mark { from { opacity: 0; transform: scale(1.4); } to { opacity: 1; transform: none; } }
+.fx-stamp .stamper rect, .fx-stamp .stamper circle { fill: #7a5634; }
+.fx-stamp .stamper { animation: fx-stamper .9s cubic-bezier(.5, 0, .3, 1) both; }
+@keyframes fx-stamper { 0% { transform: translateY(-10px); } 38% { transform: translateY(66px); } 46% { transform: translateY(62px); } 75% { transform: translateY(-14px); } 100% { transform: translateY(-40px); opacity: 0; } }
+
+/* Ouverture : la télé s'allume */
+.fx-power .tv { fill: #2b2f35; }
+.fx-power .screen { fill: #111; animation: fx-screen .8s ease .3s both; }
+@keyframes fx-screen { to { fill: #4aa3f0; } }
+.fx-power .scan { fill: #fff; stroke: none; transform: scaleX(0); animation: fx-scan .5s ease .05s both; }
+@keyframes fx-scan { 50% { transform: scaleX(1); opacity: 1; } 100% { transform: scale(1, 6); opacity: 0; } }
+.fx-power .stand { fill: none; }
+
+/* Inspection / tour : la liste se coche */
+.fx-clipboard .board { fill: #c99c63; }
+.fx-clipboard .clip { fill: #8b939c; }
+.fx-clipboard .line { fill: color-mix(in srgb, var(--muted) 40%, transparent); stroke: none; }
+.fx-clipboard .tick { fill: none; stroke: #1f8a4c; stroke-width: 4; stroke-dasharray: 22; stroke-dashoffset: 22; animation: fx-draw .22s ease var(--d) forwards; }
+@keyframes fx-draw { to { stroke-dashoffset: 0; } }
+
+/* Fermeture : le cadenas se barre */
+.fx-lock .shackle { fill: none; stroke: #8b939c; stroke-width: 9; transform: translateY(-16px); animation: fx-shackle .3s cubic-bezier(.5, 0, .3, 1.4) .38s forwards; }
+@keyframes fx-shackle { to { transform: none; } }
+.fx-lock .body { fill: #f5c400; }
+.fx-lock .keyhole { fill: var(--ink); stroke-width: 2; }
+.fx-lock .moon { fill: #f5d76e; opacity: 0; animation: fx-mark .4s ease .7s both; }
+
+/* Rangement : l'haltère retourne sur le support */
+.fx-rack .rail { fill: #6c6f74; }
+.fx-rack .leg2 { fill: none; stroke: #6c6f74; stroke-width: 5; }
+.fx-rack .db2 rect, .fx-rack .db3 rect { fill: var(--plate-b); }
+.fx-rack .db3 rect { fill: var(--plate-r); }
+.fx-rack .drop rect { fill: var(--plate-g); }
+.fx-rack .bar { fill: #9a9da2 !important; }
+.fx-rack .drop { transform-origin: 50% 100%; animation: db-land .7s cubic-bezier(.3, 1.25, .5, 1) .1s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  #timeline .db.land, #timeline .puff circle, #timeline.thud .rack-frame, #timeline.lift .sweep, #timeline.lift .db, .pips i.pop { animation: none !important; }
+}
+/* Barre rapide : les mêmes boutons que l'accueil, même taille (soleil, AA, FR | EN). */
+.quick-bar .qb-tools { gap: 8px; }
+.quick-bar .theme-btn { width: 42px; height: 42px; }
+.quick-bar .theme-btn svg { width: 22px; height: 22px; }
+.quick-bar .lang-switch { padding: 3px; }
+.quick-bar .lang-switch button { min-height: 34px; min-width: 0; padding: 6px 12px; font-size: 12px; }
+.quick-bar .quick-btn { min-height: 42px; font-size: 14px; }
+#checklist > .topbar { top: calc(var(--safe-t) - var(--tb-skip, 0px)); }
+#checklist > .topbar .quick-bar { margin: 10px 0 2px; }
+#checklist #timeline svg { max-height: 78px; }

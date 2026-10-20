@@ -1,0 +1,215 @@
+// Effets : le support à haltères (progrès du quart), les animations de fin
+// de tâche (une par type de tâche) et leurs sons, synthétisés sur place
+// (WebAudio, aucun fichier son). Tout part en silence si les sons sont coupés.
+
+// ---------- Sons ----------
+let ac = null;
+function A() {
+  ac ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function osc(type, f0, f1, at, dur, gain) {
+  const c = A(), t0 = c.currentTime + at;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t0);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(c.destination);
+  o.start(t0);
+  o.stop(t0 + dur + 0.05);
+}
+function noise(at, dur, gain, { type = 'bandpass', f0 = 1000, f1 = f0, q = 1 } = {}) {
+  const c = A(), t0 = c.currentTime + at;
+  const len = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = buf;
+  f.type = type;
+  f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t0);
+  if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.02, dur / 4));
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f).connect(g).connect(c.destination);
+  src.start(t0);
+}
+
+const SOUNDS = {
+  rackLand() { // l'haltère tombe dans son berceau
+    osc('sine', 130, 70, 0.2, 0.22, 0.5);
+    noise(0.2, 0.09, 0.35, { type: 'lowpass', f0: 500 });
+    osc('sine', 1480, 1480, 0.2, 0.28, 0.06);
+    osc('sine', 2210, 2210, 0.21, 0.2, 0.04);
+  },
+  rackFull() {
+    [523, 659, 784, 1047].forEach((f, i) => osc('triangle', f, f, 0.35 + i * 0.09, 0.45, 0.14));
+  },
+  rag() {
+    noise(0.05, 0.13, 0.32, { f0: 900, f1: 2600, q: 0.8 });
+    noise(0.36, 0.13, 0.32, { f0: 900, f1: 2600, q: 0.8 });
+    noise(0.78, 0.08, 0.25, { type: 'lowpass', f0: 600 });
+  },
+  trash() {
+    noise(0.28, 0.18, 0.4, { type: 'lowpass', f0: 320 });
+    osc('sine', 95, 55, 0.28, 0.22, 0.45);
+    osc('square', 700, 520, 0.62, 0.05, 0.08);
+    noise(0.62, 0.06, 0.25, { type: 'highpass', f0: 2800 });
+  },
+  spray() {
+    noise(0.12, 0.38, 0.22, { type: 'highpass', f0: 4200 });
+    osc('sine', 2093, 2093, 0.62, 0.3, 0.04);
+    osc('sine', 2794, 2794, 0.7, 0.3, 0.035);
+  },
+  vacuum() {
+    noise(0.05, 0.75, 0.22, { f0: 300, f1: 2400, q: 1.4 });
+    osc('sawtooth', 110, 330, 0.05, 0.75, 0.03);
+    osc('sine', 900, 1300, 0.82, 0.08, 0.12);
+  },
+  mop() {
+    osc('sine', 900, 1600, 0.1, 0.16, 0.12);
+    osc('sine', 1100, 1900, 0.34, 0.16, 0.12);
+    osc('triangle', 1320, 1320, 0.75, 0.2, 0.06);
+  },
+  mirror() {
+    osc('sine', 2637, 2637, 0.25, 0.9, 0.09);
+    osc('sine', 3951, 3951, 0.3, 0.7, 0.05);
+  },
+  sparkle() {
+    [784, 988, 1175, 1568].forEach((f, i) => osc('triangle', f, f, 0.15 + i * 0.08, 0.35, 0.1));
+  },
+  bike() {
+    osc('sawtooth', 240, 70, 0.05, 0.75, 0.035);
+    noise(0.05, 0.7, 0.1, { f0: 1600, f1: 400, q: 2 });
+    osc('sine', 1760, 1760, 0.8, 0.5, 0.1);
+    osc('sine', 2637, 2637, 0.8, 0.4, 0.05);
+  },
+  stamp() {
+    noise(0.36, 0.12, 0.45, { type: 'lowpass', f0: 420 });
+    osc('sine', 150, 70, 0.36, 0.16, 0.45);
+  },
+  power() {
+    osc('sine', 220, 880, 0.1, 0.35, 0.12);
+    osc('sine', 1320, 1320, 0.48, 0.25, 0.08);
+  },
+  clipboard() {
+    [0.15, 0.33, 0.51].forEach((at) => osc('square', 1800, 1800, at, 0.03, 0.05));
+    osc('sine', 1568, 1568, 0.72, 0.4, 0.1);
+  },
+  lock() {
+    noise(0.4, 0.03, 0.3, { type: 'highpass', f0: 2500 });
+    osc('square', 1200, 900, 0.4, 0.025, 0.06);
+    noise(0.52, 0.03, 0.3, { type: 'highpass', f0: 2000 });
+    osc('sine', 300, 300, 0.56, 0.12, 0.08);
+  },
+  rack() {
+    noise(0.42, 0.08, 0.3, { type: 'lowpass', f0: 700 });
+    [380, 1090, 2310].forEach((f, i) => osc('sine', f, f, 0.42, 0.22 - i * 0.04, 0.12));
+  },
+};
+export function fxSound(name) {
+  try { SOUNDS[name]?.(); } catch { /* pas de son ici : tant pis */ }
+}
+
+// ---------- Support à haltères (progrès du quart) ----------
+// Chaque tâche finie dépose un haltère de sa couleur dans son berceau.
+export function rackSVG(colors, total, { land = -1 } = {}) {
+  const W = 340, rows = total > 8 ? 2 : 1, per = Math.ceil(Math.max(1, total) / rows);
+  const H = rows === 2 ? 92 : 50, pad = 16, cell = (W - pad * 2) / per;
+  const hw = Math.min(30, cell - 6), head = Math.max(6, Math.min(9, hw * 0.28)), hh = Math.min(20, hw * 0.62);
+  const rowY = (r) => (rows === 2 ? 26 + r * 42 : 26);
+  let rails = '', items = '';
+  for (let r = 0; r < rows; r++) {
+    const y = rowY(r) + hh / 2 + 3;
+    rails += `<rect class="rail" x="${pad - 6}" y="${y}" width="${W - (pad - 6) * 2}" height="5" rx="2.5"/>`;
+    rails += `<rect class="leg" x="${pad - 2}" y="${y + 4}" width="4" height="${rows === 2 && r === 0 ? 38 : 10}" rx="2"/><rect class="leg" x="${W - pad - 2}" y="${y + 4}" width="4" height="${rows === 2 && r === 0 ? 38 : 10}" rx="2"/>`;
+  }
+  for (let j = 0; j < total; j++) {
+    const r = Math.floor(j / per), k = j % per;
+    const cx = pad + cell * (k + 0.5), cy = rowY(r);
+    const x0 = cx - hw / 2;
+    const c = colors[j];
+    const body = `<rect class="bar" x="${x0 + head - 1}" y="${cy - 1.6}" width="${hw - head * 2 + 2}" height="3.2" rx="1.6"/>
+      <rect class="hd" x="${x0}" y="${cy - hh / 2}" width="${head}" height="${hh}" rx="2.4"/>
+      <rect class="hd" x="${x0 + hw - head}" y="${cy - hh / 2}" width="${head}" height="${hh}" rx="2.4"/>`;
+    items += `<path class="cradle" d="M${cx - hw / 2 + 2} ${cy + hh / 2 + 3} q${hw / 2 - 2} -5 ${hw - 4} 0"/>`;
+    if (!c) { items += `<g class="slot">${body}</g>`; continue; }
+    items += `<g class="db${j === land ? ' land' : ''}" style="--pc:var(--plate-${c});--i:${j}">${body}
+      <rect class="shine" x="${x0 + 1.5}" y="${cy - hh / 2 + 2}" width="2" height="${hh - 4}" rx="1"/>
+      <rect class="shine" x="${x0 + hw - head + 1.5}" y="${cy - hh / 2 + 2}" width="2" height="${hh - 4}" rx="1"/></g>`;
+    if (j === land) items += `<g class="puff" style="--x:${cx}px;--y:${cy + hh / 2}px"><circle cx="${cx - hw / 2}" cy="${cy + hh / 2 + 2}" r="3"/><circle cx="${cx + hw / 2}" cy="${cy + hh / 2 + 2}" r="3"/><circle cx="${cx}" cy="${cy + hh / 2 + 4}" r="2.4"/></g>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs><linearGradient id="rackSweep" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+    <g class="rack-frame">${rails}</g>${items}<rect class="sweep" x="-80" y="0" width="70" height="${H}" fill="url(#rackSweep)"/></svg>`;
+}
+
+// ---------- Fin de tâche : une scène par type de tâche ----------
+const KIND_BY_PHOTO = {
+  guenilles: 'rag', poubelles: 'trash', desinfection: 'spray', 'points-contact': 'spray',
+  'aspirateur-muscu': 'vacuum', 'aspirateur-cardio': 'vacuum', 'aspirateur-gym': 'vacuum',
+  tuiles: 'mop', miroirs: 'mirror', spinning: 'bike', hebdo: 'stamp', 'bureaux-patrons': 'stamp', 'bureaux-entraineurs': 'stamp',
+  ouverture: 'power', inspection: 'clipboard', 'tour-general': 'clipboard', fermeture: 'lock', 'fin-quart': 'lock', rangement: 'rack',
+};
+export const fxKind = (it) => (it.deep ? 'sparkle' : KIND_BY_PHOTO[it.photo] || 'sparkle');
+
+const sparks = (pts) => pts.map(([x, y, s, d], i) => `<g transform="translate(${x} ${y}) scale(${s})"><path class="spark" style="--d:${d ?? 0.55 + i * 0.07}s" d="M0-8L2-2 8 0 2 2 0 8-2 2-8 0-2-2z"/></g>`).join('');
+
+const SCENES = {
+  rag: `<rect class="pile" x="68" y="118" width="64" height="12" rx="3"/><rect class="pile p2" x="72" y="108" width="56" height="11" rx="3"/>
+    <g class="rag"><rect x="40" y="38" width="120" height="66" rx="6"/><path d="M48 52h104M48 66h104M48 80h104M48 94h104"/></g>`,
+  trash: `<g class="bag"><path d="M84 30q16-14 32 0l6 34H78z"/><path class="tie" d="M94 24q6-6 12 0"/></g>
+    <g class="can"><path class="can-body" d="M64 70h72l-7 64H71z"/><path class="ribs" d="M86 82v42M100 82v42M114 82v42"/></g>
+    <g class="lid"><rect x="58" y="62" width="84" height="9" rx="4"/><rect x="92" y="56" width="16" height="7" rx="3"/></g>`,
+  spray: `<g class="bottle"><rect x="58" y="62" width="42" height="72" rx="10"/><rect x="66" y="46" width="22" height="18" rx="4"/><path class="nozzle" d="M70 46V36h34l8 6"/><path class="trigger" d="M92 50l8 14"/><rect class="label" x="66" y="84" width="26" height="28" rx="4"/></g>
+    ${[[0, -22], [14, -14], [18, 0], [14, 14], [6, -26], [22, -6], [20, 10], [10, 22]].map(([dx, dy], i) => `<circle class="mist" style="--dx:${dx * 2}px;--dy:${dy * 1.6}px;--d:${0.18 + i * 0.03}s" cx="116" cy="40" r="${3 + (i % 3)}"/>`).join('')}
+    ${sparks([[150, 70, 1.1], [168, 100, 0.8], [140, 112, 0.9]])}`,
+  vacuum: `<rect class="floor" x="20" y="124" width="160" height="4" rx="2"/>
+    ${[40, 62, 84, 106, 128, 150].map((x, i) => `<circle class="dust" style="--d:${0.12 + i * 0.1}s" cx="${x}" cy="${118 - (i % 2) * 3}" r="${3 + (i % 3)}"/>`).join('')}
+    <g class="vac"><rect x="-6" y="102" width="40" height="18" rx="5"/><circle cx="2" cy="122" r="4"/><circle cx="26" cy="122" r="4"/><path class="pole" d="M14 102L-8 40"/></g>`,
+  mop: `${[0, 1, 2, 3].map((i) => `<rect class="tile" x="${30 + i * 36}" y="96" width="34" height="34" rx="3"/>`).join('')}
+    <rect class="streak" x="30" y="96" width="142" height="34" rx="3"/>
+    <g class="mophead"><path class="pole" d="M20 94L44 24"/><rect x="2" y="92" width="38" height="12" rx="4"/><path class="strands" d="M6 104v8M14 104v9M22 104v8M30 104v9M38 104v8"/></g>
+    <g class="sign"><path d="M150 50l18 36h-36z"/><path class="mark" d="M150 62v12M150 79v1"/></g>`,
+  mirror: `<defs><clipPath id="fxMirror"><rect x="50" y="24" width="100" height="112" rx="8"/></clipPath></defs>
+    <rect class="frame" x="46" y="20" width="108" height="120" rx="10"/><rect class="glass" x="50" y="24" width="100" height="112" rx="8"/>
+    <g clip-path="url(#fxMirror)">${[[78, 60, 14], [118, 90, 11], [92, 112, 9]].map(([x, y, r], i) => `<ellipse class="smudge" style="--d:${0.15 + i * 0.12}s" cx="${x}" cy="${y}" rx="${r}" ry="${r * 0.7}"/>`).join('')}<path class="glint" d="M20 160L70 0h22L42 160z"/></g>
+    ${sparks([[146, 30, 1], [56, 128, 0.7]])}`,
+  sparkle: `<g class="bench"><rect x="40" y="88" width="120" height="14" rx="5"/><path d="M58 102v28M142 102v28M50 130h20M132 130h20"/><rect x="118" y="58" width="30" height="34" rx="5"/></g>
+    ${[[60, 92], [96, 95], [130, 74], [70, 120], [146, 118], [110, 92]].map(([x, y], i) => `<circle class="grime" style="--d:${0.1 + i * 0.08}s" cx="${x}" cy="${y}" r="5"/>`).join('')}
+    ${sparks([[56, 70, 1.2, 0.55], [100, 52, 1.5, 0.62], [150, 44, 1, 0.7], [170, 96, 0.9, 0.76], [34, 112, 0.8, 0.82]])}`,
+  bike: `<g class="speed"><path d="M20 70h30M14 84h36M24 98h26"/></g>
+    <g class="wheel"><circle cx="110" cy="84" r="44"/><circle class="hub" cx="110" cy="84" r="6"/><path d="M110 40v88M66 84h88M79 53l62 62M79 115l62-62"/></g>`,
+  stamp: `<g class="cal"><rect x="44" y="40" width="112" height="96" rx="8"/><rect class="cal-top" x="44" y="40" width="112" height="22" rx="8"/><path class="rings" d="M70 32v16M130 32v16"/></g>
+    <g class="mark"><circle cx="100" cy="100" r="22"/><path d="M89 100l8 8 15-16"/></g>
+    <g class="stamper"><rect x="80" y="20" width="40" height="12" rx="4"/><rect x="94" y="-4" width="12" height="26" rx="5"/><circle cx="100" cy="-8" r="10"/></g>`,
+  power: `<rect class="tv" x="36" y="34" width="128" height="80" rx="8"/><rect class="screen" x="42" y="40" width="116" height="68" rx="4"/><rect class="scan" x="42" y="72" width="116" height="4"/><path class="stand" d="M100 114v12M78 128h44"/>
+    ${sparks([[168, 30, 0.9, 0.6], [30, 40, 0.7, 0.7]])}`,
+  clipboard: `<rect class="board" x="54" y="26" width="92" height="116" rx="8"/><rect class="clip" x="80" y="18" width="40" height="16" rx="5"/>
+    ${[56, 84, 112].map((y, i) => `<rect class="line" x="94" y="${y - 3}" width="40" height="6" rx="3"/><rect class="box" x="66" y="${y - 9}" width="18" height="18" rx="4"/><path class="tick" style="--d:${0.12 + i * 0.18}s" d="M69 ${y}l4 4 8-9"/>`).join('')}`,
+  lock: `<path class="shackle" d="M78 78V56a22 22 0 0 1 44 0v22"/><rect class="body" x="64" y="76" width="72" height="58" rx="10"/><circle class="keyhole" cx="100" cy="100" r="6"/><path class="keyhole" d="M100 104v12"/>
+    <path class="moon" d="M160 30a14 14 0 1 0 12 22 11 11 0 0 1-12-22z"/>${sparks([[40, 36, 0.7, 0.75], [150, 70, 0.6, 0.85]])}`,
+  rack: `<rect class="rail" x="30" y="112" width="140" height="7" rx="3.5"/><path class="leg2" d="M38 118v20M162 118v20"/>
+    <g class="db2"><rect x="46" y="96" width="9" height="20" rx="2.4"/><rect x="73" y="96" width="9" height="20" rx="2.4"/><rect class="bar" x="54" y="104" width="20" height="4" rx="2"/></g>
+    <g class="db3"><rect x="118" y="96" width="9" height="20" rx="2.4"/><rect x="145" y="96" width="9" height="20" rx="2.4"/><rect class="bar" x="126" y="104" width="20" height="4" rx="2"/></g>
+    <g class="drop"><rect x="83" y="92" width="10" height="24" rx="2.6"/><rect x="107" y="92" width="10" height="24" rx="2.6"/><rect class="bar" x="92" y="102" width="16" height="4" rx="2"/></g>`,
+};
+
+// Joue la scène par-dessus la feuille de la tâche. Résout quand c'est fini.
+export function playFinish(it, host, { sound = true, still = false } = {}) {
+  const kind = fxKind(it);
+  if (sound) fxSound(kind);
+  if (still) return Promise.resolve();
+  const stage = document.createElement('div');
+  stage.className = `fx-stage fx-${kind}`;
+  stage.style.setProperty('--pc', `var(--plate-${it.plate || 'g'})`);
+  stage.setAttribute('aria-hidden', 'true');
+  stage.innerHTML = `<div class="fx-card"><svg viewBox="0 0 200 160">${SCENES[kind]}</svg><span class="fx-check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></div>`;
+  host.append(stage);
+  return new Promise((res) => setTimeout(() => { stage.classList.add('out'); setTimeout(() => { stage.remove(); res(); }, 220); }, 1350));
+}
