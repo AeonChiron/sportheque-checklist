@@ -716,7 +716,15 @@ function startTour() {
       // Le tutoriel s'efface le temps de choisir, puis reprend à l'étape suivante.
       box.classList.add('away');
       let back = false;
-      const resume = () => { if (back) return; back = true; clearInterval(watch); box.classList.remove('away'); i += 1; setTimeout(show, 360); };
+      // Retour sans saut : le tutoriel reste caché pendant que « Mon compte » se rouvre, puis réapparaît d'un coup sur l'étape suivante.
+      const resume = () => {
+        if (back) return; back = true; clearInterval(watch); i += 1;
+        const inSheet = steps[i]?.[2];
+        setTimeout(() => {
+          if (inSheet && !sheetOpen()) openAccount();
+          setTimeout(() => { show(); requestAnimationFrame(() => box.classList.remove('away')); }, inSheet ? 520 : 0);
+        }, 360);
+      };
       closeSheet();
       setTimeout(() => openAvatarPicker({ after: resume }), 320);
       const watch = setInterval(() => { if (!back && !sheetOpen() && !$('#sheet').classList.contains('closing')) resume(); }, 700);
