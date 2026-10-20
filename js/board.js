@@ -1,5 +1,5 @@
-// Historique des quarts. Chaque téléphone garde ses propres quarts (six
-// semaines). Avec le serveur du site (Netlify, comptes), chaque quart
+// Historique des quarts. Chaque téléphone garde ses propres quarts (deux
+// ans). Avec le serveur du site (Netlify, comptes), chaque quart
 // enregistré y est aussi envoyé, et toute l'équipe voit le même historique;
 // sinon (GitHub Pages, démo), on reste discrètement en mode local. Un envoi
 // raté (pas de réseau, session expirée) est gardé en file et renvoyé plus tard.
