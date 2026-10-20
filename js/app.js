@@ -459,6 +459,14 @@ function schedCard() {
     <p class="sch-today">${tp ? esc(t('schedTodayIs', f(toMin(tp.start)), f(toMin(tp.end)))) : esc(t('schedTodayOff'))}</p></div>`;
 }
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-sched]')) openScheduleSheet(); });
+// Les deux cartes sous « Mon horaire » : Bons trucs (jaune) et Aperçu du gym (vert).
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-hlink]');
+  if (!b) return;
+  ap.modeSet = true;
+  if (b.dataset.hlink === 'tips') { ap.mode = 'tips'; ap.tab = 'tips'; } else { ap.mode = 'overview'; ap.tab = 'day'; prefs.apTab = 'day'; savePrefs(); }
+  openApercu();
+});
 // Un jour prévu à l'horaire : le quart part tout seul, avec les bonnes heures.
 function startScheduled(p) {
   state = {
@@ -2258,6 +2266,10 @@ function renderHistory({ animate = true } = {}) {
 
   $('#historyBody').innerHTML = `
     ${schedCard()}
+    <div class="hi-links">
+      <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
+      <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
+    </div>
     <div class="segmented hi-mode" role="tablist">
       <button type="button" role="tab" data-hmode="recent" aria-selected="${!isWeek}">${esc(t('recent'))}</button>
       <button type="button" role="tab" data-hmode="week" aria-selected="${isWeek}">${esc(t('byWeek'))}</button>
@@ -2410,9 +2422,7 @@ function paintFront() {
   $('#poolVisit').hidden = inside;
   $('#auth').classList.toggle('inside', inside);
 }
-$('#dashTips').addEventListener('click', () => { ap.mode = 'tips'; ap.modeSet = true; ap.tab = 'tips'; openApercu(); });
 $('#dashFlag').addEventListener('click', () => openFlag());
-$('#dashOverview').addEventListener('click', () => { ap.mode = 'overview'; ap.modeSet = true; ap.tab = 'day'; prefs.apTab = 'day'; savePrefs(); openApercu(); });
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {

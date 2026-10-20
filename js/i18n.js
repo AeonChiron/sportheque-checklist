@@ -2,7 +2,7 @@
 
 export const UI = {
   fr: {
-    floor: 'Entretien · 2e étage',
+    floor: 'Entretien',
     hello: 'Bon quart!',
     lede: 'Choisis ton quart. Ton plan est prêt.',
     yourHours: 'Ton quart',
@@ -76,7 +76,7 @@ export const UI = {
     wbResume: (d, n) => `Ton quart t’attend · ${d}/${n}`,
     wbStart: 'Prêt pour ton prochain quart',
     dashShifts: 'Mes shifts',
-    dashShiftsSub: 'Aujourd’hui + passés',
+    dashShiftsSub: 'Horaire, trucs, plan',
     dashTips: 'Bons trucs',
     dashTipsSub: 'Tâche par tâche',
     dashFlag: 'Signaler',
@@ -404,7 +404,7 @@ export const UI = {
     reportBad: 'Ce lien est brisé. Ouvre-le direct dans le courriel.',
   },
   en: {
-    floor: 'Cleaning · 2nd floor',
+    floor: 'Cleaning',
     hello: 'Have a good shift!',
     lede: 'Pick your shift: your plan builds itself.',
     yourHours: 'Your shift',
@@ -478,7 +478,7 @@ export const UI = {
     wbResume: (d, n) => `Your shift is waiting · ${d}/${n}`,
     wbStart: 'Ready for your next shift',
     dashShifts: 'My shifts',
-    dashShiftsSub: 'Today and before',
+    dashShiftsSub: 'Schedule, tips, map',
     dashTips: 'Good tips',
     dashTipsSub: 'Task by task',
     dashFlag: 'Report',

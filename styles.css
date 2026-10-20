@@ -2097,3 +2097,17 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .sch-quick button small { font-size: 11px; color: var(--muted); }
 .sch-quick button[aria-pressed="true"] { background: linear-gradient(145deg, #3fb3e6, #1d5fc4); border-color: transparent; color: #fff; }
 .sch-quick button[aria-pressed="true"] small { color: #e3f3ff; }
+/* Connecté : pas de bandeau merci; seulement Mes shifts + Signaler (+ Superviseur). */
+#auth.inside .pool-cheer { display: none; }
+#auth.inside .pool-dash .dash-tile { min-height: 60px; }
+
+/* Mes shifts : deux cartes sous « Mon horaire » */
+.hi-links { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: -4px 0 16px; }
+.hi-link { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 12px; text-align: left; border-radius: 18px; border: 0; color: #fff; font: inherit; cursor: pointer; box-shadow: 0 10px 22px -16px rgba(20, 60, 120, .7); transition: transform .15s var(--ease); }
+.hi-link:active { transform: scale(.96); }
+.hi-link.tips { background: linear-gradient(140deg, #ffc93c, #f08a24); color: #3a2400; }
+.hi-link.overview { background: linear-gradient(140deg, #2bb38a, #137a6a); }
+.hi-link svg { flex: none; width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hi-link span { display: grid; gap: 2px; min-width: 0; }
+.hi-link b { font: 700 15px/1.15 var(--font); }
+.hi-link small { font: 500 12px/1.2 var(--font); opacity: .85; }

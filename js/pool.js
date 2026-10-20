@@ -34,7 +34,8 @@ export function mountPool(root) {
     edges.bottom = foot?.height ? foot.top - r.top : H - 210;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-    s.size = Math.max(84, Math.min(170, W * 0.38, (edges.bottom - edges.top - 40) / RATIO));
+    const big = root.closest('#auth')?.classList.contains('inside'); // connecté : moins de boutons, lapin plus grand
+    s.size = Math.max(84, Math.min(big ? 250 : 170, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
     hero.style.width = `${s.size}px`;
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
     if (!s.touched && W > 200) { const b = bounds(); s.x = W * 0.5; s.y = (b.minY + b.maxY) / 2; }
