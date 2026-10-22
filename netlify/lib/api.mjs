@@ -269,6 +269,29 @@ export function createApi({ getStore, env }) {
       await store.setJSON(raw.date, left);
       return json({ ok: true });
     }
+    // L'admin corrige les tâches d'un quart déjà enregistré (ex. oublié de cocher), n'importe quel jour.
+    if (raw?.action === 'edit') {
+      if (me?.role !== 'admin') return json({ error: 'admin' }, 403);
+      if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift)) || !Array.isArray(raw.items)) return json({ error: 'invalid' }, 400);
+      const name = String(raw.name || '').trim().toLowerCase();
+      const list = (await store.get(raw.date, { type: 'json' })) || [];
+      const s = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
+      if (!s) return json({ error: 'missing' }, 404);
+      const ok = new Set(['done', 'notdone', 'unchecked']);
+      const prev = new Map((s.items || []).map((i) => [i.id, i]));
+      const edited = raw.items.slice(0, 40).filter((i) => i && typeof i.id === 'string' && ok.has(i.status)).map((i) => {
+        const o = prev.get(i.id) || { id: i.id.slice(0, 40), doneAt: '', reason: '', remark: '' };
+        return { ...o, status: i.status, reason: i.status === 'notdone' ? o.reason : '' };
+      });
+      const seen = new Set(edited.map((i) => i.id));
+      s.items = [...(s.items || []).filter((i) => !seen.has(i.id)), ...edited].slice(0, 40); // le pointage et le reste restent tels quels
+      s.done = s.items.filter((i) => i.status === 'done').length;
+      s.total = Math.max(s.total || 0, s.items.length);
+      s.editedBy = me.name || '';
+      s.editedAt = new Date().toISOString();
+      await store.setJSON(raw.date, list);
+      return json({ ok: true, shift: s });
+    }
     // Un superviseur valide (ou refuse) les activités personnalisées d'un quart.
     if (raw?.action === 'custom') {
       if (!['boss', 'admin'].includes(me?.role)) return json({ error: 'boss' }, 403);

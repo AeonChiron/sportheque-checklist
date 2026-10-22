@@ -35,6 +35,8 @@ export function sanitizeShift(raw) {
     })).filter((c) => c.id && c.title && c.start && c.end),
     customStatus: CUSTOM_STATUS.has(raw.customStatus) ? raw.customStatus : '',
     customBy: str(raw.customBy, 40),
+    editedBy: str(raw.editedBy, 40), // l'admin a corrigé les tâches après coup
+    editedAt: str(raw.editedAt, 30),
     notes: str(raw.notes, 1000),
     handoff: str(raw.handoff, 200), // un mot pour le prochain quart
     done: count(raw.done),

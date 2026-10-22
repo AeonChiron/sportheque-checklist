@@ -199,3 +199,21 @@ test('Activités personnalisées : à valider; seul un superviseur valide; un ch
   assert.equal((await go('board', { ...shift, custom: [{ ...custom[0], end: '11:00' }] }, emp)).status, 200);
   assert.equal((await stored()).customStatus, 'pending');
 });
+
+test('Historique : seul l’admin corrige les tâches d’un quart, même un autre jour', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p', ADMIN_CODE: 'z' }) });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const emp = (await go('auth', { action: 'signup', name: 'Léa', email: 'l@x.ca', password: 'secret1', code: 'e' })).data.token;
+  const boss = (await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' })).data.token;
+  const admin = (await go('auth', { action: 'signup', name: 'Seed', email: 's@x.ca', password: 'secret1', role: 'admin', code: 'z' })).data.token;
+  await stores('board').setJSON('2026-10-20', [{ date: '2026-10-20', shift: 1, name: 'Léa', done: 2, total: 3, items: [{ id: 'pointage', status: 'done' }, { id: 'a', status: 'done' }, { id: 'b', status: 'unchecked' }], flags: [], savedOn: '2026-10-20' }]);
+  const fix = { action: 'edit', date: '2026-10-20', shift: 1, name: 'léa', items: [{ id: 'a', status: 'done' }, { id: 'b', status: 'done' }] };
+  assert.equal((await go('board', fix, emp)).status, 403);
+  assert.equal((await go('board', fix, boss)).status, 403);
+  const r = await go('board', fix, admin);
+  assert.equal(r.status, 200);
+  const s = (await stores('board').get('2026-10-20', { type: 'json' }))[0];
+  assert.equal(s.done, 3); // le pointage (absent de l'éditeur) reste
+  assert.equal(s.editedBy, 'Seed');
+});

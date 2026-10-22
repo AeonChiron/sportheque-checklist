@@ -2239,11 +2239,19 @@ function openReview(r, opts = {}) {
     i.remark ? `<span class="rv-quote">« ${esc(i.remark)} »</span>` : '',
     i.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(i.photos.join(', '))}</span>` : '',
   ].join('');
-  const row = (i) => `<li class="rv-row ${i.status}">
+  // Admin : « Corriger les tâches » — un toucher change le statut d'une tâche (oubli de cocher).
+  const editing = Boolean(opts.edit);
+  const row = (i) => editing && i.id
+    ? `<li class="rv-row ${i.status} rv-editable"><button type="button" class="rv-editbtn" data-rid="${esc(i.id)}" aria-label="${esc(i.title)} : ${esc(t(`st_${i.status}`))}">
+      <span class="rv-mark">${STATUS_MARK[i.status]}</span>
+      <span class="rv-main"><span class="rv-title">${esc(i.title)}</span><span class="rv-meta">${esc(t(`st_${i.status}`))}</span></span>
+      <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}</span></button></li>`
+    : `<li class="rv-row ${i.status}">
       <span class="rv-mark">${STATUS_MARK[i.status]}</span>
       <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}</span>
     </li>`;
+  const canEdit = isRealAdmin() && r.src && opts.from === 'history';
   const attention = [
     ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span>${fl.text ? `<span class="rv-quote">« ${esc(fl.text)} »</span>` : ''}${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
@@ -2269,7 +2277,11 @@ function openReview(r, opts = {}) {
     ${attention.length ? `<div class="section-head"><h2>${esc(R.attention)}</h2><span class="num">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
     ${r.notes ? `<div class="section-head"><h2>${esc(T.notes)}</h2></div><div class="panel rv-notes">${esc(r.notes)}</div>` : ''}
     <div class="section-head"><h2>${esc(R.full)}</h2><span class="num">${r.completion.done}/${r.completion.total}</span></div>
-    <ul class="rv-list">${r.items.map(row).join('')}</ul>
+    ${r.editedBy ? `<p class="section-note">${esc(t('editedBy', r.editedBy))}</p>` : ''}
+    ${canEdit ? (editing
+      ? `<div class="rv-editbar"><p>${esc(t('editHint'))}</p><div class="rv-editacts"><button type="button" class="btn ghost small" data-rvedit="cancel">${esc(t('cancel2'))}</button><button type="button" class="btn primary small" data-rvedit="save">${esc(t('editSave'))}</button></div></div>`
+      : `<button type="button" class="btn ghost rv-editopen" data-rvedit="open">${esc(t('editTasks'))}</button>`) : ''}
+    <ul class="rv-list${editing ? ' editing' : ''}">${r.items.map(row).join('')}</ul>
     ${r.overflow.length ? `<div class="section-head"><h2>${esc(T.overflow)}</h2></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
     ${r.outOfRange.length ? `<p class="section-note">${esc(T.fixed)} : ${esc(r.outOfRange.join(', '))}</p>` : ''}
     ${nPhotos ? `<p class="section-note">${esc(R.photos(nPhotos))}</p>` : ''}
@@ -2349,6 +2361,35 @@ function customPanel(r) {
     <div class="panel custom-panel" data-cdate="${esc(r.date)}" data-cshift="${c.shift}" data-cname="${esc(r.name)}"><ul class="rv-list">${rows}</ul>
     <p class="section-note">${esc(c.replaced.length ? t('customReplaces', c.replaced.join(', ')) : t('customNone'))}</p>${acts}</div>`;
 }
+$('#reviewBody').addEventListener('click', async (ev) => {
+  const [r, opts] = lastReview || [];
+  const rid = ev.target.closest('[data-rid]')?.dataset.rid;
+  if (rid && opts?.edit) { // non coché → fait → pas pu faire → non coché
+    const it = r.items.find((x) => x.id === rid);
+    it.status = { unchecked: 'done', done: 'notdone', notdone: 'unchecked' }[it.status] || 'done';
+    r.completion = { done: r.items.filter((x) => x.status === 'done').length, total: r.items.length };
+    sfx(it.status === 'done' ? 'check' : 'tick', { level: r.completion.done / (r.completion.total || 1) });
+    const y = scrollY; openReview(r, opts); scrollTo(0, y);
+    return;
+  }
+  const act = ev.target.closest('[data-rvedit]')?.dataset.rvedit;
+  if (act === 'open') { r.backup = JSON.stringify(r.items); openReview(r, { ...opts, edit: true }); return; }
+  if (act === 'cancel') { r.items = JSON.parse(r.backup || '[]'); r.completion = { done: r.items.filter((x) => x.status === 'done').length, total: r.items.length }; openReview(r, { ...opts, edit: false }); return; }
+  if (act === 'save') {
+    const s = r.src;
+    const items = r.items.map((x) => ({ id: x.id, status: x.status }));
+    try {
+      const res = await request('board', { method: 'POST', body: { action: 'edit', date: s.date, shift: s.shift, name: s.name, items } });
+      const saved = res?.shift || { ...s, items: items.map((x) => ({ ...(s.items.find((o) => o.id === x.id) || {}), ...x })), done: r.completion.done, editedBy: session.user?.name || '' };
+      keepReport(saved);
+      r.src = saved; r.editedBy = saved.editedBy;
+      hist.loaded = false; hist.weekLoaded = ''; hist.sig = '';
+      sfx('save'); toast(t('editSaved'), 'muted');
+      openReview(r, { ...opts, edit: false });
+    } catch { toast(t('customLater'), 'muted'); }
+    return;
+  }
+});
 $('#reviewBody').addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-custom]');
   if (!b) return;
@@ -2760,6 +2801,7 @@ function summaryReport(s) {
     flags: s.flags.map((fl) => ({ category: FLAG_CATEGORIES[fl.category]?.[L] || fl.category, location: fl.location, text: fl.text, at: clock(fl.at), photos: [], urgent: fl.urgent, emailed: fl.emailed, id: fl.id || '' })),
     notes: s.notes || '', completion: { done: items.filter((i) => i.status === 'done').length, total: items.length },
     custom: s.custom?.length ? { list: s.custom, replaced: p.replaced, status: s.customStatus || 'pending', by: s.customBy || '', shift: s.shift } : null,
+    src: s, editedBy: s.editedBy || '',
   };
 }
 

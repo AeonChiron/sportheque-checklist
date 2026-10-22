@@ -2668,3 +2668,14 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 :root[data-theme="dark"] .gs-text b { color: #eef4f4; }
 :root[data-theme="dark"] .gs-text em { color: #7cc4e4; }
 @media (prefers-reduced-motion: reduce) { #auth:not(.inside) .pool-cta::after { animation: none; } }
+
+/* Admin : corriger les tâches d'un quart dans l'historique */
+.rv-editopen { width: 100%; margin: 0 0 12px; min-height: 48px; }
+.rv-editbar { display: grid; gap: 10px; margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.rv-editbar p { margin: 0; font-size: 14px; color: var(--ink); }
+.rv-editacts { display: flex; gap: 10px; justify-content: flex-end; }
+.rv-editacts .btn { min-height: 44px; }
+.rv-list.editing .rv-row { padding: 0; }
+.rv-editbtn { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 12px; }
+.rv-editbtn:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.rv-editbtn .rv-meta { font-size: 13px; color: var(--muted); }
