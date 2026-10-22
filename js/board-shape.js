@@ -35,6 +35,7 @@ export function sanitizeShift(raw) {
     })).filter((c) => c.id && c.title && c.start && c.end),
     customStatus: CUSTOM_STATUS.has(raw.customStatus) ? raw.customStatus : '',
     customBy: str(raw.customBy, 40),
+    savedAt: str(raw.savedAt, 30), // premier envoi final : 24 h pour le modifier
     editedBy: str(raw.editedBy, 40), // l'admin a corrigé les tâches après coup
     editedAt: str(raw.editedAt, 30),
     notes: str(raw.notes, 1000),

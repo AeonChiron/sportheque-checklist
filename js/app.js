@@ -1045,6 +1045,7 @@ function taskRow(it, { extra = false } = {}) {
           <span class="t-title">${esc(it.title)}</span>
           ${it.summary ? `<span class="t-sum">${esc(it.summary)}</span>` : ''}
           ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
+          ${!e.done && !punch && !it.auto ? `<span class="t-more">${esc(t('seeDetails'))}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>` : ''}
         </span>
       </button>
       ${`<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
@@ -1066,8 +1067,34 @@ function breakRow(it) {
 let landId = null; // la tâche qui vient d'être cochée : son disque arrive en glissant
 let liftNext = false;
 // Les étapes d'une tâche : une pastille de sa couleur par étape.
+// Les étapes d'une tâche montent un haltère (propriétaire : « plus satisfaisant, gym »).
+// La poignée est là dès le début; chaque étape glisse un disque (gauche, droite, en
+// alternance, du plus gros au plus petit), les places vides sont en pointillé. La dernière
+// étape serre les colliers et l'haltère fait une flexion.
 function pipsHTML(done, total, plate, land = -1) {
-  return Array.from({ length: total }, (_, j) => `<i class="${j < done ? 'on' : ''}${j === land ? ' pop' : ''}"></i>`).join('');
+  const n = Math.max(1, total);
+  const H = [24, 20, 16, 13, 11];
+  const slots = Array.from({ length: n }, (_, i) => {
+    const side = i % 2 ? 1 : -1, k = Math.floor(i / 2);
+    const w = 6, gap = 1.5;
+    const x = side < 0 ? 40 - (k + 1) * (w + gap) : 80 + k * (w + gap) + gap;
+    return { x, w, h: H[Math.min(k, H.length - 1)], side };
+  });
+  const full = done >= n;
+  const plates = slots.map((p, i) => {
+    const y = 15 - p.h / 2;
+    return i < done
+      ? `<g class="plate${i === land ? ' land' : ''}" style="--dir:${p.side}"><rect x="${p.x}" y="${y}" width="${p.w}" height="${p.h}" rx="1.6"/></g>`
+      : `<rect class="ghost" x="${p.x}" y="${y}" width="${p.w}" height="${p.h}" rx="1.6"/>`;
+  }).join('');
+  const outer = Math.max(...slots.map((p) => (p.side < 0 ? 40 - p.x : p.x + p.w - 80)), 0);
+  return `<svg class="db${full && land >= 0 ? ' curl' : ''}${full ? ' full' : ''}" viewBox="${40 - outer - 8} 0 ${40 + 2 * outer + 16} 30" role="img" aria-label="${done}/${n}">
+    <rect class="bar" x="${40 - outer - 5}" y="13.4" width="${40 + 2 * outer + 10}" height="3.2" rx="1.6"/>
+    <rect class="grip" x="46" y="12.6" width="28" height="4.8" rx="2.4"/>
+    ${plates}
+    <rect class="collar${full ? ' on' : ''}" x="${40 - outer - 3}" y="11" width="3" height="8" rx="1"/>
+    <rect class="collar${full ? ' on' : ''}" x="${80 + outer}" y="11" width="3" height="8" rx="1"/>
+  </svg>`;
 }
 const sfx = (name, opts) => { if (prefs.sound !== false) fxSound(name, opts); };
 document.addEventListener('click', (ev) => { if (prefs.sound !== false && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(() => prefs.sound !== false); }, true);
@@ -2162,7 +2189,9 @@ async function saveShift() {
   const summary = boardSummary();
   const where = await publishShift(summary);
   sfx('save');
-  write(LAST_SHIFT, { ...state, savedAt: new Date().toISOString() }); // pour le modifier jusqu'à minuit
+  const prevSave = editableShift();
+  const keepAt = prevSave && prevSave.date === state.date && prevSave.shift === state.shift ? prevSave.savedAt : '';
+  write(LAST_SHIFT, { ...state, savedAt: keepAt || new Date().toISOString() }); // 24 h après le premier envoi
   state = null;
   save();
   clearPhotos();
@@ -2196,7 +2225,7 @@ const LAST_SHIFT = 'gym-last-shift';
 function editableShift() {
   const last = read(LAST_SHIFT, null);
   const mine = !session.user || last?.name === shiftName();
-  return last && mine && last.savedAt && isoOf(new Date(last.savedAt)) === todayISO() ? last : null;
+  return last && mine && last.savedAt && Date.now() - new Date(last.savedAt).getTime() < 24 * 3600e3 ? last : null; // 24 h pour corriger
 }
 function paintEditToday() {
   const last = editableShift();
@@ -2251,7 +2280,7 @@ function openReview(r, opts = {}) {
       <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}</span>
     </li>`;
-  const canEdit = isRealAdmin() && r.src && opts.from === 'history';
+  const canEdit = adminPowers() && r.src && opts.from === 'history';
   const attention = [
     ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span>${fl.text ? `<span class="rv-quote">« ${esc(fl.text)} »</span>` : ''}${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
@@ -3157,7 +3186,7 @@ function renderHistory({ animate = true } = {}) {
   let k = 0;
   const groups = dates.map((d) => `<section class="hi-day">
       <div class="hi-dayhead"><h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
-      ${byDate.get(d).map((s) => { const i = k++; return isAdmin() ? `<div class="hi-row">${histCard(s, i)}<button type="button" class="hi-del" data-hdel="${i}" aria-label="${esc(t('histDelete'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>` : histCard(s, i); }).join('')}
+      ${byDate.get(d).map((s) => { const i = k++; return adminPowers() ? `<div class="hi-row">${histCard(s, i)}<button type="button" class="hi-del" data-hdel="${i}" aria-label="${esc(t('histDelete'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>` : histCard(s, i); }).join('')}
     </section>`).join('');
 
   $('#history').classList.remove('dash-mode');
@@ -3207,7 +3236,7 @@ $('#historyBody').addEventListener('click', (ev) => {
   const ds = el.dataset;
   if (ds.hdel !== undefined) { // admin seulement : deux touchers pour effacer un quart de l'historique
     const s = hist.view[Number(ds.hdel)];
-    if (!s || !isAdmin()) return;
+    if (!s || !adminPowers()) return;
     if (!el.dataset.armed) { el.dataset.armed = '1'; el.classList.add('armed'); el.setAttribute('aria-label', t('histDeleteSure')); sfx('locked'); toast(t('histDeleteSure')); setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.classList.remove('armed'); } }, 3000); return; }
     deleteShift(s).then((ok) => {
       if (!ok) { toast(t('histDeleteFail'), 'bad'); return; }
@@ -3680,6 +3709,9 @@ function paintViewAs() { paintAdminTools(); }
 // Admin : « Voir comme » dans la barre du haut de chaque écran, et sur la page bleue
 // (propriétaire : toujours là, pas de bouton flottant). Un toucher ouvre le choix des rôles.
 const EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+// Propriétaire : dans chaque vue (employé, superviseur, nouveaux), l'admin choisit de garder ou non
+// ses outils (corriger un quart, effacer de l'historique). Personne d'autre ne les voit jamais.
+const adminPowers = () => isRealAdmin() && ((curView() === 'admin' && !prefs.simShift) || prefs.viewAdmin !== false);
 function adminViewLabel() {
   const view = curView();
   return prefs.simShift ? t('simulationShort') : view === 'admin' ? t('roleAdmin') : view.startsWith('new') ? t(view) : roleName(view);
@@ -3710,7 +3742,15 @@ function openViewMenu() {
   const nx = !prefs.simShift && nextShift();
   openSheet(`<div class="sheet-head"><p class="eyebrow">${esc(t('roleAdmin'))}</p><h2>${esc(t('viewAsTitle'))}</h2></div>
     <div class="view-opts" role="radiogroup">${opt('admin', t('roleAdmin'))}${opt('employee', roleName('employee'))}${opt('boss', roleName('boss'))}${opt('newEmployee', t('newEmployee'))}${opt('newBoss', t('newBoss'))}</div>
+    ${switchRow('vAdmin', t('viewKeepAdmin'), prefs.viewAdmin !== false)}
+    <p class="section-note">${esc(t('viewKeepAdminSub'))}</p>
     ${prefs.simShift ? `<button type="button" class="btn ghost big" data-adminact="exit">${esc(t('simulationExit'))}</button>` : nx ? `<button type="button" class="btn ghost big" data-adminact="sim">${esc(t('simulationStart'))}</button>` : ''}`, (root) => {
+    root.querySelector('#vAdmin').onclick = (ev) => {
+      prefs.viewAdmin = prefs.viewAdmin === false; savePrefs();
+      ev.currentTarget.setAttribute('aria-checked', String(prefs.viewAdmin !== false));
+      if (current === 'history') renderHistory({ animate: false });
+      if (current === 'review' && lastReview) openReview(...lastReview);
+    };
     root.addEventListener('click', (ev) => {
       const v = ev.target.closest('[data-adminview]')?.dataset.adminview;
       const act = ev.target.closest('[data-adminact]')?.dataset.adminact;
@@ -4371,6 +4411,8 @@ wake();
 
 // Animations en pause quand l'onglet est caché (batterie).
 document.addEventListener('visibilitychange', () => document.body.classList.toggle('paused', document.hidden));
+// iPad : au retour (page restaurée, autre app), les animations repartent toujours.
+for (const ev of ['pageshow', 'focus', 'pointerdown']) addEventListener(ev, () => { if (!document.hidden) document.body.classList.remove('paused'); }, { passive: true });
 
 // Demande au navigateur de ne jamais effacer nos données (connexion, horaire).
 // Firefox afficherait une question : on s'en passe là.
