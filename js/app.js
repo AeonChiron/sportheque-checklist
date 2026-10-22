@@ -207,6 +207,7 @@ function paintStatic() {
   for (const el of document.querySelectorAll('[data-label]')) { el.setAttribute('aria-label', t(el.dataset.label)); el.title = t(el.dataset.label); }
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang()));
   for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(Boolean(prefs.large)));
+  for (const b of document.querySelectorAll('[data-sound]')) { b.setAttribute('aria-pressed', String(prefs.sound !== false)); b.classList.toggle('off', prefs.sound === false); }
   paintThemeButtons();
   if ($('#poolStartLabel')) paintFront();
   const gym = $('#poolGym');
@@ -771,7 +772,7 @@ function startTour() {
         : `<button type="button" class="link" data-tour="skip">${esc(t('tourSkip'))}</button><button type="button" class="btn primary" data-tour="next">${esc(t(i === steps.length - 1 ? 'tourLast' : 'tourNext'))}</button>`}</div>
       <div class="tour-dots">${steps.map((st, j) => `<button type="button" data-tour-go="${j}" class="${j <= i ? 'on' : ''}" aria-label="${esc(t(`${st[1]}T`))}"${j === i ? ' aria-current="step"' : ''}></button>`).join('')}</div>`;
     place();
-    sfx('tick');
+    sfx('step');
     tip.querySelector('.btn[data-tour]').focus({ preventScroll: true });
   };
   box.addEventListener('click', (e) => {
@@ -1069,7 +1070,7 @@ function pipsHTML(done, total, plate, land = -1) {
   return Array.from({ length: total }, (_, j) => `<i class="${j < done ? 'on' : ''}${j === land ? ' pop' : ''}"></i>`).join('');
 }
 const sfx = (name, opts) => { if (prefs.sound !== false) fxSound(name, opts); };
-document.addEventListener('click', (ev) => { if (prefs.sound !== false && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(); }, true);
+document.addEventListener('click', (ev) => { if (prefs.sound !== false && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(() => prefs.sound !== false); }, true);
 // iPhone : par défaut, le bouton silencieux coupe les sons et la musique de l'employé continue.
 // « Sons même en silencieux » (Menu) : les sons jouent quand même (la musique peut s'arrêter).
 function applyAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = prefs.soundSilent ? 'playback' : 'ambient'; } catch { /* ignore */ } }
@@ -2639,8 +2640,26 @@ function protocolPanel() {
   return `<p class="section-note">${esc(t('protoLede'))}</p>
     <div class="panel proto-glance"><h2>${esc(longDay(d))}</h2><div class="facts">${glance.map((g) => `<span class="fact">${esc(g)}</span>`).join('')}</div></div>
     <div class="ap-cards">${col(1)}${col(2)}</div>
-    <div class="panel"><h2>${esc(t('protoRules'))}</h2><ul class="proto-rules">${t('protoRuleList').map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
-    <div class="callout tip"><div class="c-head">${ICON.info}${t('priorities')}</div>${PRIORITY_ORDER[L].map((x, i) => `<p><b class="num">${i + 1}.</b> ${esc(x)}</p>`).join('')}</div>`;
+    ${rotationPanel(d)}`;
+}
+// « Comment ça tourne » (propriétaire : plus beau, et écrit pour les employés) :
+// les 6 prochaines zones en profondeur, puis chaque règle avec son image.
+function rotationPanel(d) {
+  const L = lang();
+  const sessions = [];
+  for (let i = 0; sessions.length < 6; i++) {
+    const day = addDays(d, i), z = dayInfo(day).zones;
+    const wd = cap(dateOf(day).toLocaleDateString(locale(), { weekday: 'short' }).replace('.', ''));
+    sessions.push({ wd, part: t('morning'), z: z[1], first: i === 0 }, { wd, part: t('evening'), z: z[2], first: false });
+  }
+  const strip = sessions.slice(0, 6).map((x, i) => `<li class="rot-s z${x.z}${i === 0 ? ' now' : ''}"><small>${esc(x.wd)} · ${esc(x.part)}</small><b>${esc(x.z)}</b></li>`).join('<li class="rot-arrow" aria-hidden="true">›</li>');
+  const rules = t('rotRules').map((r) => `<li class="rot-rule"><span class="t-icon" aria-hidden="true">${illustration(r.icon)}</span><span class="rot-txt"><b>${esc(r.title)}</b><span>${esc(r.text)}</span></span></li>`).join('');
+  return `<section class="panel proto-rot" aria-labelledby="rotH">
+    <h2 id="rotH">${esc(t('protoRules'))}</h2>
+    <p class="rot-lede">${esc(t('rotLede'))}</p>
+    <ol class="rot-strip">${strip}</ol>
+    <ul class="rot-rules">${rules}</ul>
+  </section>`;
 }
 
 // Les trucs : par tâche du quart choisi, ou les bases du manuel.
@@ -4210,6 +4229,16 @@ function setLarge(on, sw) {
 }
 document.documentElement.classList.toggle('large', Boolean(prefs.large));
 for (const b of document.querySelectorAll('[data-large]')) b.addEventListener('click', () => setLarge(!prefs.large));
+// Propriétaire : le bouton du haut (à côté du thème et de la langue) coupe ou remet les sons, partout.
+// « Texte plus grand » vit dans le Menu.
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('[data-sound]')) return;
+  prefs.sound = prefs.sound === false;
+  savePrefs();
+  paintStatic();
+  if (prefs.sound !== false) sfx('save');
+  toast(t(prefs.sound !== false ? 'soundOn' : 'soundOff'), 'muted');
+});
 
 // Le protocole : un onglet de l'Aperçu, ouvert sur aujourd'hui.
 function goProtocol() {

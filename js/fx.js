@@ -201,30 +201,103 @@ function nextNote() {
   return { chord, f: chord[1 + k], bass: chord[0] };
 }
 
+// ---- Trois niveaux (propriétaire : « pas du xylophone à chaque toucher ») ----
+// Niveau 1 : discret, tout le temps — de vrais clics, des petits « tic », des souffles.
+// Niveau 2 : moyen — une étape, un enregistrement, un message, une erreur.
+// Niveau 3 : riche et rare — la mélodie (tâche cochée, pointage, signalement, fin du quart).
+const vary = (x, amt = 0.12) => x * (1 + (Math.random() - 0.5) * amt);
+// Un vrai clic : un échantillon dessiné une fois (toujours le même volume, toujours net) —
+// un claquement d'air d'une milliseconde, un « tic » aigu qui s'éteint vite et un petit corps
+// grave. À chaque toucher, la hauteur varie à peine (±4 %) pour rester vivant.
+const CLICKS = {
+  click: { hi: 2300, hi2: 4100, body: 170, decay: 0.006, noise: 0.004 },
+  tick: { hi: 3400, hi2: 6200, body: 260, decay: 0.0045, noise: 0.003 },
+  soft: { hi: 1500, hi2: 2600, body: 120, decay: 0.008, noise: 0.002 },
+};
+let clickBufs = null;
+function clickBuf(kind) {
+  const c = A();
+  if (!clickBufs || clickBufs.ctx !== c) clickBufs = { ctx: c };
+  if (clickBufs[kind]) return clickBufs[kind];
+  const k = CLICKS[kind], sr = c.sampleRate, len = Math.floor(sr * 0.08);
+  const buf = c.createBuffer(1, len, sr), d = buf.getChannelData(0);
+  let seed = 12345, peak = 0;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 2 - 1;
+  let ph = 0;
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    const air = t < k.noise ? rnd() * 0.8 * (1 - t / k.noise) : 0;
+    const snap = Math.sin(2 * Math.PI * k.hi * t) * Math.exp(-t / k.decay) * 0.6 + Math.sin(2 * Math.PI * k.hi2 * t) * Math.exp(-t / (k.decay * 0.5)) * 0.3;
+    ph += (2 * Math.PI * k.body * (1 + 0.8 * Math.exp(-t / 0.006))) / sr; // le corps tombe d'un ton
+    const body = Math.sin(ph) * Math.exp(-t / 0.014) * 0.55;
+    const fadeIn = Math.min(1, i / (sr * 0.0004)); // jamais un départ sec qui « craque »
+    d[i] = (air + snap + body) * fadeIn;
+    peak = Math.max(peak, Math.abs(d[i]));
+  }
+  for (let i = 0; i < len; i++) d[i] /= peak;
+  return (clickBufs[kind] = buf);
+}
+function click(t, { gain = 0.2, kind = 'click', pan = 0, verb = 0.12 } = {}) {
+  const src = A().createBufferSource();
+  src.buffer = clickBuf(kind);
+  src.playbackRate.value = vary(1, 0.08);
+  const g = voice(t, { pan, verb });
+  g.gain.setValueAtTime(gain, t);
+  src.connect(g); src.start(t);
+}
+// Un souffle d'air doux (feuille qui glisse), qui monte ou qui descend.
+function whoosh(t, { up = true, gain = 0.07, dur = 0.26 } = {}) {
+  burst(t, dur, gain, { f0: up ? 380 : 1500, f1: up ? 1500 : 380, q: 0.6, verb: 0.3, attack: dur * 0.45, pan: up ? -0.15 : 0.15 });
+}
+// Un bloc de bois : court, rond, à peine accordé (le niveau 2).
+function tok(t, f, gain = 0.2) {
+  const g = voice(t, { verb: 0.3 });
+  env(g, t, gain, 0.003, 0.09);
+  const o = A().createOscillator();
+  o.frequency.setValueAtTime(f * 1.25, t);
+  o.frequency.exponentialRampToValueAtTime(f, t + 0.012);
+  o.connect(g); o.start(t); o.stop(t + 0.3);
+  partial(f * 2.76, t, 0.05, gain * 0.25, { verb: 0.2 });
+  click(t, { gain: gain * 0.35, kind: 'tick', verb: 0.2 });
+}
+let tokN = 0;
+
 const SOUNDS = {
-  // Toucher : une note de kalimba de l'accord du moment, deux octaves plus haut (jamais la même deux fois de suite).
-  tap(t) {
-    const { f } = nextNote();
-    kalimba(f * 4, t, { gain: 0.13, dur: 0.6, pan: (Math.random() - 0.5) * 0.5, verb: 0.55 });
+  // ---------- Niveau 1 ----------
+  tap(t) { click(t); }, // un bouton : un vrai clic
+  tick(t) { click(t, { gain: 0.16, kind: 'tick', pan: -0.1 }); click(t + 0.032, { gain: 0.1, kind: 'tick', pan: 0.1 }); }, // interrupteur, onglet : « tic-tic »
+  open(t) { whoosh(t, { up: true }); click(t + 0.12, { gain: 0.09, kind: 'soft', verb: 0.25 }); }, // une feuille monte et se pose
+  close(t) { whoosh(t, { up: false, gain: 0.06, dur: 0.2 }); click(t + 0.1, { gain: 0.06, kind: 'soft', verb: 0.2 }); },
+  // ---------- Niveau 2 ----------
+  step(t) { const f = [880, 988, 1175][tokN++ % 3]; tok(t, f, 0.2); }, // une étape : un bloc de bois, trois hauteurs qui alternent
+  uncheck(t) { tok(t, 740, 0.15); tok(t + 0.08, 587, 0.13); },
+  notify(t) { // une bulle qui « pop »
+    const c = A(), g = voice(t, { verb: 0.3 });
+    env(g, t, 0.26, 0.004, 0.08);
+    const o = c.createOscillator();
+    o.frequency.setValueAtTime(vary(380), t);
+    o.frequency.exponentialRampToValueAtTime(vary(980), t + 0.05);
+    o.connect(g); o.start(t); o.stop(t + 0.25);
   },
-  // Ouvrir (une tâche, une feuille) : une cloche de verre douce + sa quinte, qui monte en fondu.
-  open(t) {
-    const { f } = nextNote();
-    bell(f * 4, t, { gain: 0.07, dur: 1.4, ratio: 2, index: 0.9, pan: -0.15, verb: 0.65 });
-    bell(f * 6, t + 0.05, { gain: 0.035, dur: 1.2, ratio: 2, index: 0.6, pan: 0.2, verb: 0.75 });
+  save(t) { // deux notes douces de piano électrique
+    epiano(659.25, t, { gain: 0.11, dur: 1.2, pan: -0.15, verb: 0.45 });
+    epiano(987.77, t + 0.09, { gain: 0.1, dur: 1.4, pan: 0.15, verb: 0.5 });
   },
-  close(t) {
-    const { f } = nextNote();
-    bell(f * 2, t, { gain: 0.05, dur: 0.9, ratio: 2, index: 0.5, verb: 0.6 });
+  error(t) {
+    for (const [at, f] of [[0, 196], [0.15, 165]]) {
+      const c = A(), g = voice(t + at, { verb: 0.25 });
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+      env(g, t + at, 0.2, 0.01, 0.2);
+      const o = c.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(f * 1.15, t + at);
+      o.frequency.exponentialRampToValueAtTime(f, t + at + 0.04);
+      o.connect(lp).connect(g); o.start(t + at); o.stop(t + at + 0.5);
+    }
   },
-  step(t) {
-    const { f } = nextNote();
-    kalimba(f * 4, t, { gain: 0.24, dur: 0.9, pan: -0.15 + (song.step % 3) * 0.15, verb: 0.55 });
-    kalimba(f * 6, t + 0.04, { gain: 0.06, dur: 0.7, pan: 0.3, verb: 0.7 });
-  },
+  // ---------- Niveau 3 : la mélodie ----------
   check(t, { level = 0.5 } = {}) {
     // Le maillet de bois, la note de l'accord, sa quinte, puis une cloche qui scintille.
-    // Plus le quart avance, plus le registre monte.
+    // Chaque tâche prend la note suivante de la suite d'accords; plus le quart avance, plus ça monte.
     const { f, bass } = nextNote();
     const up = level > 0.66 ? 4 : level > 0.33 ? 3 : 2;
     thump(bass, t, 0.26, 0.2);
@@ -232,43 +305,10 @@ const SOUNDS = {
     marimba(f * up * 1.5, t + 0.08, { gain: 0.22, dur: 1.6, pan: 0.14, verb: 0.5 });
     bell(f * up * 3, t + 0.17, { gain: 0.035, dur: 1.8, ratio: 3.5, index: 1.2, pan: 0.3, verb: 0.8 });
   },
-  uncheck(t) {
-    const { f } = nextNote();
-    marimba(f * 3, t, { gain: 0.15, dur: 0.7, bright: 0.35, pan: 0.1, verb: 0.5 });
-    marimba(f * 2, t + 0.09, { gain: 0.14, dur: 0.9, bright: 0.3, pan: -0.1, verb: 0.5 });
-  },
-  notify(t) {
-    const { f } = nextNote();
-    const c = A(), g = voice(t, { verb: 0.35 });
-    env(g, t, 0.32, 0.01, 0.12);
-    const o = c.createOscillator();
-    o.frequency.setValueAtTime(f * 1.5, t);
-    o.frequency.exponentialRampToValueAtTime(f * 4, t + 0.06);
-    o.connect(g); o.start(t); o.stop(t + 0.3);
-    bell(f * 6, t + 0.05, { gain: 0.08, dur: 1.3, ratio: 3.5, index: 1.4, pan: 0.2, verb: 0.7 });
-  },
-  save(t) {
-    const { chord } = nextNote();
-    epiano(chord[1] * 2, t, { gain: 0.15, dur: 1.8, pan: -0.2, verb: 0.5 });
-    epiano(chord[2] * 2, t + 0.09, { gain: 0.14, dur: 1.9, verb: 0.5 });
-    epiano(chord[4] * 2, t + 0.18, { gain: 0.13, dur: 2.2, pan: 0.2, verb: 0.55 });
-  },
-  swish(t, { down = false } = {}) { (down ? SOUNDS.close : SOUNDS.open)(t); },
-  error(t) {
-    for (const [at, f] of [[0, 196], [0.15, 165]]) {
-      const c = A(), g = voice(t + at, { verb: 0.3 });
-      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
-      env(g, t + at, 0.22, 0.01, 0.22);
-      const o = c.createOscillator(); o.type = 'triangle';
-      o.frequency.setValueAtTime(f * 1.15, t + at);
-      o.frequency.exponentialRampToValueAtTime(f, t + at + 0.04);
-      o.connect(lp).connect(g); o.start(t + at); o.stop(t + at + 0.5);
-    }
-  },
   flag(t) {
-    burst(t, 0.26, 0.08, { f0: 700, f1: 3800, q: 0.8, verb: 0.35, attack: 0.08, pan: -0.3 });
-    SOUNDS.notify(t + 0.17);
-    bell(PENTA[13], t + 0.26, { gain: 0.07, dur: 1.6, ratio: 3.5, index: 2, pan: 0.35, verb: 0.75 });
+    whoosh(t, { up: true, gain: 0.09, dur: 0.28 });
+    bell(PENTA[10], t + 0.2, { gain: 0.09, dur: 1.4, ratio: 3.5, index: 1.8, pan: -0.2, verb: 0.7 });
+    bell(PENTA[13], t + 0.3, { gain: 0.07, dur: 1.6, ratio: 3.5, index: 2, pan: 0.35, verb: 0.75 });
   },
   urgent(t) {
     thump(90, t, 0.25, 0.25);
@@ -290,7 +330,7 @@ const SOUNDS = {
 };
 // Les anciens noms (et les scènes de fin de tâche) passent par les dix sons.
 const ALIAS = {
-  tick: 'step', tab: 'tap', toggle: 'tap', locked: 'error',
+  tab: 'tick', toggle: 'tick', locked: 'error', swish: 'open',
   punch: 'check', ready: 'notify', welcome: 'celebrate', sent: 'celebrate', pour: 'check', full: 'celebrate',
 };
 export function fxSound(name, opts = {}) {
@@ -312,9 +352,9 @@ export function fxSoundAt(name, at, opts = {}) {
 }
 // Chaque toucher de bouton a son son (propriétaire) : si le bouton n'a pas déjà joué
 // son propre son, le « tap » mélodique part juste après.
-export function clickTap() {
+export function clickTap(ok = () => true) {
   const t0 = performance.now();
-  setTimeout(() => { if (lastAt < t0) fxSound('tap'); }, 0);
+  setTimeout(() => { if (lastAt < t0 && ok()) fxSound('tap'); }, 0);
 }
 
 // ---------- Verre d'eau (progrès du quart) ----------
