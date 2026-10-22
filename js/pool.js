@@ -21,9 +21,40 @@ export function mountPool(root) {
   const edges = { top: 96, bottom: 600 };
   const dark = () => document.documentElement.dataset.theme === 'dark';
 
+  // Propriétaire : le lapin va partout sur l'écran (pas juste de gauche à droite).
   function bounds() {
-    const h = s.size * RATIO, top = edges.top + h * FOOT_Y + 8;
-    return { minX: s.size * FOOT_X + 6, maxX: W - s.size * (1 - FOOT_X) - 6, minY: top, maxY: Math.max(top + 10, edges.bottom - 14) };
+    const h = s.size * RATIO;
+    return { minX: s.size * FOOT_X + 6, maxX: W - s.size * (1 - FOOT_X) - 6, minY: h * FOOT_Y + 6, maxY: H - 8 };
+  }
+  // Les objets de l'écran (titre, boutons, grande carte) : s'il les touche, il rebondit.
+  let obstacles = [];
+  function readObstacles() {
+    const r = root.getBoundingClientRect();
+    const sel = '.pool-head h1, .pool-top button:not([hidden]), .pool-top .lang-switch, .pool-bottom > :not([hidden])';
+    obstacles = [...(root.parentElement?.querySelectorAll(sel) || [])]
+      .filter((el) => el.offsetParent && getComputedStyle(el).visibility !== 'hidden')
+      .map((el) => { const b = el.getBoundingClientRect(); return { l: b.left - r.left, t: b.top - r.top, r: b.right - r.left, b: b.bottom - r.top }; })
+      .filter((o) => o.r - o.l > 4 && o.b - o.t > 4);
+  }
+  // Sa « boîte » : un peu plus petite que l'image (les oreilles et le balai ont du vide autour).
+  const body = () => { const h = s.size * RATIO; return { l: s.x - s.size * 0.38, r: s.x + s.size * 0.38, t: s.y - h * 0.97, b: s.y }; };
+  function collide(bounce) {
+    for (const o of obstacles) {
+      const m = body();
+      if (m.r <= o.l || m.l >= o.r || m.b <= o.t || m.t >= o.b) continue;
+      const ox = Math.min(m.r - o.l, o.r - m.l), oy = Math.min(m.b - o.t, o.b - m.t);
+      const sp = Math.hypot(s.vx, s.vy);
+      if (ox < oy) {
+        const left = (m.l + m.r) / 2 < (o.l + o.r) / 2;
+        s.x += left ? -ox : ox;
+        if (bounce) { s.vx = (left ? -1 : 1) * Math.max(Math.abs(s.vx) * 0.6, 60); s.sqAxis = 0; }
+      } else {
+        const above = (m.t + m.b) / 2 < (o.t + o.b) / 2;
+        s.y += above ? -oy : oy;
+        if (bounce) { s.vy = (above ? -1 : 1) * Math.max(Math.abs(s.vy) * 0.6, 60); s.sqAxis = 1; }
+      }
+      if (bounce && sp > 120) s.sqv = -Math.min(1, sp / 900) * 0.6;
+    }
   }
   function resize() {
     const r = root.getBoundingClientRect();
@@ -36,11 +67,13 @@ export function mountPool(root) {
     canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
     const big = root.closest('#auth')?.classList.contains('inside'); // connecté : moins de boutons, lapin plus grand
     // Grand écran (ordinateur) : le lapin grandit avec la hauteur de l'écran (propriétaire).
-    const cap = big ? Math.max(250, Math.min(620, H * 0.5)) : Math.max(170, Math.min(420, H * 0.34));
+    const cap = big ? Math.max(250, Math.min(500, H * 0.4)) : Math.max(170, Math.min(380, H * 0.3));
     s.size = Math.max(84, Math.min(cap, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
     hero.style.width = `${s.size}px`;
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
-    if (!s.touched && W > 200) { const b = bounds(); s.x = W * 0.5; s.y = (b.minY + b.maxY) / 2; }
+    readObstacles();
+    // Au repos : pile au milieu de l'espace libre entre le titre et le bouton.
+    if (!s.touched && W > 200) { const h = s.size * RATIO; s.x = W * 0.5; s.y = (edges.top + edges.bottom) / 2 + h * 0.45; }
     if (still) draw();
   }
 
@@ -150,8 +183,10 @@ export function mountPool(root) {
     hero.style.transform = `translate(${s.x - s.size * FOOT_X}px, ${s.y - h * FOOT_Y + bob}px) rotate(${s.lean + Math.sin(t * 1.4) * 1.2}deg) scale(${sx}, ${sy})`;
   }
 
+  let obsAt = 0;
   function step(now) {
     if (Math.abs(root.clientWidth - W) > 1 || Math.abs(root.clientHeight - H) > 1) resize();
+    if (now - obsAt > 600) { obsAt = now; readObstacles(); } // les boutons peuvent bouger (animation d'entrée)
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now; t += dt;
     const b = bounds();
@@ -160,6 +195,7 @@ export function mountPool(root) {
       const nx = s.x + (s.drag.tx - s.x) * a, ny = s.y + (s.drag.ty - s.y) * a;
       s.vx = (nx - s.x) / Math.max(dt, 1e-3); s.vy = (ny - s.y) / Math.max(dt, 1e-3);
       s.x = nx; s.y = ny;
+      collide(false);
     }
     if (!s.drag) {
       // Glisse sur l'eau : accélère doucement, puis s'arrête tout seul. Aucun déplacement sans geste.
@@ -179,6 +215,7 @@ export function mountPool(root) {
       if (s.x > b.maxX) { hit(Math.abs(s.vx), 0); s.x = b.maxX; s.vx = -Math.abs(s.vx) * 0.42; }
       if (s.y < b.minY) { hit(Math.abs(s.vy), 1); s.y = b.minY; s.vy = Math.abs(s.vy) * 0.42; }
       if (s.y > b.maxY) { hit(Math.abs(s.vy), 1); s.y = b.maxY; s.vy = -Math.abs(s.vy) * 0.42; }
+      collide(true);
     }
     s.sqv += (-170 * s.sq - 9 * s.sqv) * dt; s.sq += s.sqv * dt;
     const target = Math.max(-30, Math.min(30, s.vx * 0.06));

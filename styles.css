@@ -3169,3 +3169,9 @@ details.mt-card > summary:active { background: var(--sunk); }
 @media (min-width: 1900px) and (min-height: 1200px) {
   #auth .pool-head, #auth .pool-bottom, #auth .pool-top { zoom: 1.75; }
 }
+/* Le nom de la vue en entier (propriétaire : « Vue : Nouveau superviseur » était coupé). */
+.pool-top .qb-view span { max-width: none; overflow: visible; text-overflow: clip; }
+/* Grand écran : les boutons du haut vont dans le coin de l'écran (le titre reste seul au centre). */
+@media (min-width: 1300px) and (min-height: 850px) {
+  #auth .pool-top { position: fixed; top: calc(var(--safe-t) + 14px); right: 24px; left: auto; pointer-events: auto; }
+}
