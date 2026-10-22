@@ -1111,7 +1111,7 @@ html[data-nav="back"]::view-transition-new(root) { animation-name: vt-in-back; }
 .ap-tabs button { font-size: 14.5px; padding-left: 4px; padding-right: 4px; }
 
 /* Texte plus grand : tout le site grossit d'un cran (iPhone, iPad, ordinateur). */
-html.large { zoom: 1.15; }
+/* html.large : la loupe est posée par applyTextSize() (iPhone × 1,15) */
 
 .topbar .eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ap-tabs button { position: relative; white-space: nowrap; }
@@ -2732,3 +2732,30 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .tw-grid { grid-template-columns: max-content repeat(7, minmax(0, 1fr)); }
 .tw-day { letter-spacing: .02em; font-size: 10.5px; }
 .tw-cell { font-size: 10.5px; letter-spacing: -.02em; overflow: hidden; }
+
+/* ---- Cheap fixes: plus de texte coupé, en-tête opaque, messages au-dessus du texte ---- */
+.topbar h1, .topbar .eyebrow, .now-card .next b, .dash-tile small, .wb-text b, .d-st small, .tw-name { white-space: normal; overflow: visible; text-overflow: clip; }
+.wb-text em { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.pb-text { display: block; -webkit-line-clamp: unset; overflow: visible; }
+/* L'en-tête collé de la checklist est opaque : rien ne transparaît derrière */
+#checklist > .topbar { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* Pendant qu'une feuille est ouverte, le petit message s'affiche en haut (il ne cache plus le texte ni les boutons) */
+body:has(#sheet:not([hidden])) .toast { top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
+
+/* Roue des réglages (remplace thème / sons / langue / compte dans la barre) */
+.gear-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+#auth.inside .pool-top .lang-switch { visibility: hidden; } /* connecté : la langue est dans Réglages */
+
+/* Daniel : l'urgent en premier */
+.boss-urgent { margin: 0 0 16px; padding: 12px; border-radius: 18px; background: color-mix(in srgb, var(--bad) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); display: grid; gap: 8px; }
+.boss-urgent h2 { margin: 2px 4px 2px; font: 750 19px/1.2 var(--serif); color: var(--bad); }
+.boss-ok { margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--ok) 10%, var(--surface)); color: var(--ok); font: 600 15px/1.3 var(--font); }
+.dash-tile { position: relative; }
+.dash-badge { position: absolute; top: -6px; right: -6px; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; display: grid; place-items: center; background: #d4351c; color: #fff; font: 700 14px/1 var(--display); box-shadow: 0 0 0 2px #fff; animation: badge-pop .5s cubic-bezier(.3, 1.8, .5, 1) both; }
+.dash-badge[hidden] { display: none; }
+@keyframes badge-pop { from { transform: scale(0); } to { transform: none; } }
+#auth.inside .pool-cta.has-urgent .wb-text em { color: #c2410c; font-weight: 650; }
+
+.dash-tile.dash-flag { overflow: visible; }
+.pb-age:empty { display: none; }
+.pb-age { color: var(--warn); font-weight: 600; }

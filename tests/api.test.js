@@ -186,7 +186,7 @@ test('Activités personnalisées : à valider; seul un superviseur valide; un ch
   const boss = (await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' })).data.token;
   const custom = [{ id: 'cabc123', title: 'Studio Fit', start: '09:00', end: '10:30' }];
   const shift = { date: '2026-10-25', shift: 1, name: 'Chadi', items: [], flags: [], custom, customStatus: 'approved' };
-  const stored = async () => (await go('board?dates=2026-10-25', null, boss)).data.days['2026-10-25'][0];
+  const stored = async () => (await stores('board').get('2026-10-25', { type: 'json' }))[0];
   assert.equal((await go('board', shift, emp)).status, 200);
   assert.equal((await stored()).customStatus, 'pending'); // le téléphone ne se valide pas lui-même
   const ok = { action: 'custom', date: '2026-10-25', shift: 1, name: 'chadi', status: 'approved' };
@@ -230,4 +230,22 @@ test('Un quart enregistré se modifie pendant 24 h, puis il est verrouillé', as
   assert.equal((await stores('board').get('2026-10-21', { type: 'json' }))[0].savedAt, (await stores('board').get('2026-10-21', { type: 'json' }))[0].savedAt); // le premier envoi reste la référence
   await stores('board').setJSON('2026-10-21', [{ ...shift, savedAt: ago(25), savedOn: '2026-10-21' }]);
   assert.equal(await go(shift, tok), 409); // 25 h : verrouillé
+});
+
+test('Pas de surveillance : un quart en cours est caché aux autres, et l’heure des cases n’est pas renvoyée', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const emp = (await go('auth', { action: 'signup', name: 'Noah', email: 'n@x.ca', password: 'secret1', code: 'e' })).data.token;
+  const boss = (await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' })).data.token;
+  await go('board', { date: '2026-10-22', shift: 2, name: 'Noah', open: true, items: [{ id: 'a', status: 'done', doneAt: '2026-10-22T21:42:00Z' }], flags: [] }, emp);
+  assert.equal((await go('board?dates=2026-10-22', null, boss)).data.days['2026-10-22'].length, 0); // le superviseur ne voit pas le quart en cours
+  const own = (await go('board?dates=2026-10-22', null, emp)).data.days['2026-10-22'];
+  assert.equal(own.length, 1); // la personne retrouve sa sauvegarde
+  assert.equal(own[0].items[0].doneAt, undefined); // pas d'heure de case
+  await go('board', { date: '2026-10-22', shift: 2, name: 'Noah', items: [{ id: 'a', status: 'done', doneAt: '2026-10-22T21:42:00Z' }], flags: [] }, emp);
+  const seen = (await go('board?recent=5', null, boss)).data.days['2026-10-22'];
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].items[0].doneAt, undefined);
+  assert.equal((await stores('board').get('2026-10-22', { type: 'json' }))[0].items[0].doneAt, undefined); // et rien n'est gardé
 });

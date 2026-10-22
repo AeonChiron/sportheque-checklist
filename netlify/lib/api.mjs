@@ -236,6 +236,10 @@ export function createApi({ getStore, env }) {
   // ---------- Historique des quarts ----------
   async function shifts(req, me) {
     const store = board();
+    // Propriétaire : pas de surveillance. Un quart encore en cours n'est visible que par la personne
+    // qui le fait (sa sauvegarde), et l'heure où chaque case a été cochée n'est jamais renvoyée.
+    const mine = (s) => String(s?.name || '').trim().toLowerCase() === String(me?.name || '').trim().toLowerCase();
+    const shown = (list) => (list || []).filter((s) => !s.open || mine(s)).map((s) => ({ ...s, items: (s.items || []).map(({ doneAt, ...i }) => i) }));
     if (req.method === 'GET') {
       const params = new URL(req.url).searchParams;
       if (params.has('recent')) {
@@ -246,7 +250,7 @@ export function createApi({ getStore, env }) {
         const days = {};
         let n = 0;
         for (const d of dates) {
-          days[d] = (await store.get(d, { type: 'json' })) || [];
+          days[d] = shown(await store.get(d, { type: 'json' }));
           n += days[d].length;
           if (n >= want) break;
         }
@@ -255,7 +259,7 @@ export function createApi({ getStore, env }) {
       const dates = parseDates(params.get('dates'));
       if (!dates.length) return json({ error: 'dates' }, 400);
       const lists = await Promise.all(dates.map((d) => store.get(d, { type: 'json' })));
-      return json({ days: Object.fromEntries(dates.map((d, i) => [d, lists[i] || []])) });
+      return json({ days: Object.fromEntries(dates.map((d, i) => [d, shown(lists[i])])) });
     }
     const raw = await body(req);
     // L'admin seulement peut effacer un quart de l'historique.
@@ -280,7 +284,7 @@ export function createApi({ getStore, env }) {
       const ok = new Set(['done', 'notdone', 'unchecked']);
       const prev = new Map((s.items || []).map((i) => [i.id, i]));
       const edited = raw.items.slice(0, 40).filter((i) => i && typeof i.id === 'string' && ok.has(i.status)).map((i) => {
-        const o = prev.get(i.id) || { id: i.id.slice(0, 40), doneAt: '', reason: '', remark: '' };
+        const { doneAt, ...o } = prev.get(i.id) || { id: i.id.slice(0, 40), reason: '', remark: '' };
         return { ...o, status: i.status, reason: i.status === 'notdone' ? o.reason : '' };
       });
       const seen = new Set(edited.map((i) => i.id));

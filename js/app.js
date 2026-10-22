@@ -77,10 +77,50 @@ const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 // offre), vers la droite pour avancer, vers la gauche pour revenir.
 let current = null;
 const RANK = { poster: 6, auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, apercu: 4, history: 5, boss: 5, problem: 6, review: 7 };
+// ---------- Retour : iPhone (glisser), Android, flèche de Safari ----------
+// Chaque changement d'écran entre dans l'historique du navigateur : « retour » ramène à
+// l'écran d'avant au lieu de quitter le site. Une feuille ouverte se ferme d'abord.
+let navRestoring = false;
+let navPopAt = 0;
+const NAV_HASH = { history: '#historique', apercu: '#apercu', boss: '#patron', poster: '#affiche' };
+function navRecord(id) {
+  if (navRestoring) return;
+  const url = location.pathname + (NAV_HASH[id] ?? (['review', 'problem'].includes(id) ? location.hash : ''));
+  const st = { scr: id };
+  try {
+    if (!history.state?.scr) history.replaceState(st, '', url); // entrée toute neuve (chargement, lien #…)
+    else if (history.state.scr !== id) history.pushState(st, '', url);
+    else if (location.pathname + location.hash !== url) history.replaceState(st, '', url);
+  } catch { /* ignore */ }
+}
+let sheetPopExpected = false;
+window.addEventListener('popstate', (e) => {
+  navPopAt = Date.now();
+  if (sheetPopExpected) { sheetPopExpected = false; return; } // la feuille vient d'être fermée au toucher
+  // Une feuille ouverte : « retour » la ferme, et on reste sur l'écran.
+  if (!$('#sheet').hidden && $('#sheet').classList.contains('open')) {
+    navRestoring = true;
+    try { closeSheet(); } finally { navRestoring = false; }
+    if (e.state?.scr === current) return;
+    try { history.pushState({ scr: current }, '', location.pathname + (NAV_HASH[current] ?? '')); } catch { /* ignore */ }
+    return;
+  }
+  const scr = e.state?.scr;
+  navPopAt = Date.now();
+  navRestoring = true;
+  try {
+    if (scr === 'auth' && session.user) goFront();
+    else if (scr === 'review' && lastReview) openReview(...lastReview);
+    else if (scr === 'checklist' && state) openChecklist();
+    else route();
+  } finally { navRestoring = false; }
+});
+
 function show(id) {
   paintAdminTools();
   const prev = current;
   current = id;
+  navRecord(id);
   if (id !== 'checklist' && $('#momentAllDone')?.classList.contains('on')) hideAllDone(); // jamais par-dessus un autre écran
   ensurePlan();
   paintShiftPill();
@@ -121,7 +161,7 @@ function paintShiftPill() {
 }
 $('#shiftPill').addEventListener('click', () => {
   if (!$('#sheet').hidden) closeSheet();
-  window.history.replaceState(null, '', location.pathname);
+  window.history.replaceState(history.state, '', location.pathname);
   openChecklist();
 });
 
@@ -546,7 +586,7 @@ function openQuickSchedule({ first = false } = {}) {
   const p0 = PRESETS[0];
   const pick = Object.fromEntries(days.map((_, i) => {
     const v = presetOf(old[i]);
-    return [i, v?.start ? { on: true, start: v.start, end: v.end } : { on: !Object.keys(old).length && i < 5, start: p0.start, end: p0.end }];
+    return [i, v?.start ? { on: true, start: v.start, end: v.end } : { on: false, start: p0.start, end: p0.end }];
   }));
   const ok = (d) => d.start && d.end && d.start !== d.end;
   const row = (d, i) => `<div class="qs-row${pick[i].on ? ' on' : ''}" data-row="${i}">
@@ -860,7 +900,7 @@ function startScheduled(p, { simulation = false, quiet = false } = {}) {
   };
   save();
   if (quiet) { paintStatic(); return; }
-  window.history.replaceState(null, '', location.pathname);
+  window.history.replaceState(history.state, '', location.pathname);
   openChecklist();
 }
 
@@ -973,7 +1013,7 @@ $('#setupForm').addEventListener('submit', (ev) => {
   };
   editing = false;
   save();
-  window.history.replaceState(null, '', location.pathname);
+  window.history.replaceState(history.state, '', location.pathname);
   openChecklist();
 });
 
@@ -1182,7 +1222,7 @@ function renderNow() {
     ${bar}
     <div class="acts" data-id="${esc(cur.id)}">
       <button class="btn ${e.done ? 'ghost' : 'primary'} small" data-act="toggle">${e.done ? '✓ ' : ''}${t('markDone')}</button>
-      <button class="btn ghost small" data-act="open">${t('details')}</button>
+      <button class="btn ghost small" data-act="open">${t('seeDetails')}</button>
     </div>${next}${catchUp}</div>`;
 }
 
@@ -1396,7 +1436,9 @@ let lastFocus = null;
 // html : le contenu qui défile; foot : les boutons d'action, toujours visibles en bas.
 function openSheet(html, onMount, foot = '') {
   lastFocus = document.activeElement;
-  if ($('#sheet').hidden) {
+  if ($('#sheet').hidden || !$('#sheet').classList.contains('open')) {
+    // « Retour » doit pouvoir fermer la feuille : elle prend sa place dans l'historique.
+    if (!history.state?.sheet) { try { history.pushState({ ...(history.state || { scr: current }), sheet: true }, '', location.href); } catch { /* ignore */ } }
     sfx('open');
     // Première ouverture : le contenu arrive en cascade (pas aux mises à jour).
     $('#sheet').classList.add('fresh');
@@ -1420,6 +1462,8 @@ function openSheet(html, onMount, foot = '') {
 }
 function closeSheet() {
   if (!$('#sheet').hidden && $('#sheet').classList.contains('open')) sfx('close');
+  // Fermée au toucher (X, fond, glisser) : on retire aussi son entrée d'historique.
+  if (history.state?.sheet && !navRestoring) { sheetPopExpected = true; history.back(); }
   $('#backdrop').classList.remove('open');
   $('#sheet').classList.remove('open');
   setTimeout(() => { $('#backdrop').hidden = true; $('#sheet').hidden = true; }, 300);
@@ -1951,9 +1995,14 @@ async function sendFlagEmail(fl, s) {
 // Tout ce qui sert moins souvent, en mots clairs (pas d'icône à deviner).
 const switchRow = (id, label, on) => `<div class="inline-choice"><span id="${id}-label">${esc(label)}</span>
   <button type="button" class="switch" role="switch" id="${id}" aria-checked="${on}" aria-labelledby="${id}-label"><i></i></button></div>`;
-$('#menuBtn').addEventListener('click', () => {
+// ---------- Réglages : un seul endroit, la roue dentée, sur chaque écran ----------
+$('#menuBtn').addEventListener('click', () => openSettings());
+document.addEventListener('click', (ev) => { if (ev.target.closest('[data-settings]')) openSettings(); });
+function openSettings() {
+  const shift = Boolean(state && plan);
+  const signed = Boolean(session.user);
   openSheet(`
-    <div class="sheet-head"><h2>${t('menu')}</h2></div>
+    <div class="sheet-head"><h2>${t('settings')}</h2></div>
     <div class="menu-group">
       <div class="inline-choice"><span>${t('language')}</span>
         <div class="segmented tiny" role="radiogroup">
@@ -1969,17 +2018,20 @@ $('#menuBtn').addEventListener('click', () => {
       ${switchRow('mLarge', t('largeText'), Boolean(prefs.large))}
       ${switchRow('mSound', t('sounds'), prefs.sound !== false)}
       ${navigator.audioSession ? switchRow('mSilent', t('soundSilent'), Boolean(prefs.soundSilent)) : ''}
-      <div class="inline-choice"><span>${t('listOrder')}</span>
+      ${shift ? `<div class="inline-choice"><span>${t('listOrder')}</span>
         <div class="segmented tiny" role="radiogroup">
           <button type="button" role="radio" data-mview="time" aria-checked="${state.view !== 'zone'}">${t('byTime')}</button>
           <button type="button" role="radio" data-mview="zone" aria-checked="${state.view === 'zone'}">${t('byZone')}</button>
         </div>
-      </div>
+      </div>` : ''}
     </div>
     <div class="menu-list">
+      ${signed ? `<button class="btn ghost menu-item" id="mAccount"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>${t('account')}</button>` : ''}
+      ${signed && !bossWatching() ? `<button class="btn ghost menu-item" id="mEdit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>${t('editHours')}</button>` : ''}
       <button class="btn ghost menu-item" id="mProto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg>${t('protocolMenu')}</button>
-      <button class="btn ghost menu-item" id="mEdit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>${t('editHours')}</button>
-      <button class="btn ghost menu-item danger" id="mReset"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>${t('abandon')}</button>
+      ${isRealAdmin() ? `<button class="btn ghost menu-item" id="mView"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>${t('viewAsTitle')}</button>` : ''}
+      ${shift ? `<button class="btn ghost menu-item" id="mRestart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></svg>${t('restartShort')}</button>
+      <button class="btn ghost menu-item danger" id="mReset"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>${t('abandon')}</button>` : ''}
     </div>
   `, (root) => {
     for (const b of root.querySelectorAll('[data-mlang]')) {
@@ -2012,14 +2064,17 @@ $('#menuBtn').addEventListener('click', () => {
       };
     }
     root.querySelector('#mProto').onclick = () => { closeSheet(); goProtocol(); };
-    root.querySelector('#mEdit').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); };
+    root.querySelector('#mEdit')?.addEventListener('click', () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); });
+    root.querySelector('#mAccount')?.addEventListener('click', () => { closeSheet(); setTimeout(openAccount, 340); });
+    root.querySelector('#mView')?.addEventListener('click', () => { closeSheet(); setTimeout(openViewMenu, 340); });
+    root.querySelector('#mRestart')?.addEventListener('click', () => { closeSheet(); setTimeout(() => $('#restartBtn').click(), 340); });
     const reset = root.querySelector('#mReset');
-    reset.onclick = () => {
+    if (reset) reset.onclick = () => {
       if (!reset.dataset.armed) { reset.dataset.armed = '1'; reset.textContent = t('abandonSure'); return; }
       state = null; save(); clearPhotos(); closeSheet(); goFront();
     };
   });
-});
+}
 
 // ---------- 3. Fin de quart ----------
 $('#finishBtn').addEventListener('click', () => {
@@ -2239,7 +2294,7 @@ function reopenShift() {
   const { savedAt, ...rest } = last;
   state = rest;
   save();
-  window.history.replaceState(null, '', location.pathname);
+  window.history.replaceState(history.state, '', location.pathname);
   openChecklist();
   toast(t('editing'));
 }
@@ -2910,6 +2965,7 @@ function openHistory({ keep = false, team = false } = {}) {
   renderHistory({ animate: !keep });
   show('history');
   refreshHistory();
+  if (bossWatching()) refreshBossCount();
 }
 
 async function refreshHistory() {
@@ -3131,7 +3187,7 @@ function renderHistory({ animate = true } = {}) {
   const isUp = hist.mode === 'upcoming';
   const ready = isUp || (isWeek ? hist.weekLoaded === hist.week : hist.loaded);
   const today = todayISO();
-  const since = hist.period === 'year' ? `${today.slice(0, 4)}-01-01` : hist.period === 'day' ? today : hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
+  const since = hist.period === 'year' ? `${today.slice(0, 4)}-01-01` : hist.period === 'day' ? addDays(today, -1) : hist.period === 'week' ? mondayOf(today) : hist.period === 'month' ? `${today.slice(0, 8)}01` : '';
   const me = shiftName().trim().toLowerCase();
   // Un employé voit ses quarts; les superviseurs et l'admin voient ceux de toute l'équipe.
   let shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
@@ -3179,7 +3235,9 @@ function renderHistory({ animate = true } = {}) {
     const missed = rows.filter((r) => r.done < r.n);
     tally = `<section class="hi-tally"><h2>${esc(t(missed.length ? 'teamWatch' : 'teamAllDone'))}</h2>${missed.length ? `<ul>${missed.slice(0, 6).map(li).join('')}</ul>` : `<p class="section-note">${esc(t('teamAllDoneSub'))}</p>`}
       <details><summary>${esc(t('teamSeeAll', rows.length))}</summary><ul>${rows.map(li).join('')}</ul></details></section>`;
-    const tot = rows.reduce((a, r) => a + r.n, 0), dn = rows.reduce((a, r) => a + r.done, 0);
+    // Le même calcul que les cartes et l'analyse (tâches faites sur tâches prévues de chaque quart) :
+    // un seul pourcentage à l'écran, jamais deux chiffres qui se contredisent.
+    const tot = span.reduce((a, s) => a + metrics(s).total, 0), dn = span.reduce((a, s) => a + metrics(s).done, 0);
     hist.pctDone = tot ? Math.round((100 * dn) / tot) : 0;
   }
 
@@ -3199,7 +3257,7 @@ function renderHistory({ animate = true } = {}) {
       <div class="${hist.pctDone === 100 ? 'ok' : ''}"><b class="num">${hist.pctDone}%</b><span>${esc(t('statTasksDone'))}</span></div>
       <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags', nFlags))}</span></div>
     </div>` : '';
-    $('#historyBody').innerHTML = `${per}${ready ? `<p class="team-sum">${esc(sum)}</p>${whoBar}${bstrip}${teamAnalysis(span)}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
+    $('#historyBody').innerHTML = `${urgentBlock()}${per}${ready ? `<p class="team-sum">${esc(sum)}</p>${whoBar}${bstrip}${teamAnalysis(span)}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
       <div class="hi-links">
         <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
         <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
@@ -3231,6 +3289,8 @@ function renderHistory({ animate = true } = {}) {
 }
 
 $('#historyBody').addEventListener('click', (ev) => {
+  const pid = ev.target.closest('[data-pid]')?.dataset.pid;
+  if (pid) { location.hash = `probleme=${encodeURIComponent(pid)}`; return; }
   const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel], [data-hwho], [data-hby]');
   if (!el || el.disabled) return;
   const ds = el.dataset;
@@ -3273,6 +3333,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cu
 
 // ---------- 0. Connexion : une fois, le téléphone s'en souvient ----------
 const authUI = { tab: 'login', role: 'employee' };
+// « Admin » n'apparaît à l'inscription qu'avec un lien admin (…?admin) : les employés ne le voient jamais.
+if (!/[?&#]admin\b/.test(location.href)) document.querySelector('[data-role="admin"]')?.remove();
 const AUTH_ERRORS = { code: 'errCode', exists: 'errExists', login: 'errLogin', email: 'errEmail', password: 'errPassword', name: 'errName', 'codes-missing': 'errCodesMissing', tries: 'codeTries' };
 
 // Le plancher mouillé de la connexion (créé au premier affichage).
@@ -3305,7 +3367,7 @@ $('#poolStart').addEventListener('click', (e) => {
   if (btn.classList.contains('lifting')) return;
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
-    window.history.replaceState(null, '', location.pathname);
+    window.history.replaceState(history.state, '', location.pathname);
     if (bossWatching()) { openHistory({ team: true }); return; } // le patron : sa bande ouvre l'espace superviseur, le reste la journée de l'équipe
     dropStaleShift();
     if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
@@ -3321,10 +3383,8 @@ $('#poolStart').addEventListener('click', (e) => {
   setTimeout(() => { clank('lift'); pool().cheer(); }, 380);
   setTimeout(() => { go(); btn.classList.remove('lifting'); }, 1150);
 });
-$('#poolNext').addEventListener('click', (ev) => {
-  ev.stopPropagation();
-  if (session.user) openNextOverview();
-});
+// La bande « prochain quart » fait partie de la carte : un seul bouton, une seule action.
+$('#poolNext').addEventListener('click', () => {});
 $('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
 // Barre rapide : Accueil, Mes tâches, Recommencer, Superviseur, visiteur,
 // thème et langue. Un seul élément, déplacé en haut de l'écran affiché
@@ -3341,11 +3401,11 @@ function placeQuickBar(id) {
     const row = head.querySelector('.topbar-row');
     if (bar.previousElementSibling !== row) row.after(bar);
   } else if (bar.parentElement !== target) target.prepend(bar);
-  $('#restartBtn').hidden = id !== 'checklist';
+  $('#restartBtn').hidden = true; // dans Réglages maintenant
   $('#qbTasks').hidden = !state || id === 'checklist';
   $('#qbBoss').hidden = !isBoss() || id === 'boss';
   $('#qbVisit').hidden = !isVisitor();
-  $('#qbAccount').hidden = !session.user;
+  $('#qbAccount').hidden = true; // dans Réglages maintenant
   bar.classList.toggle('no-tools', id === 'setup'); // l'accueil a déjà ses boutons
 }
 $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
@@ -3383,7 +3443,7 @@ function paintFront() {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
     let sub = t('wbStart');
     const nx = !state && nextShift();
-    if (bossWatching()) sub = t('wbTeam');
+    if (bossWatching()) sub = urgentOpen().length ? t('wbUrgent', urgentOpen().length) : t('wbTeam');
     else if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = t('wbUnsent', n); }
     else if (state && plan) { const ts = planTasks(); sub = counting() ? t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length) : t('wbWaiting'); }
     else if (nx?.ready) sub = t('wbReady');
@@ -3391,6 +3451,7 @@ function paintFront() {
     label.innerHTML = `<span class="wb-avatar">${avatarHTML(session.user, esc((first[0] || '?').toUpperCase()))}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
     $('#poolStart').classList.toggle('unsent', Boolean(state && plan && shiftOver()));
+    $('#poolStart').classList.toggle('has-urgent', bossWatching() && urgentOpen().length > 0);
   } else {
     // Propriétaire : « Commencer » au même niveau que la carte « Bon retour » (premium, pas de disques).
     label.innerHTML = `<span class="wb-text gs-text"><b>${esc(t('getStarted'))}</b><em>${esc(t('getStartedSub'))}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
@@ -3513,10 +3574,10 @@ function autoStart() {
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {
-  if (location.hash) window.history.replaceState(null, '', location.pathname); // un rafraîchissement reste sur l'accueil
-  paintStatic();
+  paintStatic(); // (l'adresse de l'accueil, sans #, est posée par show : un rafraîchissement reste sur l'accueil)
   authSheet(false);
   show('auth');
+  if (bossWatching()) refreshBossCount(); // Daniel voit tout de suite s'il y a un problème urgent
 }
 for (const b of document.querySelectorAll('[data-front]')) b.addEventListener('click', goFront);
 // « Recommencer le quart » : on demande une fois avant de tout décocher.
@@ -3616,6 +3677,7 @@ function paintAccount() {
 // Les mots changent selon le rôle : « Shifts de l'équipe » pour un superviseur, « Admin » pour l'admin.
 function roleKey(k) {
   if (bossWatching() && ['dashShifts', 'dashShiftsSub', 'dashFlag', 'dashFlagSub'].includes(k)) return { dashShifts: 'dashManual', dashShiftsSub: 'dashManualSub', dashFlag: 'dashFeedback', dashFlagSub: 'dashFeedbackSub' }[k];
+  if (k === 'histTitle') return bossWatching() ? 'reportsTitle' : 'dashShifts';
   if (k === 'dashShifts' && isBoss()) return 'dashShiftsTeam';
   if (k === 'bossMode' && isAdmin()) return 'roleAdmin';
   return k;
@@ -3637,7 +3699,7 @@ async function doSignOut() {
   boss.team = [];
   boss.loaded = false;
   boss.teamLoaded = false;
-  window.history.replaceState(null, '', location.pathname);
+  window.history.replaceState(history.state, '', location.pathname);
   route();
 }
 
@@ -3831,7 +3893,7 @@ function openAccount() {
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
         <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
       <button type="button" class="acct-row" id="acTour" data-tour-open><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
-      <button type="button" class="acct-row" id="acSound"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/>${prefs.sound === false ? '<path d="M17 9l4 6M21 9l-4 6"/>' : '<path d="M17 8a5 5 0 0 1 0 8"/>'}</svg><span>${esc(t(prefs.sound === false ? 'soundOff' : 'soundOn'))}</span></button>
+      
     </div>
     ${admin ? `<p class="block-label">${esc(t('adminTools'))}</p>
     <div class="panel acct-admin">
@@ -3876,7 +3938,6 @@ function openAccount() {
       if (foot) foot.textContent = t(pendingView === curView() ? 'close' : 'apply');
       sfx('tab');
     }; });
-    $('#acSound').onclick = () => { prefs.sound = prefs.sound === false; savePrefs(); sfx('toggle'); openAccount(); };
     $('#acSignOut').onclick = (e) => {
       const b = e.currentTarget;
       if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('signOutSure'); sfx('locked'); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = t('signOut'); } }, 3000); return; }
@@ -3932,6 +3993,22 @@ function paintBossCount() {
   const el = $('#bossCount');
   el.hidden = !n;
   el.textContent = n;
+  // Daniel : le nombre de signalements à régler sur sa tuile, et l'urgent sur sa grande carte.
+  const tile = $('#dashFlag');
+  let badge = tile.querySelector('.dash-badge');
+  if (!badge) { badge = document.createElement('span'); badge.className = 'dash-badge num'; tile.append(badge); }
+  badge.hidden = !(bossWatching() && n);
+  badge.textContent = n;
+  if (current === 'auth' && bossWatching()) paintFront();
+  if (current === 'history' && bossWatching()) renderHistory({ animate: false });
+}
+const urgentOpen = () => boss.problems.filter((p) => p.status !== 'resolved' && p.urgent);
+// En haut des rapports de Daniel : ce qui presse. Rien d'urgent? Une ligne verte, c'est tout.
+function urgentBlock() {
+  if (!boss.loaded) return '';
+  const list = urgentOpen();
+  if (!list.length) return `<p class="boss-ok">✓ ${esc(t('noUrgent'))}</p>`;
+  return `<section class="boss-urgent"><h2>${esc(t('urgentTitle', list.length))}</h2>${list.map((p, i) => problemCard(p, i)).join('')}</section>`;
 }
 async function refreshBossCount() {
   try { boss.problems = await listProblems(); boss.loaded = true; } catch { /* le compte reste à jour au prochain coup */ }
@@ -3939,7 +4016,7 @@ async function refreshBossCount() {
 }
 
 function openBoss({ keep = false } = {}) {
-  if (!isBoss()) { window.history.replaceState(null, '', location.pathname); route(); return; }
+  if (!isBoss()) { window.history.replaceState(history.state, '', location.pathname); route(); return; }
   $('#boss .back span').dataset.t = state ? 'myShift' : 'home';
   paintStatic();
   renderBoss({ animate: !keep });
@@ -3966,6 +4043,11 @@ async function refreshBoss() {
   if (current === 'boss' && boss.tab === tab) renderBoss({ animate: false });
 }
 
+// « Ouvert depuis 3 jours » : un problème oublié se voit (propriétaire : rien de plus, aucune pression).
+function openFor(at) {
+  const days = Math.floor((Date.now() - new Date(at).getTime()) / 864e5);
+  return days < 1 ? '' : t('openDays', days);
+}
 function problemCard(p, i) {
   const tone = p.status === 'resolved' ? 'ok' : p.urgent ? 'bad' : 'warn';
   const tags = [
@@ -3977,7 +4059,7 @@ function problemCard(p, i) {
     <span class="pb-ico">${catIcon(p.category)}</span>
     <span class="rp-main">
       <b>${esc(catName(p.category))}</b>
-      <span class="hi-meta">${p.location ? `${esc(p.location)} · ` : ''}${esc(p.by)} · ${esc(whenShort(p.at))}</span>
+      <span class="hi-meta">${p.location ? `${esc(p.location)} · ` : ''}${esc(p.by)} · <span class="nowrap">${esc(whenShort(p.at))}</span>${p.status !== 'resolved' ? ` ${openFor(p.at) ? `· <span class="nowrap pb-age">${esc(openFor(p.at))}</span>` : ''}` : ''}</span>
       ${p.text ? `<span class="pb-text">${esc(p.text)}</span>` : ''}
       ${tags ? `<span class="tags">${tags}</span>` : ''}
     </span>${CHEV_R}</button>`;
@@ -4308,9 +4390,29 @@ function setLarge(on, sw) {
   document.documentElement.classList.toggle('large', on);
   sw?.setAttribute('aria-checked', String(on));
   for (const b of document.querySelectorAll('[data-large]')) b.setAttribute('aria-pressed', String(on));
+  applyTextSize();
   if (current === 'apercu') renderApercu({ animate: false }); // la 3D se remet à la bonne taille
 }
+// La taille du texte suit l'iPhone (Réglages › Affichage › Taille du texte) : plus grand là-bas,
+// plus grand ici, sans rien chercher. « Texte plus grand » dans nos Réglages ajoute 15 % par-dessus.
+function iosTextRatio() {
+  try {
+    if (!CSS.supports('font', '-apple-system-body')) return 1;
+    const p = document.createElement('p');
+    p.style.cssText = 'font:-apple-system-body;position:absolute;visibility:hidden;margin:0';
+    document.body.append(p);
+    const px = parseFloat(getComputedStyle(p).fontSize);
+    p.remove();
+    return px ? Math.min(1.45, Math.max(1, px / 17)) : 1; // 17 px = taille normale de l'iPhone
+  } catch { return 1; }
+}
+function applyTextSize() {
+  const z = Math.round(iosTextRatio() * (prefs.large ? 1.15 : 1) * 100) / 100;
+  document.documentElement.style.zoom = z === 1 ? '' : String(z);
+}
 document.documentElement.classList.toggle('large', Boolean(prefs.large));
+applyTextSize();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) applyTextSize(); }); // changé dans les Réglages de l'iPhone
 for (const b of document.querySelectorAll('[data-large]')) b.addEventListener('click', () => setLarge(!prefs.large));
 // Propriétaire : le bouton du haut (à côté du thème et de la langue) coupe ou remet les sons, partout.
 // « Texte plus grand » vit dans le Menu.
@@ -4339,7 +4441,7 @@ document.addEventListener('click', (ev) => {
   if (go.dataset.go === 'apercu-keep') { openApercu({ keep: true }); return; }
   if (go.dataset.go === 'protocol') { goProtocol(); return; }
   if (go.dataset.go === 'history-keep') { openHistory({ keep: true }); return; }
-  if (go.dataset.go === 'boss-keep') { window.history.replaceState(null, '', '#patron'); openBoss({ keep: true }); return; }
+  if (go.dataset.go === 'boss-keep') { window.history.replaceState(history.state, '', '#patron'); openBoss({ keep: true }); return; }
   if (go.dataset.go === 'boss') {
     if (location.hash === '#patron') openBoss(); else location.hash = 'patron';
     return;
@@ -4354,7 +4456,7 @@ document.addEventListener('click', (ev) => {
     if (location.hash === '#apercu') openApercu(); else location.hash = 'apercu';
     return;
   }
-  window.history.replaceState(null, '', location.pathname);
+  window.history.replaceState(history.state, '', location.pathname);
   route();
 });
 
@@ -4373,7 +4475,8 @@ function route() {
   if (session.user) return goFront(); // l'accueil (lapin, horaire) fait tout; la page « heures » sert aux heures spéciales
   return setupScreen();
 }
-window.addEventListener('hashchange', route);
+// Un « retour » change aussi le # : le popstate s'en est déjà occupé, on ne refait pas le travail.
+window.addEventListener('hashchange', () => { if (navPopAt && Date.now() - navPopAt < 400) return; route(); });
 
 // Sélecteurs : la pastille glisse vers le choix actif, où qu'il soit dans la page.
 function syncThumb(seg) {

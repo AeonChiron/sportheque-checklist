@@ -80,7 +80,7 @@ test('exit restores the prior shift, clock and work mode', () => {
 });
 test('scheduled simulation uses the selected date and opens the real checklist', () => {
   let opened=0;
-  const c=context({state:null,shiftName:()=> 'Admin',todayISO:()=> '2026-10-20',detectShift:()=>1,save:()=>{},window:{history:{replaceState:()=>{}}},location:{pathname:'/'},openChecklist:()=>opened++});
+  const c=context({state:null,shiftName:()=> 'Admin',todayISO:()=> '2026-10-20',detectShift:()=>1,save:()=>{},window:{history:{replaceState:()=>{}}},history:{state:null,replaceState:()=>{}},location:{pathname:'/'},openChecklist:()=>opened++});
   vm.runInContext(fn('startScheduled'),c);
   c.startScheduled({date:'2026-10-21',start:'10:00',end:'18:00'},{simulation:true});
   assert.equal(c.state.date,'2026-10-21'); assert.equal(c.state.simulation,true); assert.equal(opened,1);

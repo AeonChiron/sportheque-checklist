@@ -45,7 +45,7 @@ export function sanitizeShift(raw) {
     items: (Array.isArray(raw.items) ? raw.items : []).slice(0, 40).map((i) => ({
       id: str(i?.id, 40),
       status: STATUSES.has(i?.status) ? i.status : 'unchecked',
-      doneAt: str(i?.doneAt, 30),
+      // (l'heure de chaque case n'est plus gardée : propriétaire, pas de surveillance)
       reason: str(i?.reason, 20),
       remark: str(i?.remark, 300),
     })).filter((i) => i.id),
