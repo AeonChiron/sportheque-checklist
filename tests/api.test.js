@@ -98,6 +98,12 @@ test('Un quart se modifie le jour même seulement; photos effacées après 90 jo
   assert.equal((await go('board', { ...shift, submittedAt: new Date().toISOString() }, token)).status, 200); // même jour : OK
   await stores('board').setJSON('2026-10-20', [{ ...shift, submittedAt: new Date(Date.now() - 2 * 864e5).toISOString() }]); // enregistré un autre jour
   assert.equal((await go('board', shift, token)).status, 409); // un autre jour : verrouillé
+  // Un quart encore « en cours » (sauvegarde en chemin) se continue le lendemain.
+  await stores('board').setJSON('2026-10-20', [{ ...shift, open: true, submittedAt: new Date(Date.now() - 2 * 864e5).toISOString() }]);
+  assert.equal((await go('board', { ...shift, open: true }, token)).status, 200);
+  assert.equal((await stores('board').get('2026-10-20', { type: 'json' }))[0].open, true);
+  assert.equal((await go('board', shift, token)).status, 200); // la « Fin du quart » passe et ferme le quart
+  assert.equal((await stores('board').get('2026-10-20', { type: 'json' }))[0].open, false);
 
   const oldId = `${(Date.now() - 91 * 864e5).toString(36).padStart(9, '0')}abcde`;
   await stores('problems').setJSON(oldId, { id: oldId, category: 'machine', photos: 1 });

@@ -21,6 +21,8 @@ export function sanitizeShift(raw) {
     start: str(raw.start, 5),
     end: str(raw.end, 5),
     submittedAt: str(raw.submittedAt, 30),
+    special: str(raw.special, 30), // quart spécial (ex. Studio Fit + Yama)
+    open: raw.open === true, // quart en cours, enregistré en chemin (pas encore « Fin du quart »)
     notes: str(raw.notes, 1000),
     handoff: str(raw.handoff, 200), // un mot pour le prochain quart
     done: count(raw.done),

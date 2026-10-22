@@ -30,6 +30,23 @@ export const CONFIG = {
     { id: 'soir-court', start: '18:00', end: '23:00' },
   ],
 
+  // Quarts spéciaux pour une personne (propriétaire). names : prénom du compte,
+  // sans accents ni majuscules. weekday : 0 = lundi … 6 = dimanche. Ce jour-là, ce
+  // quart remplace l'horaire de la personne; la liste n'a que ces tâches, sans détails.
+  specialShifts: [
+    {
+      id: 'studio-yama',
+      names: ['chadi', 'shadi'],
+      weekday: 6,
+      start: '09:00',
+      end: '13:00',
+      tasks: [
+        { id: 'studio-fit', fr: 'Studio Fit', en: 'Studio Fit' },
+        { id: 'yama', fr: 'Yama', en: 'Yama' },
+      ],
+    },
+  ],
+
   // Langue par défaut de l'interface ('fr' ou 'en'); chaque téléphone
   // garde ensuite son choix. Le superviseur en service et la langue de son
   // rapport sont choisis au début de chaque quart.

@@ -22,6 +22,7 @@ function scheduleContext(hour = 10, minute = 0) {
     addDays: (iso, n) => { const d = new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); },
     dowOf: iso => (new Date(iso+'T12:00:00').getDay()+6)%7,
     presetOf: x => x || null, toMin: x => +x.slice(0,2)*60 + +x.slice(3),
+    specialFor: () => null, SPECIALS: [],
   });
   vm.runInContext(fn('nextShift'), c);
   return c;

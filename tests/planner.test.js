@@ -159,3 +159,13 @@ test('Aucun titre en « passage » ou « tournée » : une tâche = un nom clair
     }
   }
 });
+
+test('Quart spécial de Chadi : dimanche, seulement Studio Fit et Yama', async () => {
+  const { CONFIG } = await import('../js/config.js');
+  const sp = CONFIG.specialShifts.find((x) => x.id === 'studio-yama');
+  assert.ok(sp.names.includes('chadi'));
+  assert.equal(sp.weekday, 6); // dimanche
+  assert.deepEqual(sp.tasks.map((x) => x.fr), ['Studio Fit', 'Yama']);
+  const { sanitizeShift } = await import('../js/board-shape.js');
+  assert.equal(sanitizeShift({ date: '2026-10-25', shift: 1, name: 'Chadi', special: 'studio-yama', open: true }).special, 'studio-yama');
+});

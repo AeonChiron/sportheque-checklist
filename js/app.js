@@ -34,12 +34,17 @@ function write(key, value) {
 const prefs = { lang: CONFIG.defaultLang, name: '', supervisor: '', supervisorLang: {}, lastTimes: {}, swipeSeen: false, ...read(PREFS, {}) };
 const savePrefs = () => write(PREFS, prefs);
 let state = read(KEY, null);
-const save = () => write(KEY, state);
+const save = () => {
+  if (state) state.updatedAt = new Date().toISOString();
+  write(KEY, state);
+  if (state) queueDraft();
+};
 let plan = null;
 // Le plan du quart en cours, avec le pointage en premier : coché tout seul en commençant (jamais à zéro).
 function shiftPlan(st) {
-  const p = buildPlan({ ...st, lang: lang() });
+  const p = planOf({ ...st, lang: lang() });
   const S = p.items[0]?.start ?? 0;
+  p.forKey = `${st.date}|${st.start}|${st.end}`;
   p.items.unshift({ id: 'pointage', kind: 'task', auto: true, minutes: 0, start: S, end: S, area: 'gym', reminders: [], steps: [], tips: [], title: t('punchTitle'), summary: t('punchSub') });
   return p;
 }
@@ -223,7 +228,7 @@ function paintStatic() {
 function todayProgress() {
   const count = (st) => {
     try {
-      const p = buildPlan({ shift: st.shift, date: st.date, start: st.start, end: st.end, lang: lang() });
+      const p = planOf({ shift: st.shift, date: st.date, start: st.start, end: st.end, special: st.special, lang: lang() });
       const tasks = p.items.filter((it) => it.kind === 'task');
       return { done: tasks.filter((it) => st.tasks?.[it.id]?.done).length, total: tasks.length };
     } catch { return null; }
@@ -359,6 +364,35 @@ $('#moreHours').addEventListener('click', () => showHours($('#timeRow').hidden))
 
 // Quarts habituels : un toucher remplit les heures (toujours modifiables).
 const PRESETS = CONFIG.shiftPresets || [];
+// ---------- Quarts spéciaux (une personne, un jour de la semaine) ----------
+const SPECIALS = CONFIG.specialShifts || [];
+const firstName = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().split(/\s+/)[0] || '';
+// Le quart spécial de la personne connectée pour cette date, s'il y en a un.
+function specialFor(iso) {
+  const me = firstName(shiftName());
+  const sp = me && SPECIALS.find((x) => x.names?.includes(me) && x.weekday === dowOf(iso));
+  return sp ? { id: 'custom', special: sp.id, start: sp.start, end: sp.end } : null;
+}
+// Un plan de quart : celui du manuel, ou, pour un quart spécial, seulement ses tâches
+// (un titre chacune, rien d'autre), réparties sur les heures du quart.
+function planOf({ special = '', ...args }) {
+  const p = buildPlan(args);
+  const sp = special && SPECIALS.find((x) => x.id === special);
+  if (!sp) return p;
+  const L = args.lang || lang();
+  const n = sp.tasks.length || 1;
+  const step = Math.floor((p.end - p.start) / n);
+  p.items = sp.tasks.map((x, i) => {
+    const start = p.start + i * step;
+    const end = i === n - 1 ? p.end : start + step;
+    return { id: x.id, kind: 'task', minutes: end - start, start, end, area: 'gym', special: true, reminders: [], steps: [], tips: [], title: x[L] || x.fr, summary: '' };
+  });
+  p.overflow = [];
+  p.deficit = 0;
+  p.outOfRange = [];
+  p.special = sp.id;
+  return p;
+}
 function renderPresets() {
   const names = t('presets') || {};
   // Petite barre de 6 h à minuit : on voit d'un coup d'œil où tombe le quart.
@@ -424,19 +458,19 @@ authEvents.user = adoptSchedule;
 const dowOf = (iso) => (dateOf(iso).getDay() + 6) % 7; // 0 = lundi
 // Un jour = un quart habituel (id) ou des heures perso { start, end }.
 const presetOf = (v) => (v && typeof v === 'object' ? { id: 'custom', start: v.start, end: v.end } : PRESETS.find((p) => p.id === v) || null);
-const todaySched = () => presetOf(mySchedule()?.[dowOf(todayISO())]);
+const todaySched = () => specialFor(todayISO()) || presetOf(mySchedule()?.[dowOf(todayISO())]);
 // Le prochain quart à l'horaire. ready : on peut le partir, de 30 min avant le début jusqu'à la fin.
 const EARLY_MIN = 30;
 const nb = (x) => String(x).replace(/ /g, '\u00a0'); // « 7 h 30 » ne se coupe pas
 function nextShift() {
-  const sc = mySchedule();
-  if (!sc) return null;
+  const sc = mySchedule() || {};
+  if (!mySchedule() && !SPECIALS.length) return null;
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const today = todayISO();
   for (let i = 0; i < 8; i++) {
     const date = addDays(today, i);
-    const p = presetOf(sc[dowOf(date)]);
+    const p = specialFor(date) || presetOf(sc[dowOf(date)]);
     if (!p?.start || !p?.end) continue;
     if (i > 0) return { ...p, date, ready: false };
     const s0 = toMin(p.start);
@@ -783,7 +817,7 @@ function dropStaleShift() {
   if (Object.entries(state.tasks || {}).some(([id, x]) => x.done && id !== 'pointage') || state.flags?.length) return;
   state = null; save();
 }
-function startScheduled(p, { simulation = false } = {}) {
+function startScheduled(p, { simulation = false, quiet = false } = {}) {
   state = {
     name: shiftName(),
     supervisor: '',
@@ -792,6 +826,7 @@ function startScheduled(p, { simulation = false } = {}) {
     start: p.start,
     end: p.end,
     shift: detectShift(p.start, p.end),
+    special: p.special || '',
     tasks: {},
     flags: [],
     notes: '',
@@ -799,6 +834,7 @@ function startScheduled(p, { simulation = false } = {}) {
     createdAt: new Date().toISOString(),
   };
   save();
+  if (quiet) { paintStatic(); return; }
   window.history.replaceState(null, '', location.pathname);
   openChecklist();
 }
@@ -919,7 +955,7 @@ $('#setupForm').addEventListener('submit', (ev) => {
 // ---------- 2. Checklist ----------
 // Le quart a-t-il commencé (l'heure du début est passée)? Le pointage attend ce moment.
 // Avant le début (et sans pointage), aucun chiffre de tâches : rien à compter encore.
-const counting = () => shiftStarted() || Boolean(state?.tasks?.pointage?.done);
+const counting = () => Boolean(state); // les chiffres se montrent toujours (le quart s'ouvre quand on veut)
 const shiftStarted = () => Boolean(state) && Date.now() >= new Date(`${state.date}T${state.start}`).getTime();
 // Le mot laissé par le quart d'avant (2 derniers jours), en haut des tâches.
 let handoff = null;
@@ -986,7 +1022,7 @@ function taskRow(it, { extra = false } = {}) {
           ${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}
         </span>
       </button>
-      ${it.id === 'pointage' && !shiftStarted() && !e.done ? `<button type="button" class="check-wait num" data-act="toggle" aria-label="${esc(t('punchAt', f(toMin(state.start))))}">${nb(f(toMin(state.start)))}</button>` : `<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
+      ${`<button class="check" data-act="toggle" aria-pressed="${Boolean(e.done)}" aria-label="${esc(it.title)}"><i>${e.skipped && !e.done ? '✕' : '✓'}</i></button>`}
     </div>
   </li>`;
 }
@@ -1131,7 +1167,6 @@ function renderNow() {
 function renderChecklist() {
   const lock = shiftLocked();
   // Le pointage se coche seulement à l'heure du début du quart (pas avant, même si le quart est ouvert).
-  if (state.tasks.pointage?.done && !state.tasks.pointage.manual && !shiftStarted()) { delete state.tasks.pointage; save(); } // coché trop tôt par une ancienne version
   $('#checklist').classList.toggle('locked', Boolean(lock));
   let note = $('#lockNote');
   if (!note) { note = document.createElement('p'); note.id = 'lockNote'; note.className = 'ov-note lock-note'; $('#taskList').before(note); }
@@ -1153,9 +1188,12 @@ function renderChecklist() {
   renderNow();
 
   $('#listCount').textContent = counting() ? `${done}/${tasks.length}` : '';
-  const ready = tasks.length > 0 && done === tasks.length;
+  // « Enregistrer » tant qu'il reste des tâches; « Fin du quart » quand tout est coché
+  // (ou marqué « Pas pu faire »), ou quand l'heure de fin est passée.
+  const ready = canEnd();
   $('#finishBtn').classList.toggle('ready', ready);
-  $('#finishBtn').textContent = t(ready ? 'finishReady' : 'finish');
+  $('#finishBtn').classList.toggle('save-mode', !ready);
+  $('#finishBtn').textContent = t(ready ? 'finishReady' : 'saveProgress');
   if (lock) { $('#finishBtn').textContent = t('lockShort', countdown(lock)); $('#finishBtn').disabled = true; } else $('#finishBtn').disabled = false;
   const hint = $('#swipeHint');
   hint.hidden = prefs.swipeSeen || !matchMedia('(pointer: coarse)').matches;
@@ -1185,18 +1223,14 @@ function renderChecklist() {
 
 // Un quart pas encore commencé (plus de 30 min avant) : on le voit, on coche rien.
 function shiftLocked() {
-  if (!state || isAdmin()) return 0; // l'admin teste quand il veut
-  const at = dateOf(state.date); at.setHours(0, toMin(state.start), 0, 0);
-  const left = Math.ceil((at - Date.now()) / 6e4);
-  return left > EARLY_MIN ? left : 0;
+  // Propriétaire : plus de verrou. Le quart s'ouvre et se coche quand on veut, même d'avance.
+  return 0;
 }
 function lockedToast() { const l = shiftLocked(); if (l) { toast(t('ovLocked', countdown(l)), 'muted'); sfx('locked'); } return l; }
 function toggleDone(id) {
-  if (id === 'pointage') { // le pointage reste coché; l'admin peut pointer d'avance
+  if (id === 'pointage') { // le pointage reste coché; on pointe soi-même, à n'importe quelle heure
     if (state.tasks.pointage?.done) return;
-    if (isAdmin() || shiftStarted()) { punchIn(true); return; } // on pointe soi-même, jamais automatiquement
-    if (lockedToast()) return; // même message et même son que les autres tâches
-    toast(t('punchAt', f(toMin(state.start))), 'muted'); sfx('locked');
+    punchIn(true);
     return;
   }
   if (lockedToast()) return;
@@ -1597,14 +1631,14 @@ function openTask(id) {
     <div class="sheet-hero">
       ${mapLast ? '' : taskVisual(it)}
       <div class="sheet-head">
-        <p class="eyebrow">${esc(AREAS[it.area]?.[lang()] || '')}</p>
+        ${it.special ? '' : `<p class="eyebrow">${esc(AREAS[it.area]?.[lang()] || '')}</p>`}
         <h2>${esc(it.title)}</h2>
         <div class="meta-row">${pills}</div>
       </div>
     </div>
-    <div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span><span class="pips" style="--pc:var(--plate-${plateOf(it)})">${pipsHTML((e.steps || []).length, it.steps.length)}</span></p>
+    ${it.steps.length ? `<div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span><span class="pips" style="--pc:var(--plate-${plateOf(it)})">${pipsHTML((e.steps || []).length, it.steps.length)}</span></p>
       <ol class="steps">${it.steps.map((s, i) => `<li><button type="button" class="step" data-step="${i}" aria-pressed="${Boolean(e.done || (e.steps || []).includes(i))}"><span class="step-text">${md(s)}</span><i aria-hidden="true">✓</i></button></li>`).join('')}</ol>
-      <p class="hint">${t('stepsHint')}</p></div>
+      <p class="hint">${t('stepsHint')}</p></div>` : ''}
     ${tv}
     ${clockBox}
     ${tips}
@@ -1953,7 +1987,12 @@ $('#menuBtn').addEventListener('click', () => {
 });
 
 // ---------- 3. Fin de quart ----------
-$('#finishBtn').addEventListener('click', openFinish);
+$('#finishBtn').addEventListener('click', () => { if (canEnd()) openFinish(); else saveDraft({ manual: true }); });
+// Le quart peut se fermer : chaque tâche cochée ou marquée « Pas pu faire », ou l'heure de fin passée.
+function canEnd() {
+  const tasks = planTasks();
+  return tasks.length > 0 && (tasks.every((x) => state.tasks[x.id]?.done || state.tasks[x.id]?.skipped) || shiftOver());
+}
 $('#backBtn').addEventListener('click', () => { renderChecklist(); show('checklist'); });
 $('#fNotes').addEventListener('input', (ev) => { state.notes = ev.target.value; save(); });
 $('#fHandoff').addEventListener('input', (ev) => { state.handoff = ev.target.value; save(); });
@@ -2011,6 +2050,7 @@ function boardSummary() {
   return {
     date: state.date,
     shift: state.shift,
+    special: state.special || '',
     name: state.name,
     supervisor: state.supervisor || '',
     handoff: (state.handoff || '').trim(),
@@ -2028,9 +2068,79 @@ function boardSummary() {
   };
 }
 
+// ---------- Sauvegarde du quart en cours (propriétaire : « rien ne doit se perdre ») ----------
+// Le téléphone garde tout à chaque toucher. En plus, le quart en cours part au serveur
+// (marqué « en cours ») quelques secondes après chaque changement, quand l'app passe en
+// arrière-plan, et avec le bouton « Enregistrer ». Si le téléphone le perd (Safari vidé,
+// autre appareil, autre adresse du site), il revient tout seul depuis le serveur.
+var draftTimer = null; // var : save() peut tourner avant cette ligne au démarrage
+var lastDraftSig = '';
+const hasProgress = (st) => Boolean(st) && (Object.entries(st.tasks || {}).some(([id, x]) => id !== 'pointage' && (x.done || x.skipped || x.remark)) || st.flags?.length > 0 || Boolean(st.notes?.trim()));
+function queueDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => saveDraft(), 8000);
+}
+async function saveDraft({ manual = false } = {}) {
+  clearTimeout(draftTimer);
+  if (!state?.name || !state?.date) return;
+  const offline = prefs.simShift || prefs.simNew || state.simulation; // simulations : rien ne part au serveur
+  if (!offline && (manual || hasProgress(state))) {
+    if (!plan || plan.forKey !== `${state.date}|${state.start}|${state.end}`) plan = shiftPlan(state);
+    const summary = { ...boardSummary(), open: true };
+    const sig = JSON.stringify({ ...summary, submittedAt: '' });
+    if (manual || sig !== lastDraftSig) {
+      const where = await publishShift(summary);
+      if (where !== 'queued') lastDraftSig = sig;
+      if (manual) { toast(t(where === 'queued' ? 'savedProgressLocal' : 'savedProgress'), 'ok'); sfx('save'); }
+      return;
+    }
+  }
+  if (manual) { toast(t('savedProgress'), 'ok'); sfx('save'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && state) saveDraft(); });
+addEventListener('pagehide', () => { if (state) saveDraft(); });
+
+// Un quart « en cours » sur le serveur, à moi, d'aujourd'hui ou d'hier : on le reprend si
+// ce téléphone ne l'a plus (ou en a une copie plus vieille et vide).
+async function restoreDraft() {
+  if (!session.user || session.mode !== 'accounts' || prefs.simShift || prefs.simNew || bossWatching()) return;
+  const me = shiftName().trim().toLowerCase();
+  if (!me) return;
+  const { live, shifts } = await loadRecent(20).catch(() => ({ live: false, shifts: [] }));
+  if (!live) return;
+  const today = todayISO();
+  const d = shifts.find((x) => x.open && x.name.trim().toLowerCase() === me && x.date >= addDays(today, -1) && x.date <= addDays(today, 7));
+  if (!d) return;
+  const same = state && state.date === d.date && state.shift === d.shift;
+  if (state && !same) return; // un autre quart est ouvert ici : on n'y touche pas
+  if (same && hasProgress(state) && (state.updatedAt || '') >= (d.submittedAt || '')) return; // la copie du téléphone est la plus récente
+  const tasks = {};
+  for (const it of d.items || []) {
+    const e = {};
+    if (it.status === 'done') { e.done = true; if (it.doneAt) e.doneAt = it.doneAt; }
+    if (it.status === 'notdone') { e.skipped = true; if (it.reason) e.reason = it.reason; }
+    if (it.remark) e.remark = it.remark;
+    if (Object.keys(e).length) tasks[it.id] = it.id === 'pointage' && e.done ? { ...e, manual: true } : e;
+  }
+  state = {
+    name: d.name, supervisor: d.supervisor || '', date: d.date, simulation: false,
+    start: d.start, end: d.end, shift: d.shift, special: d.special || '', tasks,
+    flags: (d.flags || []).map((fl) => ({ ...fl, photos: [] })),
+    notes: d.notes || '', handoff: d.handoff || '', view: 'time',
+    createdAt: d.submittedAt || new Date().toISOString(),
+  };
+  write(KEY, { ...state, updatedAt: d.submittedAt || new Date().toISOString() });
+  state.updatedAt = d.submittedAt || '';
+  plan = null;
+  if (['auth', 'setup', 'checklist'].includes(current)) openChecklist();
+  else paintStatic();
+  toast(t('draftRestored'), 'ok');
+}
+
 // Fin du quart : il s'ajoute à l'historique. Pas de courriel.
 async function saveShift() {
   if (prefs.simShift || prefs.simNew) { toast(t('simulationLocal')); return; }
+  clearTimeout(draftTimer); // plus de brouillon : le quart final le remplace
   const btn = $('#sendBtn');
   btn.disabled = true;
   btn.textContent = t('saving');
@@ -2514,7 +2624,7 @@ function openDayReport(i) {
 // (les remarques restent telles qu'écrites).
 function summaryReport(s) {
   const L = lang();
-  const p = buildPlan({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, lang: L });
+  const p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, lang: L });
   const st = new Map(s.items.map((i) => [i.id, i]));
   const line = (it, withTime = true) => {
     const x = st.get(it.id) || {};
@@ -2633,9 +2743,10 @@ function histCard(s, i) {
   const unchecked = Math.max(0, m.total - m.done - m.notdone);
   const all = m.total && m.done === m.total;
   const tags = [
+    s.open ? `<span class="tag now">${esc(t('inProgress'))}</span>` : '',
     m.flags ? `<span class="tag bad">⚑ ${esc(t('nFlags', m.flags))}${urgent ? ` · ${esc(t('nUrgent', urgent))}` : ''}</span>` : '',
     m.notdone ? `<span class="tag bad">${esc(t('nNotDone', m.notdone))}</span>` : '',
-    !all && unchecked ? `<span class="tag time">${esc(t('nUnchecked', unchecked))}</span>` : '',
+    !all && unchecked && !s.open ? `<span class="tag time">${esc(t('nUnchecked', unchecked))}</span>` : '',
     s.notes || s.items.some((x) => x.remark) ? `<span class="tag note">${esc(t('remarks'))}</span>` : '',
   ].join('');
   return `<button type="button" class="rp-card hi-card ${tone(m)}" data-hi="${i}" style="--k:${Math.min(i, 8)}">
@@ -2649,13 +2760,14 @@ function histCard(s, i) {
 
 // À venir : les quarts de l'horaire, semaine par semaine, sans fin.
 function upcomingList() {
-  const sc = mySchedule();
-  if (!sc || !Object.keys(sc).length) return `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('upEmpty'))}</p></div>`;
+  const sc = mySchedule() || {};
+  const mineSpecial = SPECIALS.some((x) => x.names?.includes(firstName(shiftName())));
+  if (!Object.keys(sc).length && !mineSpecial) return `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('upEmpty'))}</p></div>`;
   const today = todayISO();
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const rows = weekDates(hist.up).map((d) => {
-    const p = presetOf(sc[dowOf(d)]);
+    const p = specialFor(d) || presetOf(sc[dowOf(d)]);
     if (!p?.start || d < today) return '';
     if (d === today && (editableShift() || nowMin >= toMin(p.end))) return '';
     const left = Math.ceil((startAt({ date: d, start: p.start }) - Date.now()) / 6e4);
@@ -2885,8 +2997,7 @@ $('#poolStart').addEventListener('click', (e) => {
     if (state) { route(); return; } // quart en cours : retour aux tâches
     // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
     const nx = nextShift();
-    if (nx?.ready) { startScheduled(nx); return; }
-    if (nx) { openNextOverview(); return; } // trop tôt : l'aperçu, sans pouvoir cocher
+    if (nx) { startScheduled(nx); return; } // propriétaire : la vraie liste tout de suite, même avant l'heure
     openScheduleSheet({ first: true }); // pas encore d'horaire : on l'entre, une fois
   };
   if (reducedMotion()) { go(); return; }
@@ -3053,19 +3164,36 @@ function openNextOverview(pick) {
   if (!found) return;
   const nx = found;
   const live = Boolean(state) && state.date === nx.date && state.start === nx.start && state.end === nx.end; // le quart en cours
-  const p = buildPlan({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, lang: lang() });
+  const p = planOf({ shift: detectShift(nx.start, nx.end), date: nx.date, start: nx.start, end: nx.end, special: nx.special, lang: lang() });
   // Chaque tâche s'ouvre pour lire ses étapes et ses trucs (rien à cocher ici).
   const rows = p.items.filter((it) => it.kind === 'task' || it.kind === 'break').map((it) => (it.kind === 'task' && (it.steps?.length || it.summary)
     ? `<li class="task"><details><summary><span class="ov-row"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b>${CHEV_R}</span></summary><div class="ov-more">${it.summary ? `<p>${md(it.summary)}</p>` : ''}${it.steps?.length ? `<ol>${it.steps.map((x) => `<li>${md(x)}</li>`).join('')}</ol>` : ''}${tipsOf(it).length ? `<p class="ov-tips-h">${esc(t('tips'))}</p><ul>${tipsOf(it).map((x) => `<li>${md(x)}</li>`).join('')}</ul>` : ''}</div></details></li>`
     : `<li class="${it.kind}"><span class="num">${nb(f(it.start))}</span><b>${esc(it.title)}</b></li>`)).join('');
   openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('nbNext'))}</p><h2>${esc(dayWord(nx.date))}${nx.date > addDays(todayISO(), 1) ? ` ${nb(dateOf(nx.date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}` : ''} · ${nb(f(toMin(nx.start)))} – ${nb(f(toMin(nx.end)))}</h2></div>${live || nx.ready ? '' : `<p class="ov-note">${esc(t('ovFuture'))}</p>`}<ol class="ov-list">${rows}</ol>`, () => {
-    $('#ovGo').onclick = () => { closeSheet(); if (live) openChecklist(); else if (nx.ready && !state) startScheduled(nx); };
+    $('#ovGo').onclick = () => { closeSheet(); if (live) openChecklist(); else if (!state) startScheduled(nx); };
     $('#ovSim')?.addEventListener('click', () => confirmShiftSimulation(nx));
     $('#ovTime').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); }; // les heures se changent dans « Quand travailles-tu? »
-  }, `${isRealAdmin() ? `<button type="button" class="btn primary" id="ovSim">${t('simulationStart')}</button>` : ''}<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || (nx.ready && !state) ? '' : ' disabled'}>${live ? t('ovBack') : nx.ready ? t('ovStart') : esc(t('ovLocked', countdown(Math.ceil((startAt(nx) - Date.now()) / 6e4))))}</button>`);
+  }, `${isRealAdmin() ? `<button type="button" class="btn primary" id="ovSim">${t('simulationStart')}</button>` : ''}<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || !state ? '' : ' disabled'}>${live ? t('ovBack') : t('ovStart')}</button>`);
 }
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
-setInterval(() => { if (current === 'auth' && session.user && !document.hidden) paintFront(); }, 20000);
+setInterval(() => {
+  if (document.hidden || !session.user) return;
+  if (autoStart()) return;
+  if (current === 'auth') paintFront();
+}, 20000);
+// Propriétaire : le jour d'un quart à l'horaire, dès 10 min avant le début, le quart
+// s'installe tout seul (les bonnes heures, la liste prête). Rien à toucher.
+const AUTO_MIN = 10;
+function autoStart() {
+  if (state || !session.user || bossWatching() || prefs.simShift || prefs.simNew || isVisitor()) return false;
+  if (location.hash && location.hash !== '#') return false; // un lien précis (rapport, historique) passe d'abord
+  const nx = nextShift();
+  if (!nx || nx.date !== todayISO()) return false;
+  if (Date.now() < startAt(nx).getTime() - AUTO_MIN * 6e4) return false;
+  if (!['auth', 'setup', null].includes(current)) { startScheduled(nx, { quiet: true }); return true; } // ailleurs : prêt, la pastille y mène
+  startScheduled(nx);
+  return true;
+}
 
 // « Accueil » : retour à la page du plancher, toujours à portée de pouce.
 function goFront() {
@@ -3688,7 +3816,7 @@ function renderProblem(p) {
 const trendPlans = new Map();
 function trendPlan(s) {
   const k = `${s.date}|${s.shift}|${s.start}|${s.end}|${lang()}`;
-  if (!trendPlans.has(k)) trendPlans.set(k, buildPlan({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, lang: lang() }));
+  if (!trendPlans.has(k)) trendPlans.set(k, planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, lang: lang() }));
   return trendPlans.get(k);
 }
 function trendsPanel() {
@@ -3863,6 +3991,7 @@ function route() {
   if (location.hash === '#historique') return openHistory();
   dropStaleShift();
   if (state?.name && state?.date) return openChecklist();
+  if (autoStart()) return;
   if (session.user) return goFront(); // l'accueil (lapin, horaire) fait tout; la page « heures » sert aux heures spéciales
   return setupScreen();
 }
@@ -3910,7 +4039,7 @@ document.addEventListener('visibilitychange', () => document.body.classList.togg
 if (!/Firefox/.test(navigator.userAgent)) navigator.storage?.persist?.().catch(() => {});
 paintStatic();
 paintViewAs();
-initAuth(() => { route(); flushQueue(); refreshAlerts(); }); // le serveur a répondu autre chose que prévu
+initAuth(() => { route(); flushQueue(); refreshAlerts(); restoreDraft(); }); // le serveur a répondu autre chose que prévu
 if (isVisitor()) {
   let seen = false;
   try { seen = sessionStorage.getItem('visit-hello') === '1'; sessionStorage.setItem('visit-hello', '1'); } catch { /* ignore */ }
@@ -3921,7 +4050,7 @@ route();
 if (isRealAdmin() && prefs.simNew && !prefs.simNew.tourDone && !prefs.simShift) setTimeout(startTour, 450);
 
 // Un quart ou un signalement enregistré sans réseau part tout seul dès que le réseau revient.
-flushQueue();
+flushQueue().then(() => restoreDraft());
 if (session.user) refreshAlerts().then(retryLoose);
 window.addEventListener('online', () => {
   retryLoose();

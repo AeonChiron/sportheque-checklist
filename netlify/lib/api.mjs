@@ -277,7 +277,8 @@ export function createApi({ getStore, env }) {
     // (jour vu par le serveur, pas l'horloge du téléphone)
     const today = localDay(new Date());
     const oldDay = old && (old.savedOn || (old.submittedAt && localDay(old.submittedAt)));
-    if (oldDay && oldDay !== today) return json({ error: 'locked' }, 409);
+    // Un quart encore « en cours » (sauvegarde en chemin) peut toujours se continuer.
+    if (oldDay && oldDay !== today && !old.open) return json({ error: 'locked' }, 409);
     await store.setJSON(shift.date, mergeShift(list, { ...shift, savedOn: today }));
     return json({ ok: true });
   }
