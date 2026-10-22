@@ -7,6 +7,9 @@
 //   /api/board     connecté : GET ?recent=N | ?dates=… · POST un quart
 //   /api/problems  connecté : POST un signalement (+ photos)
 //                  superviseur : GET la liste · GET ?id= · GET ?photo= · POST { action: status }
+//   /api/push      connecté : GET l'état · POST { action: subscribe | unsubscribe | prefs | ntfy | test }
+//                  Notifications (web-push) : rappel 10 min avant son quart, problème urgent
+//                  pour les superviseurs. ntfy : une chaîne privée pour l'app gratuite ntfy.
 //
 // Les codes d'inscription viennent des variables d'environnement TEAM_CODE
 // (employés) et BOSS_CODE (superviseurs) : jamais dans le code du site.
@@ -14,7 +17,7 @@
 
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { sanitizeShift, mergeShift, parseDates } from '../../js/board-shape.js';
-import { sanitizeProblem, problemId, PROBLEM_ID, MAX_PROBLEM_PHOTOS } from '../../js/problem-shape.js';
+import { sanitizeProblem, problemId, PROBLEM_ID, MAX_PROBLEM_PHOTOS, CATEGORIES as CATEGORY_NAMES } from '../../js/problem-shape.js';
 import { CONFIG } from '../../js/config.js';
 
 const CORS = {
@@ -55,13 +58,28 @@ const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts:
 const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
 
 // getStore(name) → magasin compatible Netlify Blobs; env() → { TEAM_CODE, BOSS_CODE }.
-export function createApi({ getStore, env }) {
+// push.send(subscription, payload, vapid) : envoi web-push (remplacé dans les tests).
+// Les clés VAPID et la chaîne ntfy sont créées toutes seules au premier usage (rien à régler sur Netlify).
+const webPush = {
+  async keys() { const wp = (await import('web-push')).default; return wp.generateVAPIDKeys(); },
+  async send(sub, payload, vapid) {
+    const wp = (await import('web-push')).default;
+    return wp.sendNotification(sub, JSON.stringify(payload), { vapidDetails: { subject: 'mailto:thealchemicalseed@gmail.com', publicKey: vapid.publicKey, privateKey: vapid.privateKey }, TTL: 3600, urgency: payload.urgent ? 'high' : 'normal' });
+  },
+};
+const PUSH_TEXT = {
+  fr: { remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' } },
+  en: { remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' } },
+};
+
+export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => fetch(...a) }) {
   const users = () => getStore('users');
   const sessions = () => getStore('sessions');
   const board = () => getStore('board');
   const problems = () => getStore('problems');
   const photos = () => getStore('problem-photos');
   const settings = () => getStore('settings');
+  const pushes = () => getStore('push');
   // Les codes d'inscription : ceux que l'admin a changés dans l'app, sinon ceux de Netlify.
   async function codes() {
     const e = env();
@@ -369,6 +387,7 @@ export function createApi({ getStore, env }) {
       await cleanPhotos();
       const p = { ...clean, id, by: me.name, byEmail: me.email, photos: files.length, status: 'open', resolvedBy: '', resolvedAt: '' };
       await problems().setJSON(id, p);
+      if (p.urgent) { try { await notifyUrgent(p); } catch { /* l'envoi ne bloque jamais le signalement */ } }
       return json({ id });
     }
     if (!lead(me)) return json({ error: 'boss' }, 403);
@@ -390,13 +409,115 @@ export function createApi({ getStore, env }) {
     return json({ problems: list.filter(Boolean) });
   }
 
-  return async function handle(req) {
+  // ---------- Notifications ----------
+  async function vapid() {
+    let k = await settings().get('vapid', { type: 'json' });
+    if (!k?.publicKey) { k = await push.keys(); await settings().setJSON('vapid', { publicKey: k.publicKey, privateKey: k.privateKey }); }
+    return k;
+  }
+  async function ntfySettings(create = false) {
+    let n = (await settings().get('ntfy', { type: 'json' })) || null;
+    if (!n && create) { n = { topic: `sportheque-${randomBytes(9).toString('hex')}`, on: false }; await settings().setJSON('ntfy', n); }
+    return n;
+  }
+  const pushRecord = async (email) => (await pushes().get(email, { type: 'json' })) || { subs: [], remind: true, urgent: true, lang: 'fr' };
+  // Envoie à tous les appareils d'une personne; les abonnements expirés (404/410) sont retirés.
+  async function sendTo(email, make) {
+    const rec = await pushes().get(email, { type: 'json' });
+    if (!rec?.subs?.length) return 0;
+    const keys = await vapid();
+    const payload = make(PUSH_TEXT[rec.lang] || PUSH_TEXT.fr);
+    let sent = 0;
+    const keep = [];
+    for (const sub of rec.subs) {
+      try { await push.send(sub, payload, keys); sent += 1; keep.push(sub); } catch (e) { if (![404, 410].includes(e?.statusCode)) keep.push(sub); }
+    }
+    if (keep.length !== rec.subs.length) await pushes().setJSON(email, { ...rec, subs: keep });
+    return sent;
+  }
+  async function notifyUrgent(p) {
+    const { blobs } = await users().list();
+    const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
+    const cat = (lang) => (CATEGORY_NAMES[p.category]?.[lang]) || p.category || '';
+    for (const u of all.filter((u) => u && !u.removed && lead(u) && u.email !== p.byEmail)) {
+      const rec = await pushes().get(u.email, { type: 'json' });
+      if (rec && rec.urgent !== false) await sendTo(u.email, (T) => ({ ...T.urgent(cat(rec.lang || 'fr'), p.by), tag: `p-${p.id}`, url: './#patron', urgent: true }));
+    }
+    const n = await ntfySettings();
+    if (n?.on && n.topic) {
+      await fetchFn(`https://ntfy.sh/${n.topic}`, { method: 'POST', body: 'Ouvrez l’app pour voir le signalement.', headers: { Title: `Urgent : ${cat('fr')}`, Priority: 'high', Tags: 'warning', Click: 'https://aeonchiron.github.io/sportheque-checklist/#patron' } }).catch(() => {});
+    }
+  }
+  // Rappel 10 min avant le quart (fonction planifiée toutes les 5 min). Une fois par jour et par personne.
+  async function remindDue(now = new Date()) {
+    const day = localDay(now);
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
+    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
+    const nowMin = Number(parts.hour) * 60 + Number(parts.minute);
+    const { blobs } = await pushes().list();
+    let sent = 0;
+    for (const { key } of blobs) {
+      const rec = await pushes().get(key, { type: 'json' });
+      if (!rec?.subs?.length || rec.remind === false || rec.reminded === day) continue;
+      const u = await users().get(key, { type: 'json' });
+      const slot = u && !u.removed ? cleanSchedule(u.schedule)[String(wd)] : null;
+      if (!slot) continue;
+      const [h, m] = slot.start.split(':').map(Number);
+      const until = h * 60 + m - nowMin;
+      if (until < 1 || until > 12) continue;
+      await pushes().setJSON(key, { ...rec, reminded: day });
+      sent += await sendTo(key, (T) => ({ ...T.remind(slot.start), tag: `r-${day}`, url: './' }));
+    }
+    return sent;
+  }
+  async function pushApi(req, me) {
+    if (req.method === 'GET') {
+      const rec = await pushRecord(me.email);
+      const n = lead(me) ? await ntfySettings(true) : null;
+      return json({ key: (await vapid()).publicKey, devices: rec.subs.length, remind: rec.remind !== false, urgent: rec.urgent !== false, ntfy: n ? { topic: n.topic, on: n.on === true } : null });
+    }
+    const b = await body(req);
+    const rec = await pushRecord(me.email);
+    if (b.action === 'subscribe') {
+      const sub = b.sub;
+      if (!sub || typeof sub.endpoint !== 'string' || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) return json({ error: 'sub' }, 400);
+      const clean = { endpoint: sub.endpoint.slice(0, 600), keys: { p256dh: String(sub.keys.p256dh).slice(0, 200), auth: String(sub.keys.auth).slice(0, 100) } };
+      const subs = [clean, ...rec.subs.filter((x) => x.endpoint !== clean.endpoint)].slice(0, 5);
+      await pushes().setJSON(me.email, { ...rec, subs, lang: b.lang === 'en' ? 'en' : 'fr' });
+      return json({ ok: true, devices: subs.length });
+    }
+    if (b.action === 'unsubscribe') {
+      const subs = rec.subs.filter((x) => x.endpoint !== b.endpoint);
+      await pushes().setJSON(me.email, { ...rec, subs });
+      return json({ ok: true, devices: subs.length });
+    }
+    if (b.action === 'prefs') {
+      const next = { ...rec };
+      if (typeof b.remind === 'boolean') next.remind = b.remind;
+      if (typeof b.urgent === 'boolean') next.urgent = b.urgent;
+      if (b.lang) next.lang = b.lang === 'en' ? 'en' : 'fr';
+      await pushes().setJSON(me.email, next);
+      return json({ ok: true });
+    }
+    if (b.action === 'ntfy') {
+      if (!lead(me)) return json({ error: 'boss' }, 403);
+      const n = await ntfySettings(true);
+      const next = { ...n, on: b.on === true };
+      await settings().setJSON('ntfy', next);
+      if (b.on === true && b.test) await fetchFn(`https://ntfy.sh/${n.topic}`, { method: 'POST', body: 'Les alertes urgentes arriveront ici.', headers: { Title: 'Sporthèque : ça marche !', Tags: 'white_check_mark' } }).catch(() => {});
+      return json({ ok: true, ntfy: { topic: next.topic, on: next.on } });
+    }
+    if (b.action === 'test') return json({ sent: await sendTo(me.email, (T) => ({ ...T.test, tag: 'test' })) });
+    return json({ error: 'action' }, 400);
+  }
+
+  async function handle(req) {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (!['GET', 'POST'].includes(req.method)) return json({ error: 'method' }, 405);
     const route = new URL(req.url).pathname.replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'auth') return await auth(req);
-      const routes = { users: team, board: shifts, problems: reports, alerts: alertList };
+      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi };
       if (!routes[route]) return json({ error: 'route' }, 404);
       const me = await currentUser(req);
       if (!me) return json({ error: 'auth' }, 401);
@@ -404,7 +525,9 @@ export function createApi({ getStore, env }) {
     } catch (err) {
       return json({ error: err.message || 'server' }, err.status || 500);
     }
-  };
+  }
+  handle.remindDue = remindDue;
+  return handle;
 }
 
 // Magasin en mémoire (serveur local et tests), même interface que Netlify Blobs.

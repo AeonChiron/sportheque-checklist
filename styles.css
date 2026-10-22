@@ -2786,3 +2786,25 @@ body:has(#sheet:not([hidden])) .toast { top: calc(12px + env(safe-area-inset-top
 
 /* Pluie de confettis plein écran à « Fin du quart » (au-dessus de l'écran bleu). */
 .confetti-rain { position: fixed; inset: 0; z-index: 61; pointer-events: none; width: 100vw; height: 100vh; }
+
+/* Notifications */
+.notify-note { margin: 10px 0; padding: 12px 14px; border-radius: 14px; background: var(--sunk); color: var(--ink); font-size: 15px; line-height: 1.4; }
+.ntfy-box { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ntfy-box h3 { margin: 0 0 6px; font-size: 17px; }
+.ntfy-box p { margin: 0 0 10px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.ntfy-topic { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ntfy-topic code { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 10px 12px; border-radius: 12px; background: var(--sunk); font-size: 14px; }
+#nTest { width: 100%; margin-top: 10px; }
+.muted-line { margin: 0 0 12px; color: var(--muted); font-size: 15px; line-height: 1.4; }
+.text-link { display: inline-block; margin-top: 6px; color: var(--link); font-weight: 600; font-size: 15px; }
+
+/* Accessibilité (axe-core) : textes assez contrastés sur la carte « En cours » et l'étiquette « Maintenant ». */
+:root:not([data-theme="dark"]) .now-card[data-plate="g"] { --surface: #17703c; }
+:root:not([data-theme="dark"]) .now-card[data-plate="r"] { --surface: #c41f27; }
+:root:not([data-theme="dark"]) .now-card[data-plate]:not([data-plate="y"]):not([data-plate="w"]) { --muted: rgba(255, 255, 255, .93); }
+:root[data-theme="dark"] .tag.now { color: #062322; }
+:root:not([data-theme="dark"]) .now-card[data-plate="g"] { --brand-ink: #17703c; }
+:root:not([data-theme="dark"]) .now-card[data-plate="r"] { --brand-ink: #c41f27; }
+/* « Voir les étapes » de la tâche en cours, en sombre : pas de pastille grise délavée. */
+:root[data-theme="dark"] .task.current .t-more { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+:root[data-theme="dark"] .t-time small { color: #a3b1b2; }

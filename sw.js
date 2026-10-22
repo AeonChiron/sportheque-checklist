@@ -1,28 +1,103 @@
-// Garde l'app utilisable sans réseau (sous-sol, Wi-Fi faible).
-// Réseau d'abord, cache en secours; l'API n'est jamais mise en cache.
-const CACHE = 'quart-gym-v117';
-const SHELL = ['./', 'index.html', 'styles.css', 'manifest.webmanifest', 'icons/icon.svg',
-  'js/app.js', 'js/config.js', 'js/manual.js', 'js/planner.js', 'js/report.js', 'js/photos.js', 'js/i18n.js', 'js/illustrations.js', 'js/board.js', 'js/board-shape.js', 'js/auth.js', 'js/problems.js', 'js/problem-shape.js', 'js/pool.js', 'js/fx.js', 'js/clock.js', 'js/avatars.js', 'icons/avatars/lapin.webp', 'icons/avatars/salut.webp', 'icons/avatars/coucou.webp', 'icons/avatars/ours.webp', 'icons/avatars/renard.webp', 'icons/avatars/chat.webp', 'icons/avatars/faon.webp', 'icons/avatars/souris.webp', 'icons/rabbit.svg', 'icons/rabbit-hello.svg', 'icons/rabbit-cheer.svg', 'icons/rabbit-rest.svg', 'js/gym3d.js', 'js/floor-layout.js', 'fonts/fraunces-latin-full-normal.woff2', 'fonts/saira-semi-condensed-latin-300-normal.woff2', 'fonts/saira-semi-condensed-latin-500-normal.woff2', 'fonts/saira-semi-condensed-latin-600-normal.woff2', 'fonts/saira-semi-condensed-latin-700-normal.woff2', 'icons/logo-sportheque.png', 'icons/logo-sportheque-dark.png', 'icons/mark-sportheque.png', 'icons/mark-sportheque-dark.png'];
+// Garde l'app utilisable sans réseau (sous-sol, Wi-Fi faible), avec Workbox (Google).
+// - Chaque fichier de l'app est gardé avec une empreinte : quand un fichier change, seul lui
+//   est retéléchargé. Plus besoin de changer un numéro de version à la main.
+// - En ligne : toujours la dernière version (réseau d'abord, 4 s max sur un Wi-Fi faible).
+// - Hors ligne : la copie gardée. L'API n'est jamais mise en cache.
+// - Les notifications (rappel de quart, problème urgent) arrivent ici.
+// Ce fichier est généré : modifier sw.src.js puis lancer `npm run sw`.
+import { precache, matchPrecache, cleanupOutdatedCaches } from './vendor/workbox/workbox-precaching/index.js';
+import { registerRoute } from './vendor/workbox/workbox-routing/index.js';
+import { NetworkFirst } from './vendor/workbox/workbox-strategies/index.js';
+import { clientsClaim } from './vendor/workbox/workbox-core/index.js';
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
-});
+const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a1814381455"},
+  {"url":"fonts/saira-semi-condensed-latin-300-normal.woff2","revision":"c293d511bde1"},
+  {"url":"fonts/saira-semi-condensed-latin-500-normal.woff2","revision":"a676f503a804"},
+  {"url":"fonts/saira-semi-condensed-latin-600-normal.woff2","revision":"16d5d3eec1fe"},
+  {"url":"fonts/saira-semi-condensed-latin-700-normal.woff2","revision":"ef86dd42eb0e"},
+  {"url":"icons/avatars/chat.webp","revision":"c9f64268fd1e"},
+  {"url":"icons/avatars/coucou.webp","revision":"fb4dc98550f1"},
+  {"url":"icons/avatars/faon.webp","revision":"8161bbb65108"},
+  {"url":"icons/avatars/lapin.webp","revision":"1eab356a4c82"},
+  {"url":"icons/avatars/ours.webp","revision":"0d24e673d22c"},
+  {"url":"icons/avatars/renard.webp","revision":"83bdd9340aa2"},
+  {"url":"icons/avatars/salut.webp","revision":"df0dabd8798f"},
+  {"url":"icons/avatars/souris.webp","revision":"ef1c91717a5d"},
+  {"url":"icons/icon-180.png","revision":"efe899ddbedb"},
+  {"url":"icons/icon.svg","revision":"d8aec5620b10"},
+  {"url":"icons/logo-sportheque-dark.png","revision":"96c2ab6cec3f"},
+  {"url":"icons/logo-sportheque.png","revision":"552c69e69e2f"},
+  {"url":"icons/mark-sportheque-dark.png","revision":"a350d6431778"},
+  {"url":"icons/mark-sportheque.png","revision":"5a977fa0a637"},
+  {"url":"icons/rabbit-cheer.svg","revision":"995e8afb46a3"},
+  {"url":"icons/rabbit-hello.svg","revision":"56f2df52dd73"},
+  {"url":"icons/rabbit-rest.svg","revision":"38b94e634be1"},
+  {"url":"icons/rabbit.svg","revision":"e23c8e5bcb2a"},
+  {"url":"index.html","revision":"56445c6a56e0"},
+  {"url":"js/app.js","revision":"e5cc41bfe2d4"},
+  {"url":"js/auth.js","revision":"dd3c62e3425e"},
+  {"url":"js/avatars.js","revision":"6a1e3a290665"},
+  {"url":"js/board-shape.js","revision":"d01e5fa03465"},
+  {"url":"js/board.js","revision":"9f5d8215334d"},
+  {"url":"js/boot.js","revision":"b6b051714bfc"},
+  {"url":"js/clock.js","revision":"bc0be64ddbfb"},
+  {"url":"js/config.js","revision":"e39e0696a4e3"},
+  {"url":"js/floor-layout.js","revision":"929d6d428978"},
+  {"url":"js/fx.js","revision":"91f7f4b4f40d"},
+  {"url":"js/gym3d.js","revision":"613145263544"},
+  {"url":"js/i18n.js","revision":"6e18cfbb301a"},
+  {"url":"js/illustrations.js","revision":"c6c8e281c2b5"},
+  {"url":"js/keep.js","revision":"7c020b6864e5"},
+  {"url":"js/manual.js","revision":"af0d644cfa96"},
+  {"url":"js/photos.js","revision":"634bb13011cd"},
+  {"url":"js/planner.js","revision":"68c80c173558"},
+  {"url":"js/pool.js","revision":"b2628438f5a8"},
+  {"url":"js/problem-shape.js","revision":"f77b5beed108"},
+  {"url":"js/problems.js","revision":"47b4ccb97899"},
+  {"url":"js/report.js","revision":"b5505237f28a"},
+  {"url":"manifest.webmanifest","revision":"d46c08bd92fd"},
+  {"url":"styles.css","revision":"fd26d238bbb6"},
+  {"url":"vendor/auto-animate/index.js","revision":"ff3ed293e583"},
+  {"url":"vendor/idb-keyval/index.js","revision":"e167d80cbf99"},
+  {"url":"vendor/ios-haptics/index.js","revision":"086cbbd279e7"},
+  {"url":"vendor/ios-haptics/utils.js","revision":"1de691d2d4a9"},
+  {"url":"vendor/qrcode.js","revision":"639921a3f950"},
+  {"url":"vendor/three.module.min.js","revision":"4d8e72afd963"}];
 
+self.skipWaiting();
+clientsClaim();
+precache(MANIFEST);
+cleanupOutdatedCaches();
+
+// Les anciennes caches faites à la main (quart-gym-v117 et avant) partent.
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-    .then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('quart-gym-')).map((k) => caches.delete(k)))));
 });
 
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
-  e.respondWith(
-    // no-cache : toujours demander la dernière version (GitHub dit « garde 10 min », on ne l'écoute pas).
-    fetch(e.request, { cache: 'no-cache' })
-      .then((res) => {
-        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
-        return res;
-      })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('index.html'))),
-  );
+const offline = {
+  // Pas de réseau : la copie gardée du fichier, sinon la page d'accueil.
+  handlerDidError: async ({ request }) => (await matchPrecache(request.url)) || (request.mode === 'navigate' ? matchPrecache('index.html') : undefined),
+};
+registerRoute(
+  ({ request, url }) => request.method === 'GET' && url.origin === self.location.origin && !url.pathname.includes('/api/'),
+  new NetworkFirst({ cacheName: 'quart-runtime', networkTimeoutSeconds: 4, fetchOptions: { cache: 'no-cache' }, plugins: [offline] }),
+);
+
+// ---------- Notifications ----------
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data?.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Sporthèque', {
+    body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag),
+    icon: 'icons/icon-180.png', badge: 'icons/icon-180.png', data: { url: d.url || './' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = new URL(e.notification.data?.url || './', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const open = list.find((c) => c.url.startsWith(self.registration.scope));
+    if (open) { open.navigate?.(target).catch(() => {}); return open.focus(); }
+    return self.clients.openWindow(target);
+  }));
 });

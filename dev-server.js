@@ -10,8 +10,19 @@ import { createApi, memoryStores } from './netlify/lib/api.mjs';
 
 // La même API que sur Netlify, avec un stockage en mémoire. Codes d'essai :
 // TEAM_CODE=equipe, BOSS_CODE=patron (modifiables par variables d'environnement).
+// Notifications en local : vraies clés VAPID (format), envoi simplement affiché dans le terminal.
+const devPush = {
+  async keys() {
+    const { createECDH } = await import('node:crypto');
+    const e = createECDH('prime256v1'); e.generateKeys();
+    return { publicKey: e.getPublicKey().toString('base64url'), privateKey: e.getPrivateKey().toString('base64url') };
+  },
+  async send(sub, payload) { console.log('[push]', sub.endpoint.slice(0, 50), payload.title); },
+};
 const api = createApi({
   getStore: memoryStores(),
+  push: devPush,
+  fetchFn: async (url, opt) => { console.log('[ntfy]', url, opt?.headers?.Title); return new Response('ok'); },
   env: () => ({ TEAM_CODE: process.env.TEAM_CODE || 'equipe', BOSS_CODE: process.env.BOSS_CODE || 'patron', ADMIN_CODE: process.env.ADMIN_CODE || 'admin-test' }),
 });
 

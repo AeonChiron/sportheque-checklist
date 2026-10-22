@@ -8,6 +8,8 @@ import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
 import { mountGlass, playFinish, fxSound, clickTap } from './fx.js';
+import { hapticTrigger } from '../vendor/ios-haptics/index.js';
+import autoAnimate from '../vendor/auto-animate/index.js';
 import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
@@ -1095,7 +1097,7 @@ function taskRow(it, { extra = false } = {}) {
 
 function breakRow(it) {
   if (it.kind === 'slack') {
-    return `<li class="break slack"><span class="ico num">${f(it.start)}</span><span><b>${esc(it.title)}</b><br><small>${esc(it.summary)}</small></span><span class="t num">${it.minutes} min</span></li>`;
+    return `<li class="break slack" data-key="b-${it.start}"><span class="ico num">${f(it.start)}</span><span><b>${esc(it.title)}</b><br><small>${esc(it.summary)}</small></span><span class="t num">${it.minutes} min</span></li>`;
   }
   const sub = it.kind === 'meal' ? t('unpaidMeal') : t('paidBreak');
   const rem = (it.reminders || []).map((r) => `<br><small>${f(r.at)} · ${esc(r.label)}</small>`).join('');
@@ -1268,21 +1270,58 @@ function renderChecklist() {
     for (const it of tasks) (groups[it.area] ||= []).push(it);
     for (const k of Object.keys(groups).sort((a, b) => AREAS[a].order - AREAS[b].order)) {
       const label = k === 'zone' ? `${AREAS.zone[lang()]} — zone ${d.zones[plan.shift]}` : AREAS[k][lang()];
-      html += `<li class="group-title">${esc(label)}</li>${groups[k].map((it) => taskRow(it)).join('')}`;
+      html += `<li class="group-title" data-key="g-${esc(k)}">${esc(label)}</li>${groups[k].map((it) => taskRow(it)).join('')}`;
     }
   } else {
     html = plan.items.map((it) => (it.kind === 'task' ? taskRow(it) : breakRow(it))).join('');
   }
-  $('#taskList').innerHTML = html;
+  morph($('#taskList'), html); // les lignes gardent leur place : AutoAnimate fait glisser ce qui bouge
 
   // Les tâches qui n'entrent pas dans les heures : on ne les montre plus (demande de l'équipe).
   $('#overflowBlock').innerHTML = '';
 
-  $('#flagsBlock').innerHTML = state.flags.length
-    ? `<div class="section-head"><h2>${t('flags')}</h2><span class="num">${state.flags.length}</span></div>
-       ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}">${catIcon(fl.category)}<div><b>${esc(catName(fl.category))}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${fl.text ? `${esc(fl.text)}<br>` : ''}<small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
-    : '';
+  morph($('#flagsBlock'), state.flags.length
+    ? `<div class="section-head" data-key="fh"><h2>${t('flags')}</h2><span class="num">${state.flags.length}</span></div>
+       ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}" data-key="f-${esc(fl.at)}-${i}">${catIcon(fl.category)}<div><b>${esc(catName(fl.category))}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${fl.text ? `${esc(fl.text)}<br>` : ''}<small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
+    : '');
 }
+
+// Met à jour une liste sans tout recréer : chaque ligne (data-id / data-key) garde son
+// élément, seules les différences changent. AutoAnimate peut alors faire glisser les
+// lignes qui changent de place, apparaissent ou disparaissent.
+function morph(parent, html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const keyOf = (el) => el.dataset?.key || el.dataset?.id || '';
+  const old = new Map();
+  for (const c of parent.children) { const k = keyOf(c); if (k && !old.has(k)) old.set(k, c); }
+  const next = [...tpl.content.children].map((n) => {
+    const k = keyOf(n);
+    const o = k && old.get(k);
+    if (!o || o.tagName !== n.tagName) return n;
+    old.delete(k);
+    for (const a of [...o.attributes]) if (!n.hasAttribute(a.name)) o.removeAttribute(a.name);
+    for (const a of [...n.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
+    if (o.innerHTML !== n.innerHTML) o.innerHTML = n.innerHTML;
+    return o;
+  });
+  next.forEach((n, i) => { if (parent.children[i] !== n) parent.insertBefore(n, parent.children[i] || null); });
+  while (parent.children.length > next.length) parent.lastElementChild.remove();
+}
+for (const sel of ['#taskList', '#flagsBlock']) { const el = $(sel); if (el) autoAnimate(el, { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' }); }
+
+// iPhone : une vraie vibration (Taptic Engine) sous le doigt, avec ios-haptics.
+// Safari n'a pas navigator.vibrate; la bibliothèque passe par l'interrupteur natif (iOS 17.4+).
+const HAPTIC = '.check, #finishBtn, #flagBtn, #momentClose, .acts [data-act], .pool-cta, .switch, .segmented button';
+function haptics(root = document) {
+  if (prefs.haptics === false) return;
+  for (const el of root.querySelectorAll(HAPTIC)) { try { hapticTrigger(el); } catch { /* ignore */ } }
+}
+let hapticQueued = false;
+const onIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (onIOS) new MutationObserver(() => { if (hapticQueued) return; hapticQueued = true; requestAnimationFrame(() => { hapticQueued = false; haptics(); }); })
+  .observe(document.body, { childList: true, subtree: true });
+if (onIOS) haptics();
 
 // Un quart pas encore commencé (plus de 30 min avant) : on le voit, on coche rien.
 function shiftLocked() {
@@ -2039,6 +2078,70 @@ async function sendFlagEmail(fl, s) {
 // Tout ce qui sert moins souvent, en mots clairs (pas d'icône à deviner).
 const switchRow = (id, label, on) => `<div class="inline-choice"><span id="${id}-label">${esc(label)}</span>
   <button type="button" class="switch" role="switch" id="${id}" aria-checked="${on}" aria-labelledby="${id}-label"><i></i></button></div>`;
+// ---------- Notifications (web-push + ntfy) ----------
+// Rappel 10 min avant son quart; problème urgent pour les superviseurs. Rien d'autre :
+// jamais de notification pour surveiller quelqu'un (propriétaire : aider, pas surveiller).
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const b64u = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4); const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
+async function deviceSub() { try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch { return null; } }
+async function turnPushOn(key) {
+  const perm = await Notification.requestPermission(); // doit suivre un toucher (iPhone)
+  if (perm !== 'granted') throw Object.assign(new Error('denied'), { code: 'denied' });
+  const reg = await navigator.serviceWorker.ready;
+  const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) });
+  await request('push', { method: 'POST', body: { action: 'subscribe', sub: sub.toJSON(), lang: lang() } });
+  return sub;
+}
+async function openNotify() {
+  const lead = isBoss() || isRealAdmin();
+  const needsHome = isIOS() && !standalone();
+  let info = null;
+  try { info = await request('push'); } catch { info = null; }
+  const sub = pushSupported() && !needsHome ? await deviceSub() : null;
+  const on = Boolean(sub) && Notification.permission === 'granted';
+  const blocked = pushSupported() && Notification.permission === 'denied';
+  openSheet(`
+    <div class="sheet-head"><h2>${t('notifyTitle')}</h2></div>
+    <p class="muted-line">${esc(t('notifyIntro'))}</p>
+    ${!info ? `<p class="notify-note">${esc(t('notifyServer'))}</p>`
+    : needsHome ? `<div class="notify-note"><b>${esc(t('notifyHomeTitle'))}</b><br>${esc(t('notifyHome'))}</div>`
+    : !pushSupported() ? `<p class="notify-note">${esc(t('notifyNoSupport'))}</p>`
+    : `<div class="menu-group">
+        ${switchRow('nDevice', t('notifyDevice'), on)}
+        ${switchRow('nRemind', t('notifyRemind'), info.remind)}
+        ${lead ? switchRow('nUrgent', t('notifyUrgent'), info.urgent) : ''}
+      </div>
+      ${blocked ? `<p class="notify-note">${esc(t('notifyBlocked'))}</p>` : ''}
+      <button class="btn ghost" id="nTest" ${on ? '' : 'disabled'}>${t('notifyTest')}</button>`}
+    ${info?.ntfy ? `<div class="ntfy-box">
+      <h3>${esc(t('ntfyTitle'))}</h3>
+      <p>${esc(t('ntfyHow'))}</p>
+      <div class="ntfy-topic"><code id="ntfyTopic">${esc(info.ntfy.topic)}</code><button class="btn ghost small" id="ntfyCopy">${t('copy')}</button></div>
+      <div class="menu-group">${switchRow('nNtfy', t('ntfySwitch'), info.ntfy.on)}</div>
+      <a class="text-link" href="https://ntfy.sh/${encodeURIComponent(info.ntfy.topic)}" target="_blank" rel="noopener">${esc(t('ntfyOpen'))}</a>
+    </div>` : ''}
+  `, (root) => {
+    const flip = (el, v) => el.setAttribute('aria-checked', String(v));
+    const dev = root.querySelector('#nDevice');
+    if (dev) dev.onclick = async () => {
+      const want = dev.getAttribute('aria-checked') !== 'true';
+      dev.disabled = true;
+      try {
+        if (want) { await turnPushOn(info.key); flip(dev, true); root.querySelector('#nTest').disabled = false; toast(t('notifyOnToast'), 'ok'); }
+        else { const s0 = await deviceSub(); if (s0) { await request('push', { method: 'POST', body: { action: 'unsubscribe', endpoint: s0.endpoint } }).catch(() => {}); await s0.unsubscribe(); } flip(dev, false); root.querySelector('#nTest').disabled = true; }
+      } catch (e) { toast(e.code === 'denied' ? t('notifyBlocked') : t('notifyFail'), 'muted'); sfx('error'); }
+      dev.disabled = false;
+    };
+    const pref = (id, key) => { const el = root.querySelector(id); if (el) el.onclick = async () => { const v = el.getAttribute('aria-checked') !== 'true'; flip(el, v); sfx('tap'); try { await request('push', { method: 'POST', body: { action: 'prefs', [key]: v, lang: lang() } }); } catch { flip(el, !v); toast(t('notifyFail'), 'muted'); } }; };
+    pref('#nRemind', 'remind');
+    pref('#nUrgent', 'urgent');
+    root.querySelector('#nTest')?.addEventListener('click', async () => { try { const r = await request('push', { method: 'POST', body: { action: 'test' } }); toast(r.sent ? t('notifySentTest') : t('notifyFail'), r.sent ? 'ok' : 'muted'); } catch { toast(t('notifyFail'), 'muted'); } });
+    const nt = root.querySelector('#nNtfy');
+    if (nt) nt.onclick = async () => { const v = nt.getAttribute('aria-checked') !== 'true'; flip(nt, v); try { await request('push', { method: 'POST', body: { action: 'ntfy', on: v, test: v } }); if (v) toast(t('ntfyOnToast'), 'ok'); } catch { flip(nt, !v); toast(t('notifyFail'), 'muted'); } };
+    root.querySelector('#ntfyCopy')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(info.ntfy.topic); toast(t('copied'), 'ok'); } catch { /* ignore */ } });
+  });
+}
 // ---------- Réglages : un seul endroit, la roue dentée, sur chaque écran ----------
 $('#menuBtn').addEventListener('click', () => openSettings());
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-settings]')) openSettings(); });
@@ -2071,6 +2174,7 @@ function openSettings() {
     </div>
     <div class="menu-list">
       ${signed ? `<button class="btn ghost menu-item" id="mAccount"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>${t('account')}</button>` : ''}
+      ${signed ? `<button class="btn ghost menu-item" id="mNotify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>${t('notifyTitle')}</button>` : ''}
       ${signed && !bossWatching() ? `<button class="btn ghost menu-item" id="mEdit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>${t('editHours')}</button>` : ''}
       <button class="btn ghost menu-item" id="mProto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h4"/></svg>${t('protocolMenu')}</button>
       ${isRealAdmin() ? `<button class="btn ghost menu-item" id="mView"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>${t('viewAsTitle')}</button>` : ''}
@@ -2110,6 +2214,7 @@ function openSettings() {
     root.querySelector('#mProto').onclick = () => { closeSheet(); goProtocol(); };
     root.querySelector('#mEdit')?.addEventListener('click', () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); });
     root.querySelector('#mAccount')?.addEventListener('click', () => { closeSheet(); setTimeout(openAccount, 340); });
+    root.querySelector('#mNotify')?.addEventListener('click', () => { closeSheet(); setTimeout(openNotify, 340); });
     root.querySelector('#mView')?.addEventListener('click', () => { closeSheet(); setTimeout(openViewMenu, 340); });
     root.querySelector('#mRestart')?.addEventListener('click', () => { closeSheet(); setTimeout(() => $('#restartBtn').click(), 340); });
     const reset = root.querySelector('#mReset');
@@ -4600,8 +4705,9 @@ window.addEventListener('online', () => {
 });
 
 // Hors ligne (si le service worker est disponible).
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && isSecureContext) {
+  // Workbox (module ES) : iPhone/iPad Safari 15+, Chrome, Edge.
+  navigator.serviceWorker.register('sw.js', { type: 'module' }).catch(() => {});
   // Une nouvelle version vient de s'installer : on recharge une fois (le quart en cours est déjà enregistré).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloaded = false;

@@ -249,3 +249,48 @@ test('Pas de surveillance : un quart en cours est caché aux autres, et l’heur
   assert.equal(seen[0].items[0].doneAt, undefined);
   assert.equal((await stores('board').get('2026-10-22', { type: 'json' }))[0].items[0].doneAt, undefined); // et rien n'est gardé
 });
+
+test('sw.js est à jour (empreintes Workbox) : lancer `npm run sw` après un changement', async () => {
+  const { build } = await import('../scripts/sw-manifest.mjs');
+  const { readFileSync } = await import('node:fs');
+  assert.equal(readFileSync(new URL('../sw.js', import.meta.url), 'utf8'), build());
+});
+
+test('Notifications : rappel 10 min avant le quart, alerte urgente aux superviseurs, ntfy sans nom', async () => {
+  const stores = memoryStores();
+  const sent = [];
+  const posts = [];
+  const push = {
+    async keys() { return { publicKey: 'PUB', privateKey: 'PRIV' }; },
+    async send(sub, payload) { if (sub.endpoint.includes('gone')) throw Object.assign(new Error('gone'), { statusCode: 410 }); sent.push({ to: sub.endpoint, ...payload }); },
+  };
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }), push, fetchFn: async (url, opt) => { posts.push({ url, ...opt }); return new Response('ok'); } });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const emp = (await go('auth', { action: 'signup', name: 'Noah', email: 'n@x.ca', password: 'secret1', code: 'e' })).data.token;
+  const boss = (await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' })).data.token;
+  const sub = (e) => ({ endpoint: `https://push.example/${e}`, keys: { p256dh: 'k', auth: 'a' } });
+  assert.equal((await go('push', null, emp)).data.key, 'PUB');
+  assert.equal((await go('push', null, emp)).data.ntfy, null); // ntfy : superviseurs seulement
+  await go('push', { action: 'subscribe', sub: sub('noah'), lang: 'en' }, emp);
+  await go('push', { action: 'subscribe', sub: sub('daniel') }, boss);
+  await go('push', { action: 'subscribe', sub: sub('gone') }, boss);
+  // Horaire de Noah : jeudi (3) 18:00
+  const u = await stores('users').get('n@x.ca', { type: 'json' });
+  await stores('users').setJSON('n@x.ca', { ...u, schedule: { 3: { start: '18:00', end: '23:00' } } });
+  assert.equal(await a.remindDue(new Date('2026-10-22T17:30:00-04:00')), 0); // trop tôt
+  assert.equal(await a.remindDue(new Date('2026-10-22T17:50:00-04:00')), 1); // 10 min avant
+  assert.equal(await a.remindDue(new Date('2026-10-22T17:55:00-04:00')), 0); // une seule fois
+  assert.match(sent[0].title, /shift starts soon/);
+  // Problème urgent : Daniel reçoit, l'abonnement expiré est retiré, ntfy seulement si activé
+  const n = (await go('push', { action: 'ntfy', on: true }, boss)).data.ntfy;
+  assert.match(n.topic, /^sportheque-[a-f0-9]{18}$/);
+  await go('problems', { category: 'blessure', urgent: true, text: 'Noah s’est coupé', photos: [] }, emp);
+  const toDaniel = sent.filter((s) => s.to.endsWith('daniel'));
+  assert.equal(toDaniel.length, 1);
+  assert.match(toDaniel[0].title, /Urgent/);
+  assert.equal((await stores('push').get('d@x.ca', { type: 'json' })).subs.length, 1);
+  assert.equal(posts.length, 1);
+  assert.ok(!JSON.stringify(posts[0]).includes('Noah')); // ntfy.sh est public : ni nom ni texte
+  await go('problems', { category: 'materiel', urgent: false, text: '', photos: [] }, emp);
+  assert.equal(posts.length, 1); // pas urgent : rien
+});

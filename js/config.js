@@ -88,6 +88,9 @@ export const CONFIG = {
   // Codes d'inscription : variables TEAM_CODE et BOSS_CODE dans Netlify.
   // Sur la copie GitHub Pages, on parle au serveur Netlify (mêmes comptes,
   // même historique) : la copie GitHub se met à jour gratuitement.
+  // Rapports de plantage (Sentry, gratuit) : coller ici le « DSN » du projet Sentry.
+  // Vide = désactivé. Ne contient ni nom, ni courriel, ni heure de case (voir js/boot.js).
+  sentryDsn: '',
   api: globalThis.location?.hostname?.endsWith('github.io') ? 'https://sportheque-checklist.netlify.app/api' : '/api',
 
   // Démo : aucun courriel n'est envoyé.
