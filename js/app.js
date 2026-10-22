@@ -2939,7 +2939,7 @@ function dashUpcoming(skip) {
   const rows = list.map((p) => {
     const left = Math.ceil((startAt(p) - Date.now()) / 6e4);
     const first = p.date === skip;
-    return `<button type="button" class="d-shift${first ? ' is-next' : ''}" data-up="${p.date}">${dDate(p.date)}<span class="d-st"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc([first ? t('nbNext') : '',p.date === todayISO() || p.date === addDays(todayISO(), 1) ? cap(dayWord(p.date)) : '', SHIFTS[detectShift(p.start, p.end)][lang()].short].filter(Boolean).join(' · '))}</small></span><span class="d-left num">${esc(left > 0 ? countdown(left) : t('nbGo'))}</span>${CHEV_R}</button>`;
+    return `<button type="button" class="d-shift${first ? ' is-next' : ''}" data-up="${p.date}">${dDate(p.date)}<span class="d-st"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc(first ? t('nbNext') : p.date === todayISO() || p.date === addDays(todayISO(), 1) ? cap(dayWord(p.date)) : SHIFTS[detectShift(p.start, p.end)][lang()].short)}</small></span><span class="d-left num">${esc(left > 0 ? countdown(left) : t('nbGo'))}</span>${CHEV_R}</button>`;
   }).join('');
   return `<section class="d-card d-up" aria-labelledby="dUpH"><div class="d-head"><h2 id="dUpH">${esc(t('upcoming'))}</h2></div>
     ${rows || `<p class="d-none">${esc(t(mySchedule() && Object.keys(mySchedule()).length ? 'upNoneSoon' : 'upEmpty'))}</p>`}</section>`;
