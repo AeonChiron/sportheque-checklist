@@ -2934,6 +2934,53 @@ function dashStats() {
     <div class="d-stat"><p class="ds-label mo">${esc(t('dsMonth'))}</p><p class="ds-num num">${wait || pct === null ? '–' : `${pct}<small>%</small>`}</p><p class="ds-sub">${esc(t('dsMonthSub'))}</p></div>
   </div>`;
 }
+// Le bas du tableau de bord (propriétaire : « plus ergonomique ») : de grandes rangées à toucher,
+// sans flèches de semaine. À venir : les prochains quarts de l'horaire. Derniers quarts : les 3
+// derniers enregistrés, « Tout voir » ouvre la liste complète.
+const dDate = (d) => `<span class="d-date" aria-hidden="true"><small>${esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'short' }).replace('.', '')))}</small><b class="num">${dateOf(d).getDate()}</b></span>`;
+function upcomingShifts(skip, n = 4) {
+  const sc = mySchedule() || {};
+  const today = todayISO();
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const out = [];
+  for (let i = 0; i < 28 && out.length < n; i++) {
+    const d = addDays(today, i);
+    const p = specialFor(d) || presetOf(sc[dowOf(d)]);
+    if (!p?.start || d === skip) continue;
+    if (d === today && (editableShift() || nowMin >= toMin(p.end))) continue;
+    out.push({ ...p, date: d });
+  }
+  return out;
+}
+function dashUpcoming(skip) {
+  const list = upcomingShifts(skip);
+  const rows = list.map((p) => {
+    const left = Math.ceil((startAt(p) - Date.now()) / 6e4);
+    return `<button type="button" class="d-shift" data-up="${p.date}">${dDate(p.date)}<span class="d-st"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc([p.date === todayISO() || p.date === addDays(todayISO(), 1) ? cap(dayWord(p.date)) : '', SHIFTS[detectShift(p.start, p.end)][lang()].short].filter(Boolean).join(' · '))}</small></span><span class="d-left num">${esc(left > 0 ? countdown(left) : t('nbGo'))}</span>${CHEV_R}</button>`;
+  }).join('');
+  return `<section class="d-card d-up" aria-labelledby="dUpH"><div class="d-head"><h2 id="dUpH">${esc(t('upcoming'))}</h2></div>
+    ${rows || `<p class="d-none">${esc(t(mySchedule() && Object.keys(mySchedule()).length ? 'upNoneSoon' : 'upEmpty'))}</p>`}</section>`;
+}
+function dashRecent() {
+  const mine = myDoneShifts().sort((a, b) => b.date.localeCompare(a.date) || (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  hist.view = mine;
+  const row = (x, i) => { const m = metrics(x); const all = m.total && m.done === m.total; return `<button type="button" class="d-shift" data-hi="${i}">${dDate(x.date)}<span class="d-st"><b class="num">${x.start ? `${nb(hhmm(x.start))} – ${nb(hhmm(x.end))}` : esc(SHIFTS[x.shift][lang()].short)}</b><small>${esc(SHIFTS[x.shift][lang()].short)}</small></span><span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>${CHEV_R}</button>`; };
+  const body = !hist.loaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>' : mine.length ? mine.slice(0, 3).map(row).join('') : `<p class="d-none">${esc(t('histEmpty'))}</p>`;
+  return `<section class="d-card d-past" aria-labelledby="dPastH"><div class="d-head"><h2 id="dPastH">${esc(t('dashRecent'))}</h2>${mine.length > 3 ? `<button type="button" class="link" data-allpast>${esc(t('seeAll'))}</button>` : ''}</div>${body}</section>`;
+}
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('[data-allpast]')) return;
+  const mine = hist.view;
+  openSheet(`<div class="sheet-head"><h2>${esc(t('dashRecent'))}</h2></div><div class="d-sheetlist">${mine.map((x, i) => { const m = metrics(x); const all = m.total && m.done === m.total; return `<button type="button" class="d-shift" data-pastone="${i}">${dDate(x.date)}<span class="d-st"><b class="num">${x.start ? `${nb(hhmm(x.start))} – ${nb(hhmm(x.end))}` : ''}</b><small>${esc(dateOf(x.date).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }))}</small></span><span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>${CHEV_R}</button>`; }).join('')}</div>`, (root) => {
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-pastone]');
+      if (!b) return;
+      closeSheet();
+      openReview(summaryReport(mine[Number(b.dataset.pastone)]), { from: 'history' });
+    });
+  }, `<button type="button" class="btn primary" data-close-sheet>${esc(t('close'))}</button>`);
+});
+
 // La semaine en cours : une colonne par jour, l'heure du début, un crochet quand c'est fait.
 function dashWeek() {
   const today = todayISO(), mon = mondayOf(today);
@@ -3092,14 +3139,6 @@ function renderHistory({ animate = true } = {}) {
   $('#hiEyebrow').textContent = cap(dateOf(today).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }));
   // Employé : un tableau de bord (propriétaire : « professionnel, épuré, style Apple »).
   // Mêmes polices que le reste de l'app; seule la mise en page change.
-  const listBody = isUp
-    ? `<div class="ap-weekbar">
-        <button type="button" class="icon-btn" data-upwk="-1" aria-label="${esc(t('prevWeek'))}" ${hist.up <= mondayOf(today) ? 'disabled' : ''}>${CHEV_L}</button>
-        <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.up))}</b>${hist.up !== mondayOf(today) ? `<button type="button" class="link" data-upwk="0">${esc(t('thisWeek'))}</button>` : ''}</div>
-        <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
-      </div><div class="up-list">${upcomingList(dashHero.skip)}</div>`
-    : `<div class="hi-list${animate && ready ? ' cascade' : ''}">${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${!hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${['week', 'month', 'all'].map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('histEmpty'))}</p></div>`}`}</div>`;
   $('#historyBody').innerHTML = `<div class="dash">
     ${dashHero.html}
     ${dashStats()}
@@ -3107,19 +3146,12 @@ function renderHistory({ animate = true } = {}) {
       <div class="d-head"><h2 id="dWeekH">${esc(t('schedTitle'))}</h2><button type="button" class="link" data-sched>${esc(t(mySchedule() && Object.keys(mySchedule()).length ? 'schedEdit' : 'schedSet'))}</button></div>
       ${dashWeek()}
     </section>
-    <section class="d-card d-list" aria-labelledby="dListH">
-      <div class="d-head"><h2 id="dListH">${esc(t('myShiftsList'))}</h2></div>
-      <div class="segmented hi-mode" role="tablist">
-        <button type="button" role="tab" data-hmode="upcoming" aria-selected="${isUp}">${esc(t('upcoming'))}</button>
-        <button type="button" role="tab" data-hmode="recent" aria-selected="${hist.mode === 'recent'}">${esc(t('recent'))}</button>
-      </div>
-      ${listBody}
-    </section>
-    <section class="d-card d-links" aria-labelledby="dLinksH">
-      <div class="d-head"><h2 id="dLinksH">${esc(t('shortcuts'))}</h2></div>
-      <button type="button" class="d-row" data-hlink="tips"><span class="d-ico tips">${HERO_ICONS.tips}</span><span class="d-txt"><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span>${CHEV_R}</button>
-      <button type="button" class="d-row" data-hlink="overview"><span class="d-ico overview">${HERO_ICONS.overview}</span><span class="d-txt"><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span>${CHEV_R}</button>
-    </section>
+    ${dashUpcoming(dashHero.skip)}
+    ${dashRecent()}
+    <div class="d-tiles">
+      <button type="button" class="d-tile" data-hlink="tips"><span class="d-ico tips">${HERO_ICONS.tips}</span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></button>
+      <button type="button" class="d-tile" data-hlink="overview"><span class="d-ico overview">${HERO_ICONS.overview}</span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></button>
+    </div>
   </div>`;
   if (animate && ready) countUp($('#historyBody'));
 }
@@ -3140,7 +3172,7 @@ $('#historyBody').addEventListener('click', (ev) => {
     });
     return;
   }
-  if (ds.up) { const p = presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
+  if (ds.up) { const p = specialFor(ds.up) || presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
   if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
   if (ds.hby) { hist.by = ds.hby; hist.who = ''; sfx('tab'); renderHistory({ animate: false }); return; }

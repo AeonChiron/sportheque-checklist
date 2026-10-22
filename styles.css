@@ -2592,3 +2592,33 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
   .d-hero .dh-btn { margin-top: auto; }
   .dh-time { font-size: clamp(36px, 4.6vw, 56px); white-space: nowrap; }
 }
+
+/* Bas du tableau de bord : grandes rangées à toucher + deux tuiles (propriétaire : « plus ergonomique ») */
+.d-shift { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto 16px; align-items: center; gap: 14px; width: 100%; min-height: 72px; padding: 10px 2px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.d-head + .d-shift, .d-sheetlist > .d-shift:first-child { border-top: 0; }
+.d-shift:active { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.d-shift > svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; opacity: .35; }
+.d-date { display: grid; justify-items: center; align-content: center; width: 52px; height: 52px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.d-date small { font: 600 11px/1 var(--font); color: var(--accent); }
+.d-date b { font: 600 22px/1.05 var(--display); color: var(--ink); }
+.d-st { display: grid; gap: 3px; min-width: 0; }
+.d-st b { font: 600 18px/1.15 var(--display); white-space: nowrap; }
+.d-st small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-st small { font-size: 14px; color: var(--muted); }
+.d-left { padding: 6px 10px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font: 600 14px/1 var(--display); white-space: nowrap; }
+.d-shift .rv-ring.small { width: 52px; height: 52px; }
+.d-shift .rv-ring.small .num { font-size: 13px; letter-spacing: -.02em; }
+.d-none { margin: 2px 2px 6px; color: var(--muted); font-size: 15px; line-height: 1.4; }
+.d-past .hi-skel { margin: 0; }
+.d-sheetlist { display: grid; }
+.d-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.d-tile { display: grid; justify-items: start; align-content: start; gap: 4px; min-height: 120px; padding: 16px; border: 0; border-radius: 18px; background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; box-shadow: 0 1px 2px rgba(26, 28, 25, .06), 0 10px 28px -22px rgba(26, 28, 25, .45); }
+.d-tile:active { transform: scale(.98); }
+.d-tile .d-ico { margin-bottom: 8px; }
+.d-tile b { font: 600 17px/1.2 var(--font); }
+.d-tile small { font-size: 14px; color: var(--muted); }
+@media (min-width: 760px) {
+  .d-up { grid-column: 1 / -1; grid-row: 3; }
+  .d-past { grid-column: 1 / -1; grid-row: 4; }
+  .d-tiles { grid-column: 1 / -1; grid-row: 5; }
+}
