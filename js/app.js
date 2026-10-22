@@ -7,7 +7,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
-import { mountGlass, playFinish, fxSound } from './fx.js';
+import { mountGlass, playFinish, fxSound, clickTap } from './fx.js';
 import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs } from './auth.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
@@ -1069,6 +1069,7 @@ function pipsHTML(done, total, plate, land = -1) {
   return Array.from({ length: total }, (_, j) => `<i class="${j < done ? 'on' : ''}${j === land ? ' pop' : ''}"></i>`).join('');
 }
 const sfx = (name, opts) => { if (prefs.sound !== false) fxSound(name, opts); };
+document.addEventListener('click', (ev) => { if (prefs.sound !== false && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(); }, true);
 // iPhone : par défaut, le bouton silencieux coupe les sons et la musique de l'employé continue.
 // « Sons même en silencieux » (Menu) : les sons jouent quand même (la musique peut s'arrêter).
 function applyAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = prefs.soundSilent ? 'playback' : 'ambient'; } catch { /* ignore */ } }

@@ -36,7 +36,7 @@ function A() {
     master = ac.createGain(); master.gain.value = 0.9;
     master.connect(hp).connect(comp).connect(lim).connect(ac.destination);
     // Réverbération : une pièce douce, stéréo, qui s'assombrit en s'éteignant.
-    const len = Math.floor(ac.sampleRate * 1.6);
+    const len = Math.floor(ac.sampleRate * 2.6);
     const ir = ac.createBuffer(2, len, ac.sampleRate);
     for (let c = 0; c < 2; c++) {
       const d = ir.getChannelData(c);
@@ -45,17 +45,30 @@ function A() {
         const k = i / len;
         const a = 0.35 + 0.6 * k; // de plus en plus sombre
         lp = lp * a + (Math.random() * 2 - 1) * (1 - a);
-        d[i] = lp * (1 - k) ** 2.6 * 2.2;
+        d[i] = lp * (1 - k) ** 2.2 * 2.2;
       }
     }
-    const pre = ac.createDelay(0.1); pre.delayTime.value = 0.014;
+    const pre = ac.createDelay(0.1); pre.delayTime.value = 0.022;
     const conv = ac.createConvolver(); conv.buffer = ir;
-    const wet = ac.createGain(); wet.gain.value = 0.32;
+    const wet = ac.createGain(); wet.gain.value = 0.5;
     verbIn = ac.createGain();
     verbIn.connect(pre).connect(conv).connect(wet).connect(hp);
   }
   if (ac.state !== 'running') ac.resume().catch(() => {});
   return ac;
+}
+// iPhone : après un verrouillage ou un autre app, le son peut rester « interrompu » et ne
+// plus repartir. Au prochain toucher, s'il ne repart pas, on le reconstruit au complet.
+function revive() {
+  if (!ac || ac.state === 'running') return;
+  const old = ac;
+  ac.resume().catch(() => {});
+  setTimeout(() => {
+    if (ac !== old || old.state === 'running') return;
+    try { old.close(); } catch { /* ignore */ }
+    ac = null; master = null; verbIn = null; // le prochain son recrée tout
+    unlock();
+  }, 250);
 }
 // iPhone : le son ne part qu'après un vrai toucher. Au premier toucher (et au retour
 // dans l'app), on réveille le son avec un silence d'un instant.
@@ -67,8 +80,9 @@ function unlock() {
   } catch { /* pas de son ici */ }
 }
 if (typeof window !== 'undefined') {
-  for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, unlock, { passive: true, capture: true });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running') ac.resume().catch(() => {}); });
+  for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, () => { revive(); unlock(); }, { passive: true, capture: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) revive(); });
+  addEventListener('pageshow', revive);
 }
 // Une voix : gain → panoramique → sortie + envoi vers la réverbération.
 function voice(t0, { pan = 0, verb = 0.25 } = {}) {
@@ -82,9 +96,11 @@ function voice(t0, { pan = 0, verb = 0.25 } = {}) {
 }
 // Enveloppe naturelle : attaque rapide, déclin exponentiel.
 function env(g, t0, peak, attack, decay) {
+  // Fondu d'entrée (jamais sec) et fondu de sortie long, qui se fond dans la réverbération.
+  const a = Math.max(attack, 0.008);
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(peak, t0 + attack);
-  g.gain.setTargetAtTime(0.0001, t0 + attack, decay / 4.5);
+  g.gain.linearRampToValueAtTime(peak, t0 + a);
+  g.gain.setTargetAtTime(0.0001, t0 + a, decay / 3.6);
 }
 function sine(f, t0, dur, out, { type = 'sine', bend = 0 } = {}) {
   const o = A().createOscillator();
@@ -111,7 +127,7 @@ function burst(t0, dur, gain, { type = 'bandpass', f0 = 2000, f1 = f0, q = 1, pa
   if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
   const g = voice(t0, { pan, verb });
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(gain, t0 + attack);
+  g.gain.linearRampToValueAtTime(gain, t0 + Math.max(attack, 0.004));
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   src.connect(f).connect(g); src.start(t0);
 }
@@ -168,84 +184,118 @@ function thump(f, t0, gain = 0.2, dur = 0.12) {
 }
 // La gamme : pentatonique de mi majeur (toutes les notes sonnent bien ensemble).
 const PENTA = [329.63, 369.99, 415.3, 493.88, 554.37, 659.25, 739.99, 830.61, 987.77, 1108.73, 1318.51, 1479.98, 1661.22, 1975.53, 2217.46, 2637.02];
-const r = (x) => x * (1 + (Math.random() - 0.5) * 0.012); // un rien d'humain d'une fois à l'autre
+const r = (x) => x * (1 + (Math.random() - 0.5) * 0.008); // un rien d'humain d'une fois à l'autre
+// Le chef d'orchestre (propriétaire : « une progression mélodique très satisfaisante ») :
+// tous les sons suivent une même suite d'accords, Mi maj9 → Do#m9 → La maj9 → Si6/9.
+// Chaque toucher prend la note suivante de l'accord en montant; l'accord change toutes
+// les quatre notes. Après 4 s de calme, la phrase recommence au début.
+const PROG = [
+  [164.81, 246.94, 311.13, 369.99, 415.3],   // Mi maj9
+  [138.59, 207.65, 246.94, 311.13, 329.63],  // Do#m9
+  [110, 164.81, 207.65, 246.94, 277.18],     // La maj9
+  [123.47, 185, 207.65, 277.18, 311.13],     // Si 6/9
+];
+const song = { step: 0, at: 0 };
+function nextNote() {
+  const now = performance.now();
+  if (now - song.at > 4000) song.step = 0;
+  song.at = now;
+  const i = song.step++;
+  const chord = PROG[Math.floor(i / 4) % PROG.length];
+  const k = i % 4; // 4 notes qui montent dans l'accord
+  return { chord, f: chord[1 + k], bass: chord[0] };
+}
 
 const SOUNDS = {
+  // Toucher : une note de kalimba de l'accord du moment, deux octaves plus haut (jamais la même deux fois de suite).
   tap(t) {
-    thump(r(520), t, 0.55, 0.08);
-    burst(t, 0.012, 0.14, { f0: 3200, q: 1.4, verb: 0 });
+    const { f } = nextNote();
+    kalimba(f * 4, t, { gain: 0.13, dur: 0.6, pan: (Math.random() - 0.5) * 0.5, verb: 0.55 });
+  },
+  // Ouvrir (une tâche, une feuille) : une cloche de verre douce + sa quinte, qui monte en fondu.
+  open(t) {
+    const { f } = nextNote();
+    bell(f * 4, t, { gain: 0.07, dur: 1.4, ratio: 2, index: 0.9, pan: -0.15, verb: 0.65 });
+    bell(f * 6, t + 0.05, { gain: 0.035, dur: 1.2, ratio: 2, index: 0.6, pan: 0.2, verb: 0.75 });
+  },
+  close(t) {
+    const { f } = nextNote();
+    bell(f * 2, t, { gain: 0.05, dur: 0.9, ratio: 2, index: 0.5, verb: 0.6 });
   },
   step(t) {
-    stepN = performance.now() - stepAt < 2500 ? stepN + 1 : 0; // chaque étape monte d'une note
-    stepAt = performance.now();
-    const f = PENTA[7 + (stepN % 6)];
-    kalimba(f, t, { gain: 0.32, pan: -0.15 + (stepN % 3) * 0.15 });
-    burst(t, 0.008, 0.08, { f0: 4500, q: 2, verb: 0 });
+    const { f } = nextNote();
+    kalimba(f * 4, t, { gain: 0.24, dur: 0.9, pan: -0.15 + (song.step % 3) * 0.15, verb: 0.55 });
+    kalimba(f * 6, t + 0.04, { gain: 0.06, dur: 0.7, pan: 0.3, verb: 0.7 });
   },
   check(t, { level = 0.5 } = {}) {
-    const i = 4 + Math.round(Math.max(0, Math.min(1, level)) * 6); // plus le quart avance, plus ça monte
-    thump(110, t, 0.3, 0.16);
-    marimba(PENTA[i], t, { gain: 0.3, dur: 1.1, pan: -0.12 });
-    marimba(PENTA[i + 2], t + 0.075, { gain: 0.24, dur: 1.3, pan: 0.14 });
-    bell(PENTA[i + 2] * 2, t + 0.16, { gain: 0.035, dur: 1.4, ratio: 3.5, index: 1.4, pan: 0.3, verb: 0.7 });
+    // Le maillet de bois, la note de l'accord, sa quinte, puis une cloche qui scintille.
+    // Plus le quart avance, plus le registre monte.
+    const { f, bass } = nextNote();
+    const up = level > 0.66 ? 4 : level > 0.33 ? 3 : 2;
+    thump(bass, t, 0.26, 0.2);
+    marimba(f * up, t, { gain: 0.28, dur: 1.4, pan: -0.12, verb: 0.45 });
+    marimba(f * up * 1.5, t + 0.08, { gain: 0.22, dur: 1.6, pan: 0.14, verb: 0.5 });
+    bell(f * up * 3, t + 0.17, { gain: 0.035, dur: 1.8, ratio: 3.5, index: 1.2, pan: 0.3, verb: 0.8 });
   },
   uncheck(t) {
-    marimba(PENTA[8], t, { gain: 0.16, dur: 0.5, bright: 0.35, pan: 0.1 });
-    marimba(PENTA[6], t + 0.08, { gain: 0.15, dur: 0.6, bright: 0.3, pan: -0.1 });
+    const { f } = nextNote();
+    marimba(f * 3, t, { gain: 0.15, dur: 0.7, bright: 0.35, pan: 0.1, verb: 0.5 });
+    marimba(f * 2, t + 0.09, { gain: 0.14, dur: 0.9, bright: 0.3, pan: -0.1, verb: 0.5 });
   },
   notify(t) {
-    const c = A(), g = voice(t, { verb: 0.2 });
-    env(g, t, 0.42, 0.004, 0.09);
+    const { f } = nextNote();
+    const c = A(), g = voice(t, { verb: 0.35 });
+    env(g, t, 0.32, 0.01, 0.12);
     const o = c.createOscillator();
-    o.frequency.setValueAtTime(420, t);
-    o.frequency.exponentialRampToValueAtTime(1250, t + 0.05);
-    o.connect(g); o.start(t); o.stop(t + 0.2);
-    bell(PENTA[12], t + 0.045, { gain: 0.11, dur: 0.9, ratio: 3.5, index: 1.6, pan: 0.2, verb: 0.55 });
+    o.frequency.setValueAtTime(f * 1.5, t);
+    o.frequency.exponentialRampToValueAtTime(f * 4, t + 0.06);
+    o.connect(g); o.start(t); o.stop(t + 0.3);
+    bell(f * 6, t + 0.05, { gain: 0.08, dur: 1.3, ratio: 3.5, index: 1.4, pan: 0.2, verb: 0.7 });
   },
   save(t) {
-    epiano(PENTA[5], t, { gain: 0.16, dur: 1.4, pan: -0.2 });
-    epiano(PENTA[7], t + 0.085, { gain: 0.15, dur: 1.5 });
-    epiano(PENTA[8], t + 0.17, { gain: 0.14, dur: 1.8, pan: 0.2 });
+    const { chord } = nextNote();
+    epiano(chord[1] * 2, t, { gain: 0.15, dur: 1.8, pan: -0.2, verb: 0.5 });
+    epiano(chord[2] * 2, t + 0.09, { gain: 0.14, dur: 1.9, verb: 0.5 });
+    epiano(chord[4] * 2, t + 0.18, { gain: 0.13, dur: 2.2, pan: 0.2, verb: 0.55 });
   },
-  swish(t, { down = false } = {}) {
-    burst(t, 0.24, 0.22, { f0: down ? 2600 : 500, f1: down ? 500 : 2600, q: 0.9, verb: 0.15, attack: 0.08, pan: down ? 0.2 : -0.2 });
-  },
+  swish(t, { down = false } = {}) { (down ? SOUNDS.close : SOUNDS.open)(t); },
   error(t) {
-    for (const [at, f] of [[0, 196], [0.14, 165]]) {
-      const c = A(), g = voice(t + at, { verb: 0.1 });
+    for (const [at, f] of [[0, 196], [0.15, 165]]) {
+      const c = A(), g = voice(t + at, { verb: 0.3 });
       const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
-      env(g, t + at, 0.24, 0.003, 0.16);
+      env(g, t + at, 0.22, 0.01, 0.22);
       const o = c.createOscillator(); o.type = 'triangle';
       o.frequency.setValueAtTime(f * 1.15, t + at);
       o.frequency.exponentialRampToValueAtTime(f, t + at + 0.04);
-      o.connect(lp).connect(g); o.start(t + at); o.stop(t + at + 0.3);
+      o.connect(lp).connect(g); o.start(t + at); o.stop(t + at + 0.5);
     }
   },
   flag(t) {
-    burst(t, 0.22, 0.09, { f0: 700, f1: 3800, q: 0.8, verb: 0.15, attack: 0.06, pan: -0.3 });
+    burst(t, 0.26, 0.08, { f0: 700, f1: 3800, q: 0.8, verb: 0.35, attack: 0.08, pan: -0.3 });
     SOUNDS.notify(t + 0.17);
-    bell(PENTA[13], t + 0.24, { gain: 0.07, dur: 1.2, ratio: 3.5, index: 2, pan: 0.35, verb: 0.6 });
+    bell(PENTA[13], t + 0.26, { gain: 0.07, dur: 1.6, ratio: 3.5, index: 2, pan: 0.35, verb: 0.75 });
   },
   urgent(t) {
-    thump(90, t, 0.25, 0.2);
-    bell(PENTA[10], t, { gain: 0.2, dur: 1.4, ratio: 1.4, index: 3, pan: -0.15, verb: 0.5 });
-    bell(PENTA[8], t + 0.24, { gain: 0.2, dur: 1.8, ratio: 1.4, index: 3, pan: 0.15, verb: 0.5 });
+    thump(90, t, 0.25, 0.25);
+    bell(PENTA[10], t, { gain: 0.2, dur: 1.8, ratio: 1.4, index: 3, pan: -0.15, verb: 0.6 });
+    bell(PENTA[8], t + 0.26, { gain: 0.2, dur: 2.2, ratio: 1.4, index: 3, pan: 0.15, verb: 0.6 });
   },
   celebrate(t) {
-    // Une basse qui gonfle, un accord de piano qui s'égrène, puis une pluie d'étincelles.
-    const g = voice(t, { verb: 0.2 });
+    // Une basse qui gonfle, l'accord de Mi maj9 qui s'égrène, puis une pluie d'étincelles.
+    const g = voice(t, { verb: 0.3 });
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.12, t + 0.25);
-    g.gain.setTargetAtTime(0.0001, t + 0.35, 0.45);
-    sine(82.41, t, 2, g);
-    [164.81, 246.94, 329.63, 415.3, 493.88, 622.25].forEach((f, i) => epiano(f, t + i * 0.04, { gain: 0.1, dur: 2.6, pan: -0.4 + i * 0.16, verb: 0.45 }));
-    [PENTA[9], PENTA[10], PENTA[11], PENTA[12], PENTA[13], PENTA[14], PENTA[15]].forEach((f, i) => kalimba(f, t + 0.3 + i * 0.065, { gain: 0.07, dur: 0.8, pan: i % 2 ? 0.45 : -0.45, verb: 0.6 }));
-    bell(PENTA[15], t + 0.8, { gain: 0.05, dur: 2, ratio: 3.5, index: 1.2, verb: 0.8 });
+    g.gain.linearRampToValueAtTime(0.12, t + 0.3);
+    g.gain.setTargetAtTime(0.0001, t + 0.45, 0.55);
+    sine(82.41, t, 2.5, g);
+    [164.81, 246.94, 329.63, 415.3, 493.88, 622.25].forEach((f, i) => epiano(f, t + i * 0.045, { gain: 0.1, dur: 3, pan: -0.4 + i * 0.16, verb: 0.6 }));
+    [PENTA[9], PENTA[10], PENTA[11], PENTA[12], PENTA[13], PENTA[14], PENTA[15]].forEach((f, i) => kalimba(f, t + 0.32 + i * 0.07, { gain: 0.07, dur: 1, pan: i % 2 ? 0.45 : -0.45, verb: 0.75 }));
+    bell(PENTA[15], t + 0.85, { gain: 0.05, dur: 2.6, ratio: 3.5, index: 1.2, verb: 0.85 });
+    song.step = 0;
   },
 };
 // Les anciens noms (et les scènes de fin de tâche) passent par les dix sons.
 const ALIAS = {
-  tick: 'step', tab: 'tap', toggle: 'tap', open: 'swish', close: 'swish', locked: 'error',
+  tick: 'step', tab: 'tap', toggle: 'tap', locked: 'error',
   punch: 'check', ready: 'notify', welcome: 'celebrate', sent: 'celebrate', pour: 'check', full: 'celebrate',
 };
 export function fxSound(name, opts = {}) {
@@ -257,8 +307,19 @@ export function fxSound(name, opts = {}) {
     const now = performance.now();
     if (key === 'notify' && now - lastAt < 350) return; // un message qui suit un autre son : pas de doublon
     lastAt = now;
-    fn(c.currentTime + 0.01, { ...opts, down: name === 'close' || opts.down, level: name === 'punch' ? 0.2 : opts.level });
+    fn(c.currentTime + 0.01, { ...opts, level: name === 'punch' ? 0.2 : opts.level });
   } catch { /* pas de son ici : tant pis */ }
+}
+// Pour écouter hors ligne (tests) : un son à un moment précis.
+export function fxSoundAt(name, at, opts = {}) {
+  const fn = SOUNDS[ALIAS[name] || name];
+  if (fn) fn(A().currentTime + at, opts);
+}
+// Chaque toucher de bouton a son son (propriétaire) : si le bouton n'a pas déjà joué
+// son propre son, le « tap » mélodique part juste après.
+export function clickTap() {
+  const t0 = performance.now();
+  setTimeout(() => { if (lastAt < t0) fxSound('tap'); }, 0);
 }
 
 // ---------- Verre d'eau (progrès du quart) ----------
