@@ -104,11 +104,13 @@ test('new user simulation clears an existing shift and restarts the tutorial wit
 });
 test('real admin controls remain available when viewing employee and supervisor roles', () => {
   for (const view of ['employee','boss','newEmployee','newBoss','admin']) {
-    const elements={'#adminRoles':{}}; let added=0;
-    const c=context({prefs:{},$:sel=>elements[sel],isRealAdmin:()=>true,curView:()=>view,viewAs:()=>view,roleName:x=>x,esc:x=>x,t:x=>x,document:{createElement:()=>({}),body:{append:bar=>{elements['#adminSimulator']=bar;added++;}}},openAccount:()=>{},exitShiftSimulation:()=>{}});
-    vm.runInContext(fn('paintAdminTools'),c); c.paintAdminTools();
-    assert.equal(added,1); assert.match(elements['#adminSimulator'].innerHTML,/adminRoles/);
-    assert.equal(typeof elements['#adminRoles'].onclick,'function');
+    const made = {}; const hosts = { '#quickBar .qb-left': [], '#auth .pool-top .setup-tools': [] };
+    const doc = { getElementById: (id) => made[id] || null, createElement: () => ({ setAttribute() {}, addEventListener(ev, f) { this.click = f; } }) };
+    const c=context({prefs:{},$:sel=>hosts[sel] ? { prepend: (b) => { hosts[sel].push(b); made[b.id] = b; }, append: (b) => { hosts[sel].push(b); made[b.id] = b; } } : null,isRealAdmin:()=>true,curView:()=>view,viewAs:()=>view,roleName:x=>x,esc:x=>x,t:x=>x,document:doc,openViewMenu:()=>{},EYE:''});
+    vm.runInContext(fn('adminViewLabel')+fn('paintAdminTools'),c); c.paintAdminTools();
+    // Toujours deux accès : la barre du haut et la page bleue; aucun bouton flottant.
+    assert.equal(hosts['#quickBar .qb-left'].length,1); assert.equal(hosts['#auth .pool-top .setup-tools'].length,1);
+    assert.equal(typeof made.qbView.click,'function'); assert.equal(typeof made.poolView.click,'function');
   }
 });
 test('simulation completion and issues never call publishing services', async () => {

@@ -2436,10 +2436,13 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .view-as .va-wide { grid-column: 1 / -1; }
 
 /* Admin controls remain reachable across screens and onboarding overlays. */
-#adminSimulator { position: fixed; z-index: 1000; bottom: calc(12px + env(safe-area-inset-bottom)); right: 12px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 24px); }
-#adminSimulator button { border: 0; border-radius: 20px; padding: 10px 14px; background: #6d28d9; color: #fff; font: 600 13px/1.3 var(--font); cursor: pointer; box-shadow: 0 4px 14px #0003; }
-body:has(#adminSimulator) { padding-bottom: 64px; }
-#adminSimulator button:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
+/* Admin : « Voir comme » (barre du haut et page bleue) */
+.quick-btn.qb-view span { max-width: 9.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pool-top .qb-view { min-height: 44px; background: color-mix(in srgb, var(--surface) 88%, transparent); }
+.view-opts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.view-opt { min-height: 48px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: 600 16px/1.2 var(--font); text-align: left; cursor: pointer; }
+.view-opt[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.view-opt[aria-checked="true"]::after { content: ' ✓'; }
 
 /* ---------- Personnaliser mon quart ---------- */
 .notice.warn { background: var(--warn-soft); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
@@ -2464,3 +2467,25 @@ body:has(#adminSimulator) { padding-bottom: 64px; }
 .custom-panel .section-note { margin: 10px 0 0; }
 .custom-acts { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
 .custom-acts .btn { min-height: 44px; }
+
+/* ---------- Mes shifts : un ordre clair (prochain quart, quarts, horaire, raccourcis) ---------- */
+.hi-block { margin: 0 0 22px; }
+.hi-blockhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 2px 10px; }
+.hi-blockhead h2 { margin: 0; font: 750 20px/1.15 var(--serif); }
+.hi-block .sched-card, .hi-block .hi-links, .hi-block .up-list { margin-bottom: 0; }
+.hi-block .hi-links { margin-top: 0; }
+.hi-next { display: grid; gap: 12px; margin: 0 0 22px; padding: 16px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 14px 30px -20px rgba(20, 60, 120, .55); }
+.hi-next.live { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.hn-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hn-top small { font: 600 13px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.hn-chip { padding: 6px 10px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font: 700 14px/1 var(--font); }
+.hi-next.live .hn-chip { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent); }
+.hn-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.hn-main b { font: 750 26px/1.1 var(--serif); }
+.hn-main span { font: 700 20px/1.1 var(--display); }
+.hn-main small { color: var(--muted); font-size: 14px; }
+.hi-next .btn { width: 100%; }
+/* Grand écran (iPad, ordi) : l'en-tête bleu s'aligne sur la colonne au lieu de déborder. */
+@media (min-width: 700px) {
+  #history .review-top { margin: 0 0 20px; padding: 22px 24px 24px; border-radius: 28px; }
+}

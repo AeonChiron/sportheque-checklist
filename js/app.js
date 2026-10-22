@@ -513,7 +513,8 @@ function whenLabel(iso) {
 }
 const presetName = (id) => (id === 'custom' ? t('schedCustom') : (t('presets') || {})[id] || id);
 const SCHED_SHORT = { jour: 'J', soir: 'S', 'soir-court': 'SC' };
-const schedShort = (v) => (v && typeof v === 'object' ? f(toMin(v.start)).replace(' h ', 'h').replace(' h', 'h') : SCHED_SHORT[v] || '•');
+// La semaine montre l'heure du début (pas des lettres) : « 7:30 », « 18:00 ».
+const schedShort = (v) => { const h = hoursOf(v); return h?.start ? f(toMin(h.start)).replace(' h ', 'h').replace(' h', 'h') : SCHED_SHORT[v] || '•'; };
 // Éditeur : chaque jour = un interrupteur. Allumé, on voit Début / Fin
 // (modifiables), avec les quarts habituels en raccourcis.
 const hoursOf = (v) => (v && typeof v === 'object' ? v : presetOf(v));
@@ -806,7 +807,7 @@ function startTour() {
 }
 document.addEventListener('click', (e) => { if (e.target.closest('[data-tour-open]')) { closeSheet(); setTimeout(startTour, 360); } });
 // Carte « Mon horaire » en haut de Mes shifts.
-function schedCard() {
+function schedCard({ bare = false } = {}) {
   const sc = mySchedule();
   const days = WEEKDAYS[lang()];
   const ti = dowOf(todayISO());
@@ -814,9 +815,9 @@ function schedCard() {
     return `<div class="sched-card empty"><div><b>${t('schedTitle')}</b><p>${t('schedEmpty')}</p></div><button type="button" class="btn primary" data-sched>${t('schedSet')}</button></div>`;
   }
   const tp = todaySched();
-  return `<div class="sched-card"><div class="sch-top"><b>${t('schedTitle')}</b><button type="button" class="link" data-sched>${t('schedEdit')}</button></div>
+  return `<div class="sched-card">${bare ? '' : `<div class="sch-top"><b>${t('schedTitle')}</b><button type="button" class="link" data-sched>${t('schedEdit')}</button></div>`}
     <div class="sch-week">${days.map((d, i) => `<span class="sch-pill${i === ti ? ' today' : ''}${sc[i] ? ' on' : ''}"><small>${esc(cap(d).slice(0, 3))}</small><b>${sc[i] ? schedShort(sc[i]) : '–'}</b></span>`).join('')}</div>
-    <p class="sch-today">${tp ? esc(t('schedTodayIs', f(toMin(tp.start)), f(toMin(tp.end)))) : esc(t('schedTodayOff'))}</p></div>`;
+    ${bare ? '' : `<p class="sch-today">${tp ? esc(t('schedTodayIs', f(toMin(tp.start)), f(toMin(tp.end)))) : esc(t('schedTodayOff'))}</p>`}</div>`;
 }
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-sched]')) openScheduleSheet(); });
 // Les deux cartes sous « Mon horaire » : Bons trucs (jaune) et Aperçu du gym (vert).
@@ -2875,8 +2876,35 @@ function histCard(s, i) {
     </span>${CHEV_R}</button>`;
 }
 
+// En haut de « Mes shifts » : le quart en cours, ou le prochain, avec un seul gros bouton.
+function nextShiftCard() {
+  const live = state?.name && state?.date ? state : null;
+  const nx = !live && nextShift();
+  if (!live && !nx) return '';
+  const date = live ? live.date : nx.date;
+  const start = live ? live.start : nx.start, end = live ? live.end : nx.end;
+  const left = Math.ceil((startAt({ date, start }) - Date.now()) / 6e4);
+  let chip = '';
+  if (live) {
+    const p = shiftPlan(live);
+    const tasks = p.items.filter((x) => x.kind === 'task');
+    chip = `${tasks.filter((x) => live.tasks?.[x.id]?.done).length}/${tasks.length} ${t('tasks')}`;
+  } else chip = left > 0 ? countdown(left) : t('nbGo');
+  return `<section class="hi-next${live ? ' live' : ''}">
+    <div class="hn-top"><small>${esc(t(live ? 'nowShiftLabel' : 'nbNext'))}</small><span class="hn-chip num">${esc(chip)}</span></div>
+    <div class="hn-main"><b>${esc(cap(dayWord(date)))}</b><span class="num">${nb(f(toMin(start)))} – ${nb(f(toMin(end)))}</span><small>${esc(SHIFTS[detectShift(start, end)][lang()].short)}</small></div>
+    <button type="button" class="btn primary big" data-hnext>${esc(t(live ? 'ovBack' : 'ovStart'))}</button>
+  </section>`;
+}
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('[data-hnext]')) return;
+  if (state?.name && state?.date) { openChecklist(); return; }
+  const nx = nextShift();
+  if (nx) startScheduled(nx);
+});
+
 // À venir : les quarts de l'horaire, semaine par semaine, sans fin.
-function upcomingList() {
+function upcomingList(skip = '') {
   const sc = mySchedule() || {};
   const mineSpecial = SPECIALS.some((x) => x.names?.includes(firstName(shiftName())));
   if (!Object.keys(sc).length && !mineSpecial) return `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('upEmpty'))}</p></div>`;
@@ -2885,7 +2913,7 @@ function upcomingList() {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const rows = weekDates(hist.up).map((d) => {
     const p = specialFor(d) || presetOf(sc[dowOf(d)]);
-    if (!p?.start || d < today) return '';
+    if (!p?.start || d < today || d === skip) return '';
     if (d === today && (editableShift() || nowMin >= toMin(p.end))) return '';
     const left = Math.ceil((startAt({ date: d, start: p.start }) - Date.now()) / 6e4);
     return `<button type="button" class="up-card" data-up="${d}"><span class="up-day"><b>${esc(dayWord(d))}</b><small>${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small></span><span class="up-main"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc(SHIFTS[detectShift(p.start, p.end)][lang()].short)}</small></span><span class="up-left num">${left > 0 ? esc(countdown(left)) : esc(t('nbGo'))}</span>${CHEV_R}</button>`;
@@ -3005,16 +3033,17 @@ function renderHistory({ animate = true } = {}) {
     return;
   }
 
+  // Employé (propriétaire : « plus ordonné ») : 1. le prochain quart, en grand; 2. mes quarts
+  // (à venir / passés); 3. mon horaire de la semaine; 4. les raccourcis.
+  const nextCard = nextShiftCard();
   $('#historyBody').innerHTML = `
-    ${schedCard()}
-    <div class="hi-links">
-      <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
-      <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
-    </div>
-    <div class="segmented hi-mode" role="tablist">
-      <button type="button" role="tab" data-hmode="upcoming" aria-selected="${isUp}">${esc(t('upcoming'))}</button>
-      <button type="button" role="tab" data-hmode="recent" aria-selected="${hist.mode === 'recent'}">${esc(t('recent'))}</button>
-    </div>
+    ${nextCard}
+    <section class="hi-block">
+      <div class="hi-blockhead"><h2>${esc(t('myShiftsList'))}</h2></div>
+      <div class="segmented hi-mode" role="tablist">
+        <button type="button" role="tab" data-hmode="upcoming" aria-selected="${isUp}">${esc(t('upcoming'))}</button>
+        <button type="button" role="tab" data-hmode="recent" aria-selected="${hist.mode === 'recent'}">${esc(t('recent'))}</button>
+      </div>
     ${isWeek ? `<div class="ap-weekbar">
       <button type="button" class="icon-btn" data-hwk="-1" aria-label="${esc(t('prevWeek'))}">${CHEV_L}</button>
       <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.week))}</b>${hist.week !== mondayOf(today) ? `<button type="button" class="link" data-hwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
@@ -3024,10 +3053,22 @@ function renderHistory({ animate = true } = {}) {
       <button type="button" class="icon-btn" data-upwk="-1" aria-label="${esc(t('prevWeek'))}" ${hist.up <= mondayOf(today) ? 'disabled' : ''}>${CHEV_L}</button>
       <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.up))}</b>${hist.up !== mondayOf(today) ? `<button type="button" class="link" data-upwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
       <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
-    </div><div class="up-list">${upcomingList()}</div>` : `<div class="hi-list${animate && ready ? ' cascade' : ''}">
+    </div><div class="up-list">${upcomingList(nextCard ? nextShift()?.date : '')}</div>` : `<div class="hi-list${animate && ready ? ' cascade' : ''}">
       ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
         : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${(isBoss() ? ['day', 'week', 'month', 'all'] : ['week', 'month', 'all']).map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${whoBar}${strip}${tally}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
     </div>`}
+    </section>
+    <section class="hi-block">
+      <div class="hi-blockhead"><h2>${esc(t('schedTitle'))}</h2>${mySchedule() && Object.keys(mySchedule()).length ? `<button type="button" class="link" data-sched>${esc(t('schedEdit'))}</button>` : ''}</div>
+      ${schedCard({ bare: true })}
+    </section>
+    <section class="hi-block">
+      <div class="hi-blockhead"><h2>${esc(t('shortcuts'))}</h2></div>
+      <div class="hi-links">
+        <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
+        <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
+      </div>
+    </section>
     ${ready && !isUp ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
   if (animate && ready) countUp($('#historyBody'));
 }
@@ -3507,20 +3548,61 @@ function startNewbie(role = 'employee') {
 }
 // Pastille « Aperçu : Employé » tant que l'admin regarde l'app avec un autre rôle; un toucher revient à Admin.
 function paintViewAs() { paintAdminTools(); }
+// Admin : « Voir comme » dans la barre du haut de chaque écran, et sur la page bleue
+// (propriétaire : toujours là, pas de bouton flottant). Un toucher ouvre le choix des rôles.
+const EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+function adminViewLabel() {
+  const view = curView();
+  return prefs.simShift ? t('simulationShort') : view === 'admin' ? t('roleAdmin') : view.startsWith('new') ? t(view) : roleName(view);
+}
 function paintAdminTools() {
-  let bar = $('#adminSimulator');
-  if (!isRealAdmin()) { bar?.remove(); return; }
-  if (!bar) {
-    bar = document.createElement('div'); bar.id = 'adminSimulator';
-    document.body.append(bar);
+  $('#adminSimulator')?.remove(); // ancienne version (bouton violet flottant)
+  const admin = isRealAdmin();
+  const html = `${EYE}<span>${esc(t('viewShort'))} : ${esc(adminViewLabel())}</span>`;
+  for (const [id, host, cls] of [['qbView', '#quickBar .qb-left', 'quick-btn qb-view'], ['poolView', '#auth .pool-top .setup-tools', 'quick-btn qb-view pool-view']]) {
+    let b = document.getElementById(id);
+    if (!admin) { b?.remove(); continue; }
+    if (!b) {
+      b = document.createElement('button');
+      b.type = 'button'; b.id = id; b.className = cls;
+      b.addEventListener('click', openViewMenu);
+      const box = $(host);
+      if (!box) continue;
+      if (id === 'qbView') box.append(b); else box.prepend(b);
+    }
+    b.innerHTML = html;
+    b.setAttribute('aria-label', `${t('viewAsTitle')} : ${adminViewLabel()}`);
   }
-  bar.innerHTML = `<button type="button" id="adminRoles">${esc(t('viewAsTitle'))} · ${esc(curView().startsWith('new') ? t(curView()) : roleName(viewAs() || 'admin'))}</button>${prefs.simShift ? `<button type="button" id="simulationExit">${esc(t('simulationExit'))}</button>` : ''}`;
-  $('#adminRoles').onclick = () => {
-    if (prefs.simShift) { exitShiftSimulation(); return; }
-    if ($('#tour')) { $('#tour').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); setTimeout(openAccount, 400); }
-    else openAccount();
-  };
-  $('#simulationExit')?.addEventListener('click', exitShiftSimulation);
+}
+function openViewMenu() {
+  if (!isRealAdmin()) return;
+  const view = curView();
+  const opt = (v, name) => `<button type="button" class="view-opt" role="radio" aria-checked="${view === v && !prefs.simShift}" data-adminview="${v}">${esc(name)}</button>`;
+  const nx = !prefs.simShift && nextShift();
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${EYE}${esc(t('roleAdmin'))}</p><h2>${esc(t('viewAsTitle'))}</h2></div>
+    <div class="view-opts" role="radiogroup">${opt('admin', t('roleAdmin'))}${opt('employee', roleName('employee'))}${opt('boss', roleName('boss'))}${opt('newEmployee', t('newEmployee'))}${opt('newBoss', t('newBoss'))}</div>
+    ${prefs.simShift ? `<button type="button" class="btn ghost big" data-adminact="exit">${esc(t('simulationExit'))}</button>` : nx ? `<button type="button" class="btn ghost big" data-adminact="sim">${esc(t('simulationStart'))}</button>` : ''}`, (root) => {
+    root.addEventListener('click', (ev) => {
+      const v = ev.target.closest('[data-adminview]')?.dataset.adminview;
+      const act = ev.target.closest('[data-adminact]')?.dataset.adminact;
+      if (act === 'exit') { closeSheet(); exitShiftSimulation(); return; }
+      if (act === 'sim') { const n = nextShift(); if (n) confirmShiftSimulation(n); return; }
+      if (v) applyAdminView(v);
+    });
+    $('#viewTools').onclick = () => { closeSheet(); setTimeout(openAccount, 340); };
+  }, `<button type="button" class="btn ghost" id="viewTools">${esc(t('adminTools'))}</button><button type="button" class="btn primary" data-close-sheet>${esc(t('close'))}</button>`);
+}
+// Un toucher dans le menu : on voit l'app comme ce rôle, tout de suite.
+function applyAdminView(v) {
+  if (!isRealAdmin() || !v) return;
+  if (prefs.simShift) exitShiftSimulation();
+  closeSheet();
+  if (v === curView()) { paintAdminTools(); return; }
+  if (v.startsWith('new')) { startNewbie(v === 'newBoss' ? 'boss' : 'employee'); paintAdminTools(); return; }
+  restoreNewbie();
+  delete prefs.workAsEmp; savePrefs();
+  setViewAs(v); sfx('save'); paintViewAs(); goFront(); paintFront();
+  toast(v === 'admin' ? t('viewAsBack') : t('viewAsNow', roleName(v)));
 }
 function restoreNewbie() {
   const back = prefs.simNew;
