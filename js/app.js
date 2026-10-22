@@ -2769,9 +2769,25 @@ function stateLine(st) {
   if (st.kind === 'unchecked') return `<span class="st warn">○ ${esc(t('notChecked'))}</span>`;
   return `<span class="st">${esc(t('planned'))}</span>`;
 }
+// Le même compte partout (carte, rapport, tableau de bord) : les tâches du plan de ce quart,
+// sans le pointage. Avant, la carte prenait le compte gardé (pointage inclus) : 12/13 contre 11/11.
+const metricsCache = new WeakMap();
+function planCount(s) {
+  if (metricsCache.has(s)) return metricsCache.get(s);
+  let r = null;
+  try {
+    const p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, custom: s.custom, lang: lang() });
+    const st = new Map((s.items || []).map((i) => [i.id, i.status]));
+    const ids = p.items.filter((x) => x.kind === 'task').map((x) => x.id);
+    if (ids.length) r = { done: ids.filter((id) => st.get(id) === 'done').length, total: ids.length };
+  } catch { r = null; }
+  metricsCache.set(s, r);
+  return r;
+}
 function metrics(s) {
-  const done = s.done ?? s.items.filter((i) => i.status === 'done').length;
-  const total = s.total ?? s.items.length;
+  const pc = s?.date && SHIFTS[s.shift] ? planCount(s) : null;
+  const done = pc ? pc.done : s.done ?? s.items.filter((i) => i.status === 'done').length;
+  const total = pc ? pc.total : s.total ?? s.items.length;
   return { done, total, pct: total ? Math.round((100 * done) / total) : 0, notdone: s.items.filter((i) => i.status === 'notdone').length, flags: s.flags.length, urgent: s.flags.filter((fl) => fl.urgent).length };
 }
 // Rouge : urgent ou pas fait. Ambre : il reste quelque chose à voir. Vert : tout fait, rien à signaler.
