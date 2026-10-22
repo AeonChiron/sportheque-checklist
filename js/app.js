@@ -2292,7 +2292,7 @@ function openReview(r, opts = {}) {
     <div class="rv-head">
       <p class="eyebrow">${[r.gymName, R.title].filter(Boolean).map(esc).join(' · ')}</p>
       <h1>${esc(r.name)}</h1>
-      <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(dayMonth(r.date))} · <span class="num">${esc(r.hours)}</span></p>
+      <p class="rv-sub">${esc(r.shiftName)} · ${esc(r.weekday)} ${esc(dayMonth(r.date))} · <span class="num nowrap">${esc(r.hours)}</span></p>
       ${r.supervisor ? `<p class="rv-sub">${esc(t('supShort'))} : ${esc(r.supervisor)}</p>` : ''}
     </div>
     <div class="rv-verdict ${nAttention ? 'warn' : 'ok'}">
@@ -3067,7 +3067,7 @@ function dashWeek() {
     const done = doneDays.has(d);
     const cls = ['dw-day', d === today && 'today', p && 'on', done && 'done', d < today && 'past'].filter(Boolean).join(' ');
     const label = `${cap(names[i])}${p ? ` ${f(toMin(p.start))} – ${f(toMin(p.end))}` : ` ${t('schedOff')}`}${done ? ` ✓` : ''}`;
-    return `<li class="${cls}" aria-label="${esc(label)}"><span class="dw-name" aria-hidden="true">${esc(cap(names[i]).slice(0, 3))}</span><span class="dw-dot" aria-hidden="true">${done ? '✓' : new Date(`${d}T12:00:00`).getDate()}</span><span class="dw-time num" aria-hidden="true">${p ? esc(f(toMin(p.start))) : '—'}</span></li>`;
+    return `<li class="${cls}" aria-label="${esc(label)}"><span class="dw-name" aria-hidden="true">${esc(cap(names[i]).slice(0, 3))}</span><span class="dw-dot" aria-hidden="true">${done ? '✓' : new Date(`${d}T12:00:00`).getDate()}</span><span class="dw-time num" aria-hidden="true">${p ? esc(f(toMin(p.start)).replace(/\s/g, '')) : '—'}</span></li>`;
   }).join('')}</ol>`;
 }
 document.addEventListener('click', (ev) => {

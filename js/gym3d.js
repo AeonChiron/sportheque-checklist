@@ -371,6 +371,9 @@ export function mountGym3D(host, { highlight = null, selected = null, tags = {},
     if (!host.isConnected) { destroy(); return; }
     raf = requestAnimationFrame(tick);
     if (!visible || document.hidden) return;
+    // Batterie : rien ne bouge après 12 s sans toucher (body.calm); au repos, 30 images/s suffisent.
+    if (!drag && document.body.classList.contains('calm')) return;
+    if (!drag && now - lastMove > 2500 && (tick.skip = !tick.skip)) return;
     const t = (now - t0) / 1000;
     // Au repos, la caméra se balance doucement d'un côté à l'autre.
     if (!reduced() && !drag && now - lastMove > 2500) target.az += (view.az0 + Math.sin(t * 0.25) * 0.35 - target.az) * 0.01;
