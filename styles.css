@@ -2622,3 +2622,6 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
   .d-past { grid-column: 1 / -1; grid-row: 4; }
   .d-tiles { grid-column: 1 / -1; grid-row: 5; }
 }
+
+.d-shift.is-next .d-date { background: var(--ink); }
+.d-shift.is-next .d-date small, .d-shift.is-next .d-date b { color: var(--surface); }

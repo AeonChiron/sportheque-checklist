@@ -2927,8 +2927,9 @@ function upcomingShifts(skip, n = 4) {
   for (let i = 0; i < 28 && out.length < n; i++) {
     const d = addDays(today, i);
     const p = specialFor(d) || presetOf(sc[dowOf(d)]);
-    if (!p?.start || d === skip) continue;
+    if (!p?.start) continue;
     if (d === today && (editableShift() || nowMin >= toMin(p.end))) continue;
+    if (d === skip && state?.date === d) continue; // le quart déjà ouvert vit dans la carte du haut
     out.push({ ...p, date: d });
   }
   return out;
@@ -2937,7 +2938,8 @@ function dashUpcoming(skip) {
   const list = upcomingShifts(skip);
   const rows = list.map((p) => {
     const left = Math.ceil((startAt(p) - Date.now()) / 6e4);
-    return `<button type="button" class="d-shift" data-up="${p.date}">${dDate(p.date)}<span class="d-st"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc([p.date === todayISO() || p.date === addDays(todayISO(), 1) ? cap(dayWord(p.date)) : '', SHIFTS[detectShift(p.start, p.end)][lang()].short].filter(Boolean).join(' · '))}</small></span><span class="d-left num">${esc(left > 0 ? countdown(left) : t('nbGo'))}</span>${CHEV_R}</button>`;
+    const first = p.date === skip;
+    return `<button type="button" class="d-shift${first ? ' is-next' : ''}" data-up="${p.date}">${dDate(p.date)}<span class="d-st"><b class="num">${nb(f(toMin(p.start)))} – ${nb(f(toMin(p.end)))}</b><small>${esc([first ? t('nbNext') : '',p.date === todayISO() || p.date === addDays(todayISO(), 1) ? cap(dayWord(p.date)) : '', SHIFTS[detectShift(p.start, p.end)][lang()].short].filter(Boolean).join(' · '))}</small></span><span class="d-left num">${esc(left > 0 ? countdown(left) : t('nbGo'))}</span>${CHEV_R}</button>`;
   }).join('');
   return `<section class="d-card d-up" aria-labelledby="dUpH"><div class="d-head"><h2 id="dUpH">${esc(t('upcoming'))}</h2></div>
     ${rows || `<p class="d-none">${esc(t(mySchedule() && Object.keys(mySchedule()).length ? 'upNoneSoon' : 'upEmpty'))}</p>`}</section>`;
