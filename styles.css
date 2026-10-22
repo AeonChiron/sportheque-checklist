@@ -2808,3 +2808,5 @@ body:has(#sheet:not([hidden])) .toast { top: calc(12px + env(safe-area-inset-top
 /* « Voir les étapes » de la tâche en cours, en sombre : pas de pastille grise délavée. */
 :root[data-theme="dark"] .task.current .t-more { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 :root[data-theme="dark"] .t-time small { color: #a3b1b2; }
+/* Avant le début du quart : on coche, mais l'envoi attend l'heure (propriétaire). */
+#finishBtn.send-locked { background: var(--sunk); color: var(--ink); border: 1px solid var(--line); box-shadow: none; }

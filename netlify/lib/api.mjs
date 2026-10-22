@@ -292,13 +292,19 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       return json({ ok: true });
     }
     // L'admin corrige les tâches d'un quart déjà enregistré (ex. oublié de cocher), n'importe quel jour.
+    // Corriger les cases d'un quart déjà enregistré : l'admin, n'importe quel quart;
+    // chaque personne, son propre quart pendant 36 h après le premier envoi (propriétaire).
     if (raw?.action === 'edit') {
-      if (me?.role !== 'admin') return json({ error: 'admin' }, 403);
       if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift)) || !Array.isArray(raw.items)) return json({ error: 'invalid' }, 400);
       const name = String(raw.name || '').trim().toLowerCase();
       const list = (await store.get(raw.date, { type: 'json' })) || [];
       const s = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
       if (!s) return json({ error: 'missing' }, 404);
+      const admin = me?.role === 'admin';
+      const own = String(me?.name || '').trim().toLowerCase() === name;
+      const firstAt = new Date(s.savedAt || s.submittedAt || 0).getTime();
+      if (!admin && !own) return json({ error: 'admin' }, 403);
+      if (!admin && (!firstAt || Date.now() - firstAt > 36 * 3600e3)) return json({ error: 'locked' }, 409);
       const ok = new Set(['done', 'notdone', 'unchecked']);
       const prev = new Map((s.items || []).map((i) => [i.id, i]));
       const edited = raw.items.slice(0, 40).filter((i) => i && typeof i.id === 'string' && ok.has(i.status)).map((i) => {
@@ -309,8 +315,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       s.items = [...(s.items || []).filter((i) => !seen.has(i.id)), ...edited].slice(0, 40); // le pointage et le reste restent tels quels
       s.done = s.items.filter((i) => i.status === 'done').length;
       s.total = Math.max(s.total || 0, s.items.length);
-      s.editedBy = me.name || '';
-      s.editedAt = new Date().toISOString();
+      if (!own) { s.editedBy = me.name || ''; s.editedAt = new Date().toISOString(); } // sa propre correction : pas d'étiquette
       await store.setJSON(raw.date, list);
       return json({ ok: true, shift: s });
     }

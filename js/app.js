@@ -1260,6 +1260,9 @@ function renderChecklist() {
   $('#finishBtn').classList.toggle('save-mode', !ready);
   $('#finishBtn').textContent = t(ready ? 'finishReady' : 'saveProgress');
   if (lock) { $('#finishBtn').textContent = t('lockShort', countdown(lock)); $('#finishBtn').disabled = true; } else $('#finishBtn').disabled = false;
+  const early = notStarted();
+  $('#finishBtn').classList.toggle('send-locked', early);
+  if (early) { $('#finishBtn').classList.remove('ready'); $('#finishBtn').textContent = t('sendLocked', sendWhen()); }
   const hint = $('#swipeHint');
   hint.hidden = prefs.swipeSeen || !matchMedia('(pointer: coarse)').matches;
   hint.textContent = t('swipeHint');
@@ -1284,6 +1287,14 @@ function renderChecklist() {
     ? `<div class="section-head" data-key="fh"><h2>${t('flags')}</h2><span class="num">${state.flags.length}</span></div>
        ${state.flags.map((fl, i) => `<div class="flag-item${fl.urgent ? ' urgent' : ''}" data-key="f-${esc(fl.at)}-${i}">${catIcon(fl.category)}<div><b>${esc(catName(fl.category))}</b>${fl.location ? ` · ${esc(fl.location)}` : ''}<br>${fl.text ? `${esc(fl.text)}<br>` : ''}<small class="num">${clock(fl.at)}${fl.photos?.length ? ` · ${t('photos')} ${fl.photos.length}` : ''}</small>${flagMailLine(fl, i)}</div><button data-del-flag="${i}">${t('remove')}</button></div>`).join('')}`
     : '');
+}
+
+// Mon propre quart, enregistré il y a moins de 36 h : je peux encore corriger ses cases.
+const EDIT_HOURS = 36;
+function ownFixable(src) {
+  const me = String(session.user?.name || '').trim().toLowerCase();
+  const at = new Date(src?.savedAt || src?.submittedAt || 0).getTime();
+  return Boolean(me) && String(src?.name || '').trim().toLowerCase() === me && at > 0 && Date.now() - at < EDIT_HOURS * 3600e3;
 }
 
 // Met à jour une liste sans tout recréer : chaque ligne (data-id / data-key) garde son
@@ -2227,6 +2238,8 @@ function openSettings() {
 
 // ---------- 3. Fin de quart ----------
 $('#finishBtn').addEventListener('click', () => {
+  // Propriétaire : on coche quand on veut, mais on n'envoie pas avant l'heure du début du quart.
+  if (notStarted()) { queueDraft(); toast(t('sendWait', sendWhen()), 'muted'); sfx('error'); return; }
   if (!canEnd()) { saveDraft({ manual: true }); return; }
   // Tout est coché : « Fin du quart » lance la fête (lapin, confettis, accord), puis le résumé.
   if (allDone()) { showAllDone(); celebrate(); confettiRain(); sfx('celebrate'); sfx('cheer'); buzz('lift'); return; }
@@ -2241,7 +2254,17 @@ $('#backBtn').addEventListener('click', () => { renderChecklist(); show('checkli
 $('#fNotes').addEventListener('input', (ev) => { state.notes = ev.target.value; save(); });
 $('#fHandoff').addEventListener('input', (ev) => { state.handoff = ev.target.value; save(); });
 
+// Le quart n'a pas encore commencé (ex. mardi 7:30 vu jeudi) : on peut cocher, pas envoyer.
+function shiftStartAt(st = state) { const at = dateOf(st.date); at.setHours(0, toMin(st.start), 0, 0); return at; }
+function notStarted() { return Boolean(state?.start && state?.date) && Date.now() < shiftStartAt().getTime(); }
+function sendWhen() {
+  const time = f(toMin(state.start));
+  if (state.date === todayISO()) return t('sendAtTime', time);
+  const day = dateOf(state.date).toLocaleDateString(locale(), { weekday: 'long' });
+  return t('sendAtDay', day, time);
+}
 function openFinish() {
+  if (notStarted()) { toast(t('sendWait', sendWhen()), 'muted'); sfx('error'); return; }
   paintStatic();
   const tasks = planTasks();
   const st = (x) => state.tasks[x.id] || {};
@@ -2484,7 +2507,8 @@ function openReview(r, opts = {}) {
       <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}</span>
     </li>`;
-  const canEdit = adminPowers() && r.src && opts.from === 'history';
+  // Propriétaire : chacun corrige les cases de SON quart pendant 36 h; l'admin, n'importe quel quart.
+  const canEdit = Boolean(r.src) && opts.from === 'history' && (adminPowers() || ownFixable(r.src));
   const attention = [
     ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span>${fl.text ? `<span class="rv-quote">« ${esc(fl.text)} »</span>` : ''}${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
@@ -2619,7 +2643,7 @@ $('#reviewBody').addEventListener('click', async (ev) => {
       hist.loaded = false; hist.weekLoaded = ''; hist.sig = '';
       sfx('save'); toast(t('editSaved'), 'muted');
       openReview(r, { ...opts, edit: false });
-    } catch { toast(t('customLater'), 'muted'); }
+    } catch (e) { toast(t(e.status === 0 ? 'customLater' : e.message === 'locked' ? 'editLocked' : 'editServer'), 'muted'); sfx('error'); }
     return;
   }
 });
@@ -3590,10 +3614,11 @@ function paintFront() {
   const label = $('#poolStartLabel');
   if (inside) {
     // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
+    ensurePlan(); // au démarrage, le quart gardé sur le téléphone compte tout de suite
     let sub = t('wbStart');
     const nx = !state && nextShift();
     if (bossWatching()) sub = urgentOpen().length ? t('wbUrgent', urgentOpen().length) : t('wbTeam');
-    else if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = t('wbUnsent', n); }
+    else if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = state.date === todayISO() ? t('wbUnsentDay', n, '') : t('wbUnsentDay', n, dateOf(state.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'short' })); }
     else if (state && plan) { const ts = planTasks(); sub = counting() ? t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length) : t('wbWaiting'); }
     else if (nx?.ready) sub = t('wbReady');
     else if (nx) sub = t('wbPeek');
