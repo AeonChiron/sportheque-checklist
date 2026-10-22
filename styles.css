@@ -2489,3 +2489,9 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 @media (min-width: 700px) {
   #history .review-top { margin: 0 0 20px; padding: 22px 24px 24px; border-radius: 28px; }
 }
+
+/* Fin du quart : signaler au superviseur, à côté des notes */
+.finish-report { display: grid; gap: 12px; border-color: color-mix(in srgb, var(--bad) 30%, var(--line)); }
+.finish-report .fr-text { margin: 0; display: grid; gap: 4px; }
+.finish-report .fr-text span { color: var(--muted); font-size: 14px; }
+.finish-report .btn { width: 100%; }

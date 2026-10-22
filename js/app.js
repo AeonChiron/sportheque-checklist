@@ -1733,6 +1733,11 @@ function openTask(id) {
 // pas de courriel.
 $('#flagBtn').addEventListener('click', () => openFlag());
 $('#flagHome').addEventListener('click', () => openFlag());
+// Fin du quart : signaler au superviseur (urgent proposé d'office), puis on revient au résumé à jour.
+$('#finishFlag').addEventListener('click', () => {
+  state.notes = $('#fNotes').value; state.handoff = $('#fHandoff').value; save(); // rien de tapé ne se perd
+  openFlag({ urgentFirst: true, after: () => { if (current === 'finish') openFinish(); } });
+});
 
 const CAT_ICON = {
   difficile: '<path d="M4 18c2-6 5-9 8-9s6 3 8 9"/><path d="M12 9V4M9 6l3-2 3 2"/>',
@@ -1770,9 +1775,9 @@ function flagTaskItems() {
   const tp = todaySched() || SHIFTS[1];
   try { return buildPlan({ shift: detectShift(tp.start, tp.end), date: todayISO(), start: tp.start, end: tp.end, lang: lang() }).items; } catch { return []; }
 }
-function openFlag({ where = '' } = {}) {
+function openFlag({ where = '', urgentFirst = false, after = null } = {}) {
   let category = null;
-  let urgent = null; // tant que l'employé n'a pas choisi, suit la catégorie
+  let urgent = urgentFirst ? true : null; // tant que l'employé n'a pas choisi, suit la catégorie (fin de quart : urgent d'office)
   const sup = alertNames();
   openSheet(`
     <div class="sheet-head">
@@ -1855,6 +1860,7 @@ function openFlag({ where = '' } = {}) {
         save(); renderChecklist();
         submitProblem(fl);
       } else submitProblem(fl, looseCtx());
+      after?.();
     };
     paint();
   }, `<div class="sheet-actions">
