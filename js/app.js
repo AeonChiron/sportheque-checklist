@@ -93,10 +93,8 @@ function navRecord(id) {
     else if (location.pathname + location.hash !== url) history.replaceState(st, '', url);
   } catch { /* ignore */ }
 }
-let sheetPopExpected = false;
 window.addEventListener('popstate', (e) => {
   navPopAt = Date.now();
-  if (sheetPopExpected) { sheetPopExpected = false; return; } // la feuille vient d'être fermée au toucher
   // Une feuille ouverte : « retour » la ferme, et on reste sur l'écran.
   if (!$('#sheet').hidden && $('#sheet').classList.contains('open')) {
     navRestoring = true;
@@ -106,6 +104,8 @@ window.addEventListener('popstate', (e) => {
     return;
   }
   const scr = e.state?.scr;
+  // Le même écran deux fois de suite (laissé par une feuille fermée) : on saute ce pas en silence.
+  if (scr && scr === current && !e.state?.sheet) { history.back(); return; }
   navPopAt = Date.now();
   navRestoring = true;
   try {
@@ -1462,8 +1462,9 @@ function openSheet(html, onMount, foot = '') {
 }
 function closeSheet() {
   if (!$('#sheet').hidden && $('#sheet').classList.contains('open')) sfx('close');
-  // Fermée au toucher (X, fond, glisser) : on retire aussi son entrée d'historique.
-  if (history.state?.sheet && !navRestoring) { sheetPopExpected = true; history.back(); }
+  // Fermée au toucher (X, fond, glisser) : son entrée d'historique redevient l'écran lui-même
+  // (pas de history.back() : rien ne se croise si on navigue tout de suite après).
+  if (history.state?.sheet && !navRestoring) { try { history.replaceState({ scr: history.state.scr || current }, '', location.href); } catch { /* ignore */ } }
   $('#backdrop').classList.remove('open');
   $('#sheet').classList.remove('open');
   setTimeout(() => { $('#backdrop').hidden = true; $('#sheet').hidden = true; }, 300);
@@ -4099,7 +4100,7 @@ function renderBoss({ animate = true } = {}) {
     for (const p of boss.problems.filter((x) => x.category === 'materiel' && x.status !== 'resolved')) {
       for (const it of (p.text || t('materielNoText')).split(',').map((x) => x.trim()).filter(Boolean)) need.set(it, (need.get(it) || 0) + 1);
     }
-    const supplies = need.size ? `<div class="panel supplies"><h2>${esc(t('toOrder'))}</h2><div class="flag-chips">${[...need].sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="chip"><b>${esc(k)}</b>${n > 1 ? ` ×${n}` : ''}</span>`).join('')}</div></div>` : '';
+    const supplies = need.size ? `<div class="panel supplies"><h2>${esc(t('toOrder'))}</h2><div class="flag-chips">${[...need].sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="chip"><b>${esc(k)}</b>${n > 1 ? ` ×${n}` : ''}</span>`).join('')}</div><button type="button" class="btn ghost small" data-bought>✓ ${esc(t('bought'))}</button></div>` : '';
     panel = !boss.loaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
       : `${supplies}<div class="segmented tiny pb-filter" role="tablist">
           <button type="button" role="tab" data-pfilter="open" aria-selected="${boss.filter === 'open'}">${esc(t('toFix'))}${n ? ` · ${n}` : ''}</button>
@@ -4109,6 +4110,14 @@ function renderBoss({ animate = true } = {}) {
           : `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(boss.filter === 'open' ? 'nothingToFix' : 'noProblems'))}</p></div>`}</div>`;
   }
   $('#bossBody').innerHTML = `
+    <div class="segmented boss-tabs" role="tablist">
+      <button type="button" role="tab" data-btab="problems" aria-selected="${boss.tab === 'problems'}">${esc(t('tabProblems'))}</button>
+      <button type="button" role="tab" data-btab="trends" aria-selected="${boss.tab === 'trends'}">${esc(t('tabTrends'))}</button>
+      <button type="button" role="tab" data-btab="team" aria-selected="${boss.tab === 'team'}">${esc(t('tabTeam'))}</button>
+    </div>
+    ${boss.error ? `<div class="notice bad">${esc(t(boss.error))}</div>` : ''}
+    ${panel}
+    <div class="boss-more">
     <button type="button" class="rp-card boss-hist" data-go="history">
       <span class="pb-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg></span>
       <span class="rp-main"><b>${esc(t('shiftsHistory'))}</b><span class="hi-meta">${esc(t('shiftsHistorySub'))}</span></span>${CHEV_R}
@@ -4118,16 +4127,23 @@ function renderBoss({ animate = true } = {}) {
       <span class="rp-main"><b>${esc(t('posterCard'))}</b><span class="hi-meta">${esc(t('posterCardSub'))}</span></span>${CHEV_R}
     </button>
     <div class="panel alerts-row">${switchRow('bAlerts', t('alertsMe'), Boolean(session.user?.alerts))}<p class="section-note">${esc(t('alertsMeSub', alertNames()))}</p></div>
-    <div class="segmented boss-tabs" role="tablist">
-      <button type="button" role="tab" data-btab="problems" aria-selected="${boss.tab === 'problems'}">${esc(t('tabProblems'))}</button>
-      <button type="button" role="tab" data-btab="trends" aria-selected="${boss.tab === 'trends'}">${esc(t('tabTrends'))}</button>
-      <button type="button" role="tab" data-btab="team" aria-selected="${boss.tab === 'team'}">${esc(t('tabTeam'))}</button>
-    </div>
-    ${boss.error ? `<div class="notice bad">${esc(t(boss.error))}</div>` : ''}
-    ${panel}`;
+    </div>`;
 }
 
 $('#bossBody').addEventListener('click', async (ev) => {
+  // Liste d'achats : tout est acheté → les signalements « Matériel manquant » ouverts sont réglés.
+  const bought = ev.target.closest('[data-bought]');
+  if (bought) {
+    bought.disabled = true;
+    try {
+      for (const p of boss.problems.filter((x) => x.category === 'materiel' && x.status !== 'resolved')) {
+        const next = await setProblemStatus(p.id, 'resolved');
+        boss.problems = boss.problems.map((x) => (x.id === next.id ? next : x));
+      }
+      sfx('save'); toast(t('boughtDone'), 'muted'); paintBossCount(); renderBoss({ animate: false });
+    } catch { bought.disabled = false; toast(t('customLater'), 'muted'); }
+    return;
+  }
   const sw = ev.target.closest('#bAlerts');
   if (sw) {
     const on = sw.getAttribute('aria-checked') !== 'true';
