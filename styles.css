@@ -3159,3 +3159,6 @@ details.mt-card > summary:active { background: var(--sunk); }
 #auth.inside .pool-cta.fh .wb-avatar > span { display: grid; place-items: center; width: 100%; height: 100%; font: 800 32px/1 var(--display); color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, .35); box-shadow: none; }
 #auth.inside .pool-cta.fh .wb-avatar::after { inset: 0; }
 .tour-tip[data-side="over"]::before { display: none; }
+.rv-ownacts { display: flex; gap: 10px; flex-wrap: wrap; }
+.rv-ownacts .btn { flex: 1 1 160px; }
+.rv-del[data-armed] { background: var(--bad); color: #fff; border-color: transparent; }

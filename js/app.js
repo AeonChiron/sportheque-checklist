@@ -2555,7 +2555,7 @@ function openReview(r, opts = {}) {
     ${r.editedBy ? `<p class="section-note">${esc(t('editedBy', r.editedBy))}</p>` : ''}
     ${canEdit ? (editing
       ? `<div class="rv-editbar"><p>${esc(t('editHint'))}</p><div class="rv-editacts"><button type="button" class="btn ghost small" data-rvedit="cancel">${esc(t('cancel2'))}</button><button type="button" class="btn primary small" data-rvedit="save">${esc(t('editSave'))}</button></div></div>`
-      : `<button type="button" class="btn ghost rv-editopen" data-rvedit="open">${esc(t('editTasks'))}</button>`) : ''}
+      : `<div class="rv-ownacts"><button type="button" class="btn ghost rv-editopen" data-rvedit="open">${esc(t('editTasks'))}</button>${ownFixable(r.src) || adminPowers() ? `<button type="button" class="btn ghost danger rv-del" data-rvdel>${esc(t('delShift'))}</button>` : ''}</div>`) : ''}
     <ul class="rv-list${editing ? ' editing' : ''}">${r.items.map(row).join('')}</ul>
     ${r.overflow.length ? `<div class="section-head"><h2>${esc(T.overflow)}</h2></div><p class="section-note">${esc(T.overflowNote(r.deficit))}</p><ul class="rv-list">${r.overflow.map(row).join('')}</ul>` : ''}
     ${r.outOfRange.length ? `<p class="section-note">${esc(T.fixed)} : ${esc(r.outOfRange.join(', '))}</p>` : ''}
@@ -2664,6 +2664,19 @@ $('#reviewBody').addEventListener('click', async (ev) => {
     } catch (e) { toast(t(e.status === 0 ? 'customLater' : e.message === 'locked' ? 'editLocked' : 'editServer'), 'muted'); sfx('error'); }
     return;
   }
+});
+// Propriétaire : chacun peut effacer son propre quart pendant 36 h (deux touchers).
+$('#reviewBody').addEventListener('click', async (ev) => {
+  const d = ev.target.closest('[data-rvdel]');
+  if (!d || !lastReview) return;
+  if (!d.dataset.armed) { d.dataset.armed = '1'; d.textContent = t('delShiftSure'); sfx('error'); setTimeout(() => { if (d.isConnected) { delete d.dataset.armed; d.textContent = t('delShift'); } }, 3500); return; }
+  const src = lastReview[0].src;
+  const ok = await deleteShift(src);
+  if (!ok) { toast(t('histDeleteFail'), 'bad'); return; }
+  hist.recent = (hist.recent || []).filter((x) => !(x.date === src.date && x.shift === src.shift && (x.name || '').trim().toLowerCase() === (src.name || '').trim().toLowerCase()));
+  hist.loaded = true; hist.sig = '';
+  toast(t('histDeleted')); sfx('toggle');
+  openMine({ keep: true });
 });
 $('#reviewBody').addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-custom]');

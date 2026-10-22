@@ -159,7 +159,7 @@ test('Admin : son propre code; seul l’admin change les codes d’équipe', asy
   assert.equal((await c2('auth', { method: 'POST', token: emp.token, body: { action: 'avatar', avatar: '' } })).data.user.avatar, '');
 });
 
-test('Historique : seul l’admin efface un quart', async () => {
+test('Historique : l’admin efface n’importe quel quart; un autre employé ou un superviseur, non', async () => {
   const a3 = createApi({ getStore: memoryStores(), env: () => ({ TEAM_CODE: 'Equipe', BOSS_CODE: 'Patron', ADMIN_CODE: 'Racine' }) });
   const c3 = async (path, { method = 'GET', body, token } = {}) => {
     const res = await a3(new Request(`http://x/api/${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }));
@@ -171,7 +171,8 @@ test('Historique : seul l’admin efface un quart', async () => {
   const admin = await sign('Kat', 'admin', 'racine');
   await c3('board', { method: 'POST', token: emp, body: { date: '2026-10-21', shift: 1, name: 'Marie', items: [], flags: [] } });
   const del = { action: 'delete', date: '2026-10-21', shift: 1, name: 'marie' };
-  assert.equal((await c3('board', { method: 'POST', token: emp, body: del })).status, 403);
+  const other = await sign('Noah', 'employee', 'equipe');
+  assert.equal((await c3('board', { method: 'POST', token: other, body: del })).status, 403);
   assert.equal((await c3('board', { method: 'POST', token: boss, body: del })).status, 403);
   assert.equal((await c3('board', { method: 'POST', token: admin, body: del })).status, 200);
   assert.equal((await c3('board?dates=2026-10-21', { token: admin })).data.days['2026-10-21'].length, 0);
@@ -313,4 +314,20 @@ test('Chacun corrige les cases de son propre quart pendant 36 h (pas celui des a
   assert.equal(s.editedBy, undefined); // sa propre correction n'est pas étiquetée
   await stores('board').setJSON('2026-10-21', [{ ...shift, savedAt: ago(37) }]);
   assert.equal(await go(edit, lea), 409); // 37 h : verrouillé
+});
+
+test('Chacun efface son propre quart pendant 36 h, pas celui des autres', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
+  const go = async (body, token) => (await a(new Request('http://x/api/board', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }))).status;
+  const tok = async (name, email) => (await (await a(new Request('http://x/api/auth', { method: 'POST', body: JSON.stringify({ action: 'signup', name, email, password: 'secret1', code: 'e' }) }))).json()).token;
+  const lea = await tok('Léa', 'lea@x.ca'), noah = await tok('Noah', 'noah@x.ca');
+  const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const del = { action: 'delete', date: '2026-10-21', shift: 2, name: 'Léa' };
+  await stores('board').setJSON('2026-10-21', [{ date: '2026-10-21', shift: 2, name: 'Léa', items: [], flags: [], savedAt: ago(37) }]);
+  assert.equal(await go(del, lea), 409);
+  assert.equal(await go(del, noah), 403);
+  await stores('board').setJSON('2026-10-21', [{ date: '2026-10-21', shift: 2, name: 'Léa', items: [], flags: [], savedAt: ago(10) }]);
+  assert.equal(await go(del, lea), 200);
+  assert.equal((await stores('board').get('2026-10-21', { type: 'json' })).length, 0);
 });

@@ -281,11 +281,17 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     }
     const raw = await body(req);
     // L'admin seulement peut effacer un quart de l'historique.
+    // Effacer un quart : l'admin, n'importe lequel; chaque personne, le sien pendant 36 h (propriétaire).
     if (raw?.action === 'delete') {
-      if (me?.role !== 'admin') return json({ error: 'admin' }, 403);
       if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift))) return json({ error: 'invalid' }, 400);
       const name = String(raw.name || '').trim().toLowerCase();
       const list = (await store.get(raw.date, { type: 'json' })) || [];
+      if (me?.role !== 'admin') {
+        const mineS = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
+        if (String(me?.name || '').trim().toLowerCase() !== name) return json({ error: 'admin' }, 403);
+        const at = new Date(mineS?.savedAt || mineS?.submittedAt || 0).getTime();
+        if (mineS && !mineS.open && (!at || Date.now() - at > 36 * 3600e3)) return json({ error: 'locked' }, 409);
+      }
       const left = list.filter((x) => !(Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name));
       if (left.length === list.length) return json({ error: 'missing' }, 404);
       await store.setJSON(raw.date, left);

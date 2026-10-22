@@ -144,3 +144,4 @@ Plain static site + one serverless function. No build step.
   - Quick bar « Accueil » (`[data-front]`) and `data-go="home"` (no shift open) → hub; `#hubDoor` → front page. Guided tour now runs on the hub (`tourHub*` keys); bubble auto-places (below/above/pinned bottom).
   - **Nav fix**: popstate with `state == null` (fired by `location.hash = …` links) is ignored so hashchange records the screen; Back from a report now returns to Reports.
   - Test scripts: front tap now lands on `hub`; start a shift with `#hbMain .hb-cta`.
+- **Delete own shift (owner, 22 oct.)**: on a shift report opened from Mes quarts, « Effacer ce quart » (two taps) for your own shift within 36 h (admin: any). Server `delete` checks owner + 36 h (409 locked, 403 other people).
