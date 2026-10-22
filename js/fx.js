@@ -57,32 +57,27 @@ function A() {
   if (ac.state !== 'running') ac.resume().catch(() => {});
   return ac;
 }
-// iPhone : après un verrouillage ou un autre app, le son peut rester « interrompu » et ne
-// plus repartir. Au prochain toucher, s'il ne repart pas, on le reconstruit au complet.
-function revive() {
-  if (!ac || ac.state === 'running') return;
-  const old = ac;
-  ac.resume().catch(() => {});
-  setTimeout(() => {
-    if (ac !== old || old.state === 'running') return;
-    try { old.close(); } catch { /* ignore */ }
-    ac = null; master = null; verbIn = null; // le prochain son recrée tout
-    unlock();
-  }, 250);
-}
-// iPhone : le son ne part qu'après un vrai toucher. Au premier toucher (et au retour
-// dans l'app), on réveille le son avec un silence d'un instant.
+// iPhone / iPad : Safari ne laisse démarrer (ou redémarrer) le son que PENDANT un vrai toucher
+// (touchend, click, touche du clavier — pas pointerdown). À chaque toucher, on crée ou on relance
+// le moteur à ce moment-là et on joue un silence d'un instant pour l'ouvrir. S'il reste bloqué
+// plus d'une seconde (iOS l'a « interrompu » après un verrouillage), on le remplace au toucher
+// SUIVANT, toujours pendant ce toucher (jamais dans une minuterie : il resterait muet).
+let stale = false;
 function unlock() {
   try {
+    if (stale && ac) { try { ac.close(); } catch { /* ignore */ } ac = null; master = null; verbIn = null; stale = false; }
     const c = A();
     const b = c.createBuffer(1, 1, c.sampleRate), src = c.createBufferSource();
     src.buffer = b; src.connect(c.destination); src.start(0);
+    if (c.state !== 'running') {
+      const cc = c;
+      setTimeout(() => { if (ac === cc && cc.state !== 'running') stale = true; }, 1000);
+    }
   } catch { /* pas de son ici */ }
 }
 if (typeof window !== 'undefined') {
-  for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, () => { revive(); unlock(); }, { passive: true, capture: true });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) revive(); });
-  addEventListener('pageshow', revive);
+  for (const ev of ['touchend', 'click', 'keydown']) addEventListener(ev, unlock, { passive: true, capture: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running') ac.resume().catch(() => {}); });
 }
 // Une voix : gain → panoramique → sortie + envoi vers la réverbération.
 function voice(t0, { pan = 0, verb = 0.25 } = {}) {
