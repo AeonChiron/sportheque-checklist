@@ -1291,11 +1291,11 @@ function shiftLocked() {
 }
 function lockedToast() { const l = shiftLocked(); if (l) { toast(t('ovLocked', countdown(l)), 'muted'); sfx('locked'); } return l; }
 function toggleDone(id) {
-  if (id === 'pointage') { // le pointage reste coché; on pointe soi-même, à n'importe quelle heure
-    if (state.tasks.pointage?.done) return;
+  if (id === 'pointage' && !state.tasks.pointage?.done) { // on pointe soi-même, à n'importe quelle heure
     punchIn(true);
     return;
   }
+  // Propriétaire : le pointage se décoche n'importe quand, comme les autres tâches.
   if (lockedToast()) return;
   const wasAll = allDone();
   const e = entry(id);
@@ -1319,6 +1319,49 @@ function toggleDone(id) {
   else if (e.done && tasks.length - left === half && tasks.length > 3) { celebrate(); toast(t('halfway'), 'ok', undo); }
   else toast(e.done ? pickCheer() : t('unchecked'), e.done ? 'ok' : 'muted', undo);
   bump($('#progressLabel'));
+}
+
+// Propriétaire : une vraie pluie de confettis plein écran à « Fin du quart ».
+function confettiRain() {
+  if (reducedMotion()) return;
+  const cv = document.createElement('canvas');
+  cv.className = 'confetti-rain';
+  document.body.append(cv);
+  const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const x = cv.getContext('2d'); x.scale(dpr, dpr);
+  const cols = ['#3fd6f0', '#ff8a6b', '#ffd166', '#5cc28e', '#ffffff', '#b98cff', '#ff6fa8'];
+  const P = Array.from({ length: Math.round(Math.min(220, W / 4)) }, (_, i) => ({
+    x: Math.random() * W, y: -20 - Math.random() * H * 0.9,
+    vx: (Math.random() - 0.5) * 1.6, vy: 2 + Math.random() * 3.2,
+    r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.25,
+    w: 6 + Math.random() * 6, h: 9 + Math.random() * 8, c: cols[i % cols.length],
+    sw: Math.random() * Math.PI * 2, round: i % 5 === 0,
+  }));
+  // Deux canons qui tirent des coins du bas au départ.
+  for (let i = 0; i < 70; i++) {
+    const left = i % 2 === 0, a = (left ? -1 : -1) * (Math.PI / 2) + (left ? 0.45 : -0.45) + (Math.random() - 0.5) * 0.5, sp = 11 + Math.random() * 8;
+    P.push({ x: left ? 0 : W, y: H * 0.85, vx: Math.cos(a) * sp * (left ? 1 : 1), vy: Math.sin(a) * sp, r: Math.random() * 3, vr: (Math.random() - 0.5) * 0.3,
+      w: 6 + Math.random() * 5, h: 8 + Math.random() * 7, c: cols[(i * 3) % cols.length], sw: Math.random() * 6, round: i % 6 === 0 });
+  }
+  const t0 = performance.now(), LIFE = 4200;
+  const tick = (now) => {
+    const el = now - t0;
+    x.clearRect(0, 0, W, H);
+    const fade = el > LIFE - 900 ? Math.max(0, (LIFE - el) / 900) : 1;
+    x.globalAlpha = fade;
+    for (const p of P) {
+      p.vy = Math.min(p.vy + 0.18, 5.5); p.vx *= 0.985; p.sw += 0.12;
+      p.x += p.vx + Math.sin(p.sw) * 0.8; p.y += p.vy; p.r += p.vr;
+      if (p.y > H + 30) continue;
+      x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.scale(1, Math.cos(p.sw * 1.6));
+      x.fillStyle = p.c;
+      if (p.round) { x.beginPath(); x.arc(0, 0, p.w / 2, 0, Math.PI * 2); x.fill(); } else x.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      x.restore();
+    }
+    if (el < LIFE) requestAnimationFrame(tick); else cv.remove();
+  };
+  requestAnimationFrame(tick);
 }
 
 // Moment spécial : la dernière tâche cochée fait sauter la mascotte de joie.
@@ -2081,7 +2124,7 @@ function openSettings() {
 $('#finishBtn').addEventListener('click', () => {
   if (!canEnd()) { saveDraft({ manual: true }); return; }
   // Tout est coché : « Fin du quart » lance la fête (lapin, confettis, accord), puis le résumé.
-  if (allDone()) { showAllDone(); celebrate(); sfx('celebrate'); buzz('lift'); return; }
+  if (allDone()) { showAllDone(); celebrate(); confettiRain(); sfx('celebrate'); sfx('cheer'); buzz('lift'); return; }
   openFinish();
 });
 // Le quart peut se fermer : chaque tâche cochée ou marquée « Pas pu faire », ou l'heure de fin passée.
@@ -2247,7 +2290,7 @@ async function saveShift() {
   sfx('save');
   const prevSave = editableShift();
   const keepAt = prevSave && prevSave.date === state.date && prevSave.shift === state.shift ? prevSave.savedAt : '';
-  write(LAST_SHIFT, { ...state, savedAt: keepAt || new Date().toISOString() }); // 24 h après le premier envoi
+  write(LAST_SHIFT, { ...state, savedAt: keepAt || new Date().toISOString() }); // 36 h après le premier envoi
   state = null;
   save();
   clearPhotos();
@@ -2281,7 +2324,7 @@ const LAST_SHIFT = 'gym-last-shift';
 function editableShift() {
   const last = read(LAST_SHIFT, null);
   const mine = !session.user || last?.name === shiftName();
-  return last && mine && last.savedAt && Date.now() - new Date(last.savedAt).getTime() < 24 * 3600e3 ? last : null; // 24 h pour corriger
+  return last && mine && last.savedAt && Date.now() - new Date(last.savedAt).getTime() < 36 * 3600e3 ? last : null; // 36 h pour corriger
 }
 function paintEditToday() {
   const last = editableShift();

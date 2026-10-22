@@ -218,18 +218,18 @@ test('Historique : seul l’admin corrige les tâches d’un quart, même un aut
   assert.equal(s.editedBy, 'Seed');
 });
 
-test('Un quart enregistré se modifie pendant 24 h, puis il est verrouillé', async () => {
+test('Un quart enregistré se modifie pendant 36 h, puis il est verrouillé', async () => {
   const stores = memoryStores();
   const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
   const go = async (body, token) => (await a(new Request('http://x/api/board', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }))).status;
   const tok = (await (await a(new Request('http://x/api/auth', { method: 'POST', body: JSON.stringify({ action: 'signup', name: 'Léa', email: 'l2@x.ca', password: 'secret1', code: 'e' }) }))).json()).token;
   const shift = { date: '2026-10-21', shift: 2, name: 'Léa', items: [], flags: [] };
   const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString();
-  await stores('board').setJSON('2026-10-21', [{ ...shift, savedAt: ago(20), savedOn: '2026-10-21' }]);
-  assert.equal(await go(shift, tok), 200); // 20 h : encore modifiable (même un autre jour)
+  await stores('board').setJSON('2026-10-21', [{ ...shift, savedAt: ago(30), savedOn: '2026-10-21' }]);
+  assert.equal(await go(shift, tok), 200); // 30 h : encore modifiable (même un autre jour)
   assert.equal((await stores('board').get('2026-10-21', { type: 'json' }))[0].savedAt, (await stores('board').get('2026-10-21', { type: 'json' }))[0].savedAt); // le premier envoi reste la référence
-  await stores('board').setJSON('2026-10-21', [{ ...shift, savedAt: ago(25), savedOn: '2026-10-21' }]);
-  assert.equal(await go(shift, tok), 409); // 25 h : verrouillé
+  await stores('board').setJSON('2026-10-21', [{ ...shift, savedAt: ago(37), savedOn: '2026-10-21' }]);
+  assert.equal(await go(shift, tok), 409); // 37 h : verrouillé
 });
 
 test('Pas de surveillance : un quart en cours est caché aux autres, et l’heure des cases n’est pas renvoyée', async () => {

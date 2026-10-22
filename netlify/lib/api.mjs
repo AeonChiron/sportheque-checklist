@@ -312,12 +312,12 @@ export function createApi({ getStore, env }) {
     const shift = sanitizeShift(raw);
     if (!shift) return json({ error: 'invalid' }, 400);
     const list = (await store.get(shift.date, { type: 'json' })) || [];
-    // Propriétaire : un quart enregistré se modifie pendant 24 h après son premier envoi
+    // Propriétaire : un quart enregistré se modifie pendant 36 h après son premier envoi
     // (heure du serveur, pas celle du téléphone). Un quart encore « en cours » se continue toujours.
     const old = list.find((x) => x.shift === shift.shift && x.name.toLowerCase() === shift.name.toLowerCase());
     const today = localDay(new Date());
     const firstAt = old && !old.open ? Date.parse(old.savedAt || old.submittedAt || '') || 0 : 0;
-    if (old && !old.open && (!firstAt || Date.now() - firstAt > 24 * 3600e3)) return json({ error: 'locked' }, 409);
+    if (old && !old.open && (!firstAt || Date.now() - firstAt > 36 * 3600e3)) return json({ error: 'locked' }, 409);
     const savedAt = shift.open ? '' : old && !old.open && old.savedAt ? old.savedAt : new Date().toISOString();
     // La validation vient du superviseur, jamais du téléphone : elle reste tant que les
     // activités ne changent pas; une activité changée redevient « à valider ».

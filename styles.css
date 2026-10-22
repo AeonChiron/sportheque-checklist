@@ -2771,3 +2771,18 @@ body:has(#sheet:not([hidden])) .toast { top: calc(12px + env(safe-area-inset-top
 .boss-more { display: grid; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 .supplies .btn { margin-top: 10px; min-height: 44px; }
 .dash-badge { top: 8px; right: 8px; box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); }
+
+/* Propriétaire : en mode sombre, le verre et les contours d'icônes doivent briller (trop sombres avant). */
+:root[data-theme="dark"] .glass-in { fill: color-mix(in srgb, #9fe6f2 14%, var(--surface)); }
+:root[data-theme="dark"] .glass-rim { stroke: rgba(214, 245, 250, .78); stroke-width: 2.4; }
+:root[data-theme="dark"] .glass-shine { stroke: rgba(255, 255, 255, .8); }
+:root[data-theme="dark"] .water { fill: #3fd6f0; }
+:root[data-theme="dark"] .water-back { fill: #2aa6c2; }
+:root[data-theme="dark"] .drop { fill: #3fd6f0; }
+:root[data-theme="dark"] #timeline .glass svg { filter: drop-shadow(0 0 10px rgba(63, 214, 240, .35)); }
+:root[data-theme="dark"] #timeline.full .glass svg { filter: drop-shadow(0 0 14px rgba(63, 214, 240, .7)); }
+:root[data-theme="dark"] .t-icon { background: color-mix(in srgb, #ffffff 7%, var(--sunk)); }
+:root[data-theme="dark"] .t-icon[data-plate] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 60%, #ffffff), 0 0 12px -3px color-mix(in srgb, var(--pc) 75%, transparent); }
+
+/* Pluie de confettis plein écran à « Fin du quart » (au-dessus de l'écran bleu). */
+.confetti-rain { position: fixed; inset: 0; z-index: 61; pointer-events: none; width: 100vw; height: 100vh; }

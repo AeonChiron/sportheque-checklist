@@ -327,7 +327,86 @@ const SOUNDS = {
     bell(PENTA[15], t + 0.85, { gain: 0.05, dur: 2.6, ratio: 3.5, index: 1.2, verb: 0.85 });
     song.step = 0;
   },
+  // Propriétaire : à « Fin du quart », une foule qui crie « yay ! » et applaudit, par-dessus l'accord.
+  cheer(t) {
+    const c = A();
+    const nb = noiseBuf(c);
+    // Une rumeur de foule qui gonfle puis retombe.
+    roar(c, nb, t, 2.6);
+    // Une quinzaine de voix : chacune « y-aaa-y ! », hauteur et départ un peu différents.
+    for (let i = 0; i < 16; i++) yay(c, nb, t + 0.04 + Math.random() * 0.28, i);
+    // Les applaudissements : des centaines de petites claques, denses au début puis qui s'espacent.
+    const n = 170;
+    for (let i = 0; i < n; i++) {
+      const k = Math.random() ** 1.6; // plus serré au début
+      clap(c, nb, t + 0.15 + k * 2.8, 0.05 + (1 - k) * 0.07);
+    }
+  },
 };
+function noiseBuf(c) {
+  if (noiseBuf.ctx === c) return noiseBuf.buf;
+  const len = Math.floor(c.sampleRate * 3), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  noiseBuf.ctx = c; noiseBuf.buf = buf;
+  return buf;
+}
+function noiseSrc(c, nb, t, dur) {
+  const src = c.createBufferSource();
+  src.buffer = nb; src.start(t, Math.random() * (nb.duration - dur - 0.05), dur + 0.05);
+  return src;
+}
+function clap(c, nb, t, gain) {
+  const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900 + Math.random() * 1700; f.Q.value = 1.1 + Math.random();
+  const g = voice(t, { pan: Math.random() * 1.6 - 0.8, verb: 0.35 });
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.002);
+  g.gain.setTargetAtTime(0.0001, t + 0.004, 0.012 + Math.random() * 0.01);
+  noiseSrc(c, nb, t, 0.12).connect(f).connect(g);
+}
+function roar(c, nb, t, dur) {
+  const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.5;
+  const f2 = c.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = 2400;
+  const g = voice(t, { verb: 0.5 });
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.05, t + 0.35);
+  g.gain.setTargetAtTime(0.0001, t + 0.9, 0.6);
+  noiseSrc(c, nb, t, Math.min(dur, 2.9)).connect(f).connect(f2).connect(g);
+}
+// Une voix humaine simple : une source (dents de scie + souffle) passée dans trois formants qui glissent y → a → i.
+function yay(c, nb, t, i) {
+  const kid = i % 3 === 0;
+  const f0 = (kid ? 300 : i % 2 ? 210 : 150) * (0.88 + Math.random() * 0.28);
+  const dur = 0.75 + Math.random() * 0.55;
+  const o = c.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f0 * 0.82, t);
+  o.frequency.exponentialRampToValueAtTime(f0 * 1.18, t + 0.22);
+  o.frequency.exponentialRampToValueAtTime(f0 * 1.08, t + dur * 0.7);
+  o.frequency.exponentialRampToValueAtTime(f0 * 0.9, t + dur);
+  const lfo = c.createOscillator(), ld = c.createGain();
+  lfo.frequency.value = 5 + Math.random() * 2.5; ld.gain.value = f0 * 0.025;
+  lfo.connect(ld).connect(o.frequency);
+  const src = c.createGain(); src.gain.value = 1;
+  o.connect(src);
+  const br = c.createGain(); br.gain.value = 0.35; noiseSrc(c, nb, t, dur + 0.3).connect(br).connect(src);
+  const g = voice(t, { pan: Math.random() * 1.4 - 0.7, verb: 0.45 });
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.03, t + 0.07);
+  g.gain.setValueAtTime(0.03, t + dur * 0.65);
+  g.gain.setTargetAtTime(0.0001, t + dur * 0.65, dur * 0.18);
+  const sc = kid ? 1.18 : i % 2 ? 1.08 : 1;
+  // [F1, F2, F3] pour « y », « a », « i »
+  const path = [[280, 2250, 2900], [760, 1750, 2600], [420, 2150, 2850]];
+  path[0].forEach((_, k) => {
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = [7, 11, 13][k];
+    f.frequency.setValueAtTime(path[0][k] * sc, t);
+    f.frequency.linearRampToValueAtTime(path[1][k] * sc, t + 0.14);
+    f.frequency.setValueAtTime(path[1][k] * sc, t + dur * 0.55);
+    f.frequency.linearRampToValueAtTime(path[2][k] * sc, t + dur);
+    const fg = c.createGain(); fg.gain.value = [1, 0.55, 0.3][k] * 3;
+    src.connect(f).connect(fg).connect(g);
+  });
+  o.start(t); lfo.start(t); o.stop(t + dur + 0.4); lfo.stop(t + dur + 0.4);
+}
 // Les anciens noms (et les scènes de fin de tâche) passent par les dix sons.
 const ALIAS = {
   tab: 'tick', toggle: 'tick', locked: 'error', swish: 'open',
