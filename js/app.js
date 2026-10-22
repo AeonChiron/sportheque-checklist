@@ -2,7 +2,8 @@ import { simulated } from './clock.js';
 import { MASCOTS, mascotImg, avatarHTML as avatarOf, shrinkPhoto } from './avatars.js'; // en premier : l'heure simulée de l'admin
 import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
-import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS } from './manual.js';
+import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS, ZONES } from './manual.js';
+import { METHOD } from './method.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
@@ -96,6 +97,9 @@ function navRecord(id) {
   } catch { /* ignore */ }
 }
 window.addEventListener('popstate', (e) => {
+  // Un lien « #… » (ex. Rapports) déclenche aussi popstate, sans état : ce n'est pas un retour.
+  // On laisse hashchange ouvrir l'écran, qui s'inscrit normalement dans l'historique.
+  if (e.state == null && $('#sheet').hidden) return;
   navPopAt = Date.now();
   // Une feuille ouverte : « retour » la ferme, et on reste sur l'écran.
   if (!$('#sheet').hidden && $('#sheet').classList.contains('open')) {
@@ -149,7 +153,7 @@ function show(id) {
 if (document.startViewTransition) document.documentElement.classList.add('vt');
 
 // « Mes tâches » : pendant un quart, un toucher ramène à la liste, de n'importe où.
-const PILL_HIDDEN = new Set(['checklist', 'finish', 'sent', 'auth']);
+const PILL_HIDDEN = new Set(['checklist', 'finish', 'sent', 'auth', 'hub']); // le tableau de bord a sa grande carte
 function paintShiftPill() {
   const pill = $('#shiftPill');
   const on = Boolean(state && plan && !PILL_HIDDEN.has(current) && !(current === 'history' && !bossWatching())); // Mes shifts : la carte du quart fait déjà ce travail
@@ -741,17 +745,26 @@ function maybeWelcome() {
 function startTour() {
   const key = session.user?.email;
   if (!key || $('#tour')) return;
-  if (current !== 'auth') goFront();
+  if (current !== 'hub') { openHub({ keep: true }); setTimeout(startTour, 450); return; }
   prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true };
   savePrefs();
   // Les étapes de l'accueil, puis on entre dans « Mon compte » pour montrer l'horaire et ce tutoriel.
-  const home = [
-    ['#poolStart', bossWatching() ? 'tourStartBoss' : 'tourStart'],
-    ['#poolDash .dash-shifts', bossWatching() ? 'tourManual' : isBoss() ? 'tourShiftsTeam' : 'tourShifts'],
-    ['#dashFlag', bossWatching() ? 'tourFeedback' : 'tourFlag'],
-    ['#dashBoss', 'tourBoss'],
-    ['#poolAccount', 'tourAccount'],
-  ].filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
+  // Propriétaire : la visite se fait sur le tableau de bord, une carte à la fois.
+  const home = (bossWatching() ? [
+    ['#hbMain', 'tourHubProblems'],
+    ['#hubBody .hb-today', 'tourHubToday'],
+    ['#hubBody .t-reports', 'tourHubReports'],
+    ['#hubBody .t-teamweek', 'tourHubTeam'],
+    ['#hubBody .t-method', 'tourHubMethod'],
+    ['#hubBody .t-access', 'tourHubAccess'],
+  ] : [
+    ['#hbMain', 'tourHubMain'],
+    ['#hubBody .hb-glance', 'tourHubGlance'],
+    ['#hubBody .t-mine', 'tourHubMine'],
+    ['#hubBody .t-plan', 'tourHubPlan'],
+    ['#hubBody .t-flag', 'tourFlag'],
+    ['#hubBody .t-method', 'tourHubMethod'],
+  ]).concat([['#hubAccount', 'tourAccount']]).filter(([sel]) => { const el = $(sel); return el && !el.hidden && el.offsetParent; });
   const inside = session.user.visitor ? [] : [
     ...(isBoss() ? [['#acWork', 'tourWork', true]] : []),
     ...(bossWatching() ? [] : [['#acSched', 'tourSched', true]]),
@@ -793,9 +806,13 @@ function startTour() {
     if (!el) return;
     const r = el.getBoundingClientRect(), pad = 8;
     hole.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px;border-radius:${Math.min(28, r.height / 2 + pad)}px`;
-    const below = r.top + r.height / 2 < innerHeight / 2;
-    tip.style.cssText = below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
-    tip.dataset.side = below ? 'below' : 'above';
+    // La bulle va où il y a de la place (sous la carte, au-dessus, sinon collée en bas de l'écran).
+    const th = tip.offsetHeight || 220;
+    const roomBelow = innerHeight - r.bottom - pad - 24, roomAbove = r.top - pad - 24;
+    const below = th <= roomBelow || (th > roomAbove && roomBelow >= roomAbove);
+    const fits = below ? th <= roomBelow : th <= roomAbove;
+    tip.style.cssText = !fits ? 'bottom:12px' : below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
+    tip.dataset.side = !fits ? 'over' : below ? 'below' : 'above';
     const tr = tip.getBoundingClientRect();
     tip.style.setProperty('--ax', `${Math.min(Math.max(r.left + r.width / 2 - tr.left - 8, 18), tr.width - 34)}px`); // la pointe de la bulle vise le bouton
   }
@@ -806,7 +823,8 @@ function startTour() {
     // Les étapes du compte : la feuille s'ouvre; revenir à l'accueil la referme.
     if (inSheet && !sheetOpen()) { openAccount(); box.classList.add('wait'); setTimeout(() => { box.classList.remove('wait'); show(); }, 480); return; }
     if (!inSheet && sheetOpen()) { closeSheet(); box.classList.add('wait'); setTimeout(() => { box.classList.remove('wait'); show(); }, 400); return; }
-    $(sel)?.scrollIntoView({ block: 'center' });
+    const target = $(sel);
+    if (target) { const big = target.offsetHeight > innerHeight * 0.4; target.scrollIntoView({ block: big ? 'start' : 'center' }); if (big) window.scrollBy(0, -70); }
     tip.className = 'tour-tip';
     tip.innerHTML = `<p class="tour-count">${i + 1} / ${steps.length}</p><h2 id="tourH">${esc(t(`${k}T`))}</h2><p>${esc(t(k))}</p>
       <div class="tour-btns">${k === 'tourPic' // la photo : on la choisit tout de suite, une peluche de préférence
@@ -2231,7 +2249,7 @@ function openSettings() {
     const reset = root.querySelector('#mReset');
     if (reset) reset.onclick = () => {
       if (!reset.dataset.armed) { reset.dataset.armed = '1'; reset.textContent = t('abandonSure'); return; }
-      state = null; save(); clearPhotos(); closeSheet(); goFront();
+      state = null; save(); clearPhotos(); closeSheet(); openHub();
     };
   });
 }
@@ -2443,7 +2461,7 @@ function winLine(name, summary) {
   return summary.total && summary.done === summary.total ? t('perfect', summary.total) : '';
 }
 
-$('#newShiftBtn').addEventListener('click', () => goFront());
+$('#newShiftBtn').addEventListener('click', () => openHub());
 $('#editShiftBtn').addEventListener('click', reopenShift);
 
 // Le quart enregistré aujourd'hui sur ce téléphone se modifie jusqu'à minuit
@@ -2462,7 +2480,7 @@ function paintEditToday() {
 }
 function reopenShift() {
   const last = editableShift();
-  if (!last) { toast(t('editLocked'), 'bad'); goFront(); return; }
+  if (!last) { toast(t('editLocked'), 'bad'); openHub(); return; }
   const { savedAt, ...rest } = last;
   state = rest;
   save();
@@ -2481,7 +2499,7 @@ function openReview(r, opts = {}) {
   const { from = '' } = opts;
   lastReview = [r, opts];
   const back = $('#review .back');
-  const [go, label] = REVIEW_BACK[from] || ['home', state ? 'myShift' : 'home'];
+  const [go, label] = (opts.back && REVIEW_BACK[opts.back]) || REVIEW_BACK[from] || ['home', state ? 'myShift' : 'home'];
   back.dataset.go = go;
   back.querySelector('span').dataset.t = label;
   const R = REVIEW[r.lang] || REVIEW.fr;
@@ -3541,20 +3559,15 @@ $('#poolStart').addEventListener('click', (e) => {
   const go = () => {
     if (!session.user) { authSheet(true, 'signup'); return; }
     window.history.replaceState(history.state, '', location.pathname);
-    if (bossWatching()) { openHistory({ team: true }); return; } // le patron : sa bande ouvre l'espace superviseur, le reste la journée de l'équipe
     dropStaleShift();
-    if (state && shiftOver()) { openFinish(); return; } // fini mais pas envoyé : on l'envoie
-    if (state) { route(); return; } // quart en cours : retour aux tâches
-    // Horaire connu : le quart part tout de suite avec ses heures, sans formulaire.
-    const nx = nextShift();
-    if (nx) { startScheduled(nx); return; } // propriétaire : la vraie liste tout de suite, même avant l'heure
-    openScheduleSheet({ first: true }); // pas encore d'horaire : on l'entre, une fois
+    openHub(); // propriétaire : le grand bouton ouvre le tableau de bord, tout est là
   };
   if (reducedMotion()) { go(); return; }
+  // Le bouton s'allume (un éclair fait le tour), puis on entre.
   btn.classList.add('lifting');
   clank('plate'); buzz('plate');
-  setTimeout(() => { clank('lift'); pool().cheer(); }, 380);
-  setTimeout(() => { go(); btn.classList.remove('lifting'); }, 1150);
+  setTimeout(() => { clank('lift'); pool().cheer(); }, 200);
+  setTimeout(() => { go(); btn.classList.remove('lifting'); }, 560);
 });
 // La bande « prochain quart » fait partie de la carte : un seul bouton, une seule action.
 $('#poolNext').addEventListener('click', () => {});
@@ -3564,7 +3577,7 @@ $('#poolLogin').addEventListener('click', () => authSheet(true, 'login'));
 // (dans l'en-tête collant de la checklist, pour qu'il reste visible).
 function placeQuickBar(id) {
   const bar = $('#quickBar');
-  const on = id !== 'auth' && Boolean(session.user || !accounts());
+  const on = id !== 'auth' && id !== 'hub' && Boolean(session.user || !accounts()); // le tableau de bord a sa propre barre
   bar.hidden = !on;
   if (!on) return;
   const target = document.getElementById(id);
@@ -3613,27 +3626,25 @@ function paintFront() {
   const first = shiftName().split(' ')[0];
   const label = $('#poolStartLabel');
   if (inside) {
-    // Carte « Bon retour » : initiale, nom, où en est le quart, flèche.
+    // Propriétaire : la page d'entrée n'a qu'un bouton. La photo, « Bon retour », le nom, une
+    // ligne d'état; un éclair fait le tour (bleu électrique pour l'équipe, or pour les superviseurs).
     ensurePlan(); // au démarrage, le quart gardé sur le téléphone compte tout de suite
-    let sub = t('wbStart');
-    const nx = !state && nextShift();
-    if (bossWatching()) sub = urgentOpen().length ? t('wbUrgent', urgentOpen().length) : t('wbTeam');
-    else if (state && plan && shiftOver()) { const n = planTasks().filter((x) => state.tasks[x.id]?.done).length; sub = state.date === todayISO() ? t('wbUnsentDay', n, '') : t('wbUnsentDay', n, dateOf(state.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'short' })); }
-    else if (state && plan) { const ts = planTasks(); sub = counting() ? t('wbResume', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length) : t('wbWaiting'); }
-    else if (nx?.ready) sub = t('wbReady');
-    else if (nx) sub = t('wbPeek');
-    label.innerHTML = `<span class="wb-avatar">${avatarHTML(session.user, esc((first[0] || '?').toUpperCase()))}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(sub)}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
-    $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
-    $('#poolStart').classList.toggle('unsent', Boolean(state && plan && shiftOver()));
+    const st = frontStatus();
+    label.innerHTML = `<span class="wb-avatar">${avatarHTML(session.user, esc((first[0] || '?').toUpperCase()))}</span><span class="wb-text"><small>${esc(t('wbHello'))}</small><b>${esc(first || '')}</b><em>${esc(st.line)}</em></span><span class="wb-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
+    $('#poolStart').setAttribute('aria-label', `${t('welcomeBackName', first)} ${st.line}`);
+    $('#poolStart').classList.toggle('unsent', Boolean(st.alert && !bossWatching()));
     $('#poolStart').classList.toggle('has-urgent', bossWatching() && urgentOpen().length > 0);
+    $('#poolStart').classList.toggle('gold', isBoss());
   } else {
     // Propriétaire : « Commencer » au même niveau que la carte « Bon retour » (premium, pas de disques).
     label.innerHTML = `<span class="wb-text gs-text"><b>${esc(t('getStarted'))}</b><em>${esc(t('getStartedSub'))}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
     $('#poolStart').setAttribute('aria-label', t('getStarted'));
   }
   paintNextBox(inside);
+  $('#poolStart').classList.toggle('fh', inside);
+  if (inside) { $('#poolNext').hidden = true; $('#poolDash').hidden = true; } // tout le reste vit dans le tableau de bord
   if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
-  $('#poolDash').hidden = !inside;
+  $('#poolDash').hidden = true;
   $('#poolAccount').hidden = !inside;
   if (inside) { $('#poolAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase())); $('#poolAccount').setAttribute('aria-label', t('account')); }
   $('#dashBoss').hidden = !isBoss() || bossWatching();
@@ -3753,7 +3764,7 @@ function goFront() {
   show('auth');
   if (bossWatching()) refreshBossCount(); // Daniel voit tout de suite s'il y a un problème urgent
 }
-for (const b of document.querySelectorAll('[data-front]')) b.addEventListener('click', goFront);
+for (const b of document.querySelectorAll('[data-front]')) b.addEventListener('click', () => (session.user ? openHub() : goFront())); // « Accueil » : le tableau de bord
 // « Recommencer le quart » : on demande une fois avant de tout décocher.
 $('#restartBtn').addEventListener('click', () => {
   openSheet(`<div class="sheet-head"><h2>${t('restartTitle')}</h2></div><p class="lede">${t('restartBody')}</p>`, (root) => {
@@ -4187,6 +4198,7 @@ function urgentBlock() {
 async function refreshBossCount() {
   try { boss.problems = await listProblems(); boss.loaded = true; } catch { /* le compte reste à jour au prochain coup */ }
   paintBossCount();
+  if (current === 'auth') paintFront(); // la ligne du grand bouton : « 1 problème urgent »
 }
 
 function openBoss({ keep = false } = {}) {
@@ -4623,10 +4635,467 @@ function goProtocol() {
   if (location.hash === '#apercu') openApercu({ keep: true }); else location.hash = 'apercu';
 }
 
+// ======================================================================
+// L'accueil en deux temps (propriétaire, 22 oct.) :
+//  1. la page d'entrée n'a qu'un grand bouton (photo, « Bon retour », le nom);
+//  2. il ouvre le tableau de bord : tout ce qu'on peut faire, du plus utile au moins utile.
+// Mots simples, gros boutons, une chose par carte.
+// ======================================================================
+Object.assign(NAV_HASH, { hub: '#accueil', mine: '#mes-quarts', plan: '#horaire', glance: '#quart', method: '#methode', teamweek: '#equipe' });
+Object.assign(RANK, { hub: 0.5, mine: 5, plan: 5, glance: 5.5, method: 5, teamweek: 5 });
+REVIEW_BACK.mine = ['mine', 'tMine'];
+
+const HUB_ICO = {
+  mine: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2"/></svg>',
+  plan: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17h6"/></svg>',
+  flag: '<svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  method: '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h5v17H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 1 2 2z"/></svg>',
+  reports: '<svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>',
+  team: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.6 4.6 0 0 1 21 18.5"/></svg>',
+  access: '<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14.5v2.5"/></svg>',
+  zone: '<svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>',
+  mirror: '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M10 8l-1.5 1.5M14 9l-4 4"/></svg>',
+  week: '<svg viewBox="0 0 24 24"><path d="M9 11l2 2 4-4"/><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4"/></svg>',
+  meal: '<svg viewBox="0 0 24 24"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 1.5-3 4-3 7h3v11"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M12 3v3"/></svg>',
+  compost: '<svg viewBox="0 0 24 24"><path d="M5 7h14l-1.5 13h-11z"/><path d="M3 7h18M10 4h4M12 11c-2 1-2.5 3-1 5 1.5-1 3-3 1-5z"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
+  go: '<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></svg>',
+};
+const hubIco = (k) => `<span class="hb-ico" aria-hidden="true">${HUB_ICO[k]}</span>`;
+const hm = (iso) => nb(f(toMin(iso)));
+
+// Le quart dont on parle : celui qui est ouvert, sinon le prochain à l'horaire.
+function myShiftTarget() {
+  if (state?.date && state?.start) return { live: true, mine: true, date: state.date, start: state.start, end: state.end, special: state.special || '', custom: state.custom || [] };
+  const nx = nextShift();
+  return nx ? { live: false, mine: true, ...nx } : null;
+}
+// Le quart d'un employé de l'équipe ce jour-là (pour le superviseur), d'après son horaire.
+function teamTarget(u, date) {
+  const v = u.schedule?.[dowOf(date)] ?? u.schedule?.[String(dowOf(date))];
+  const p = presetOf(v);
+  if (!p?.start) return null;
+  const sp = SPECIALS.find((x) => x.names?.includes(firstName(u.name)) && x.weekday === dowOf(date));
+  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email };
+}
+// Ce qu'il faut savoir d'un quart, en quelques lignes : la zone, les miroirs ou tuiles,
+// la tâche de la semaine, les pauses, le compost. Tout vient du plan (js/planner.js).
+function shiftFacts(tg) {
+  const shift = detectShift(tg.start, tg.end);
+  const p = planOf({ shift, date: tg.date, start: tg.start, end: tg.end, special: tg.special, custom: tg.custom || [], lang: lang() });
+  const items = p.items;
+  const tasks = items.filter((i) => i.kind === 'task');
+  const work = tasks.reduce((a, i) => a + (i.minutes || 0), 0);
+  const find = (re) => items.find((i) => re.test(i.id || ''));
+  const facts = [];
+  if (tg.special) facts.push({ k: 'star', label: t('glSpecial'), value: tasks.map((x) => x.title).join(' + ') });
+  const deep = find(/-profondeur$/);
+  if (deep) {
+    const z = dayInfo(tg.date).zones[shift];
+    facts.push({ k: 'zone', label: t(tg.mine ? 'glDeep' : 'glDeepOther'), value: t('zoneShort', z), sub: ZONES[z]?.[lang()]?.name || '', z });
+  }
+  const surf = find(/-surfaces$/);
+  if (surf) { const info = dayInfo(tg.date); facts.push({ k: 'mirror', label: t('glSurf'), value: info.surfaces === 'miroirs' ? t('mirrorsShort', info.zones.third) : info.surfaces === 'tuiles' ? t('tilesShort') : surf.title }); }
+  const hebdo = find(/-hebdo$/);
+  if (hebdo) facts.push({ k: 'week', label: t('glWeekly'), value: (hebdo.summary || hebdo.title).replace(/\.\s*$/, '') });
+  const meal = items.find((i) => i.kind === 'meal');
+  if (meal) facts.push({ k: 'meal', label: meal.title || t('glMeal'), value: nb(f(meal.start)) });
+  const pause = items.find((i) => i.kind === 'pause');
+  if (pause) facts.push({ k: 'pause', label: t('glPause'), value: nb(f(pause.start)) });
+  const trash = find(/^q2-poubelles$/);
+  if (trash && /compost/i.test(trash.summary || '')) facts.push({ k: 'compost', label: t('glCompost'), value: t('glCompostText'), sub: /chemin|curb/i.test(trash.summary || '') ? (trash.summary.split('.')[0] || '') : '' });
+  return { p, items, tasks, work, facts, shift };
+}
+// La barre du quart : un morceau par bloc, de la couleur de son disque; repas et pauses en pâle.
+function shiftBar(items) {
+  const blocks = items.filter((i) => ['task', 'meal', 'pause'].includes(i.kind) && i.minutes > 0);
+  return `<span class="hg-bar" aria-hidden="true">${blocks.map((i, k) => `<i class="${i.kind === 'task' ? '' : 'rest'}" style="flex:${i.minutes};--pc:var(--plate-${plateOf(i)});--k:${k}"></i>`).join('')}</span>`;
+}
+const hours = (min) => (min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ` ${String(min % 60).padStart(2, '0')}` : ''}` : `${min} min`);
+const whenText = (tg) => t('glWhen', cap(dayWord(tg.date)), hm(tg.start), hm(tg.end));
+
+// ---------- Page d'entrée : un seul bouton ----------
+function frontStatus() {
+  if (bossWatching()) {
+    const u = urgentOpen().length;
+    return { line: u ? t('frontBossUrgent', u) : t('frontBossOk'), alert: u > 0 };
+  }
+  if (state && plan && shiftOver()) return { line: t('hbUnsent'), alert: true };
+  if (state && plan) { const ts = planTasks(); return { line: t('frontLive', ts.filter((x) => state.tasks[x.id]?.done).length, ts.length) }; }
+  const nx = nextShift();
+  if (nx?.ready) return { line: t('wbReady') };
+  if (nx) return { line: t('frontNext', dayWord(nx.date).toLowerCase(), hm(nx.start)) };
+  return { line: t('frontNone') };
+}
+
+// ---------- Le tableau de bord ----------
+const hub = { anim: true };
+function openHub({ keep = false } = {}) {
+  if (!session.user) { goFront(); return; }
+  paintStatic();
+  renderHub({ animate: !keep });
+  show('hub');
+  refreshHub();
+}
+async function refreshHub() {
+  if (bossWatching()) {
+    const [pr, tm] = await Promise.allSettled([listProblems(), listTeam()]);
+    if (pr.status === 'fulfilled') { boss.problems = pr.value; boss.loaded = true; boss.error = ''; } else if (!boss.loaded) boss.error = pr.reason?.status === 0 ? 'errNetwork' : 'errServer';
+    if (tm.status === 'fulfilled') { boss.team = tm.value; boss.teamLoaded = true; }
+    paintBossCount();
+  } else if (!hist.loaded) {
+    const r = await loadRecent(500).catch(() => null);
+    if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
+  } else return;
+  if (current === 'hub') renderHub({ animate: false });
+}
+function renderHub({ animate = true } = {}) {
+  const first = (shiftName() || session.user?.name || '').split(' ')[0];
+  $('#hubDate').textContent = cap(new Date().toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }));
+  $('#hubTitle').textContent = t('hubHello', first);
+  $('#hubAsk').textContent = t(bossWatching() ? 'hubAskBoss' : 'hubAsk');
+  $('#hubAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase()));
+  $('#hubAccount').setAttribute('aria-label', t('account'));
+  $('#hubDoor').setAttribute('aria-label', t('frontDoor'));
+  const body = $('#hubBody');
+  body.className = `hub-body${bossWatching() ? ' is-boss' : ''}${animate && !reducedMotion() ? ' cascade' : ''}`;
+  body.innerHTML = bossWatching() ? hubBoss() : hubEmployee();
+  if (animate) countUp(body);
+}
+const tile = (k, ico, title, sub, extra = '') => `<button type="button" class="hb-tile t-${k}" data-hub="${k}">${hubIco(ico)}<span class="hb-tt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>${extra}</button>`;
+
+function hubEmployee() {
+  const tg = myShiftTarget();
+  const fixable = (hist.recent || []).filter((s) => !s.open && ownFixable(s)).length;
+  return `${hubMainCard(tg)}${tg ? glanceCard(tg) : ''}
+    <nav class="hb-tiles" aria-label="${esc(t('hubAsk'))}">
+      ${tile('mine', 'mine', t('tMine'), t('tMineSub'), fixable ? `<span class="hb-badge num">${esc(t('fixBadge', fixable))}</span>` : '')}
+      ${tile('plan', 'plan', t('tPlan'), t('tPlanSub'))}
+      ${tile('flag', 'flag', t('tFlag'), t('tFlagSub'))}
+      ${tile('method', 'method', t('tMethod'), t('tMethodSub'))}
+    </nav>`;
+}
+// La grande carte : commencer, continuer ou envoyer son quart. C'est elle qui sert le plus.
+function hubMainCard(tg) {
+  if (!tg) {
+    return `<section class="hb-main is-empty" id="hbMain"><p class="hb-label">${esc(t('hbNone'))}</p><p class="hb-text">${esc(t('hbNoneText'))}</p>
+      <button type="button" class="hb-cta" data-hub="sched"><span>${esc(t('hbSetSched'))}</span>${HUB_ICO.go}</button></section>`;
+  }
+  const head = (label, extra = '') => `<div class="hb-row"><p class="hb-label">${label}</p>${extra}</div>
+    <p class="hb-day">${esc(cap(dayWord(tg.date)))}${tg.date > addDays(todayISO(), 1) ? `<small>${esc(dateOf(tg.date).toLocaleDateString(locale(), { day: 'numeric', month: 'long' }))}</small>` : ''}</p>
+    <p class="hb-time num">${hm(tg.start)}<span> – ${hm(tg.end)}</span></p>`;
+  if (tg.live) {
+    const ts = planTasks();
+    const done = ts.filter((x) => state.tasks[x.id]?.done).length;
+    const pct = ts.length ? Math.round((100 * done) / ts.length) : 0;
+    const over = shiftOver();
+    const ring = `<span class="hb-ring" style="--p:${pct}"><b class="num">${done}/${ts.length}</b></span>`;
+    return `<section class="hb-main${over ? ' is-alert' : ' is-live'}" id="hbMain">${head(`<span class="hb-dot"></span>${esc(t(over ? 'hbUnsent' : 'hbLive'))}`, ring)}
+      <p class="hb-sub">${esc(t('hbProgress', done, ts.length))}</p>
+      <button type="button" class="hb-cta" data-hub="${over ? 'finish' : 'tasks'}"><span>${esc(t(over ? 'hbSend' : 'hbResume'))}</span>${over ? HUB_ICO.send : HUB_ICO.go}</button></section>`;
+  }
+  const left = Math.ceil((startAt(tg) - Date.now()) / 6e4);
+  const today = tg.date === todayISO();
+  const chip = `<span class="hb-chip num">${esc(left > 0 ? t('hbIn', countdown(left)) : t('nbGo'))}</span>`;
+  const later = left > 0 && !tg.ready;
+  const when = today ? t('sendAtTime', hm(tg.start)) : t('sendAtDay', dayWord(tg.date).toLowerCase(), hm(tg.start));
+  return `<section class="hb-main${tg.ready ? ' is-now' : ''}" id="hbMain">${head(esc(t(tg.ready ? 'hbNow' : 'hbNext')), chip)}
+    <button type="button" class="hb-cta" data-hub="start"><span>${esc(t(tg.ready || today ? 'hbStart' : 'hbOpen'))}</span>${HUB_ICO.play}</button>
+    ${later ? `<p class="hb-note">${esc(t('hbEarly', when))}</p>` : ''}</section>`;
+}
+function factHTML(x) {
+  return `<span class="hg-fact k-${x.k}">${hubIco(x.k)}<span class="hg-txt"><small>${esc(x.label)}</small><b>${esc(x.value)}</b>${x.sub ? `<em>${esc(x.sub)}</em>` : ''}</span></span>`;
+}
+function glanceCard(tg) {
+  const F = shiftFacts(tg);
+  return `<button type="button" class="hb-glance" data-hub="glance">
+    <span class="hg-head"><span class="hg-title">${hubIco('zone')}<b>${esc(t('glTitle'))}</b></span><span class="hg-when num">${esc(whenText(tg))}</span></span>
+    <span class="hg-facts">${F.facts.slice(0, 4).map(factHTML).join('')}</span>
+    ${shiftBar(F.items)}
+    <span class="hg-foot"><span class="num">${esc(t('glCount', F.tasks.length, hours(F.work)))}</span><span class="hg-more">${esc(t('glSeeAll'))}${CHEV_R}</span></span>
+  </button>`;
+}
+
+// ---------- Superviseur ----------
+function hubBoss() {
+  const today = todayISO();
+  const open = boss.problems.filter((p) => p.status !== 'resolved').sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent)) || (b.at || '').localeCompare(a.at || ''));
+  const urgent = open.filter((p) => p.urgent).length;
+  let main;
+  if (!boss.loaded) {
+    main = `<section class="hb-main hb-pb is-wait" id="hbMain"><p class="hb-label">${esc(t('bhTitle'))}</p><p class="hb-text">${esc(t(boss.error ? 'bhOffline' : 'bhLoading'))}</p>
+      <button type="button" class="hb-cta" data-hub="problems"><span>${esc(t('bhSee'))}</span>${HUB_ICO.go}</button></section>`;
+  } else if (!open.length) {
+    main = `<section class="hb-main hb-pb is-ok" id="hbMain"><div class="hb-row"><p class="hb-label">${esc(t('bhTitle'))}</p><span class="hb-okmark">${HUB_ICO.check}</span></div>
+      <p class="hb-day small">${esc(t('bhNone'))}</p>
+      <button type="button" class="hb-cta" data-hub="problems"><span>${esc(t('bhSee'))}</span>${HUB_ICO.go}</button></section>`;
+  } else {
+    const row = (p) => `<span class="pb-mini${p.urgent ? ' urgent' : ''}">${catIcon(p.category)}<span><b>${esc(catName(p.category))}</b><small>${esc([p.location, p.by, whenShort(p.at)].filter(Boolean).join(' · '))}</small></span></span>`;
+    main = `<section class="hb-main hb-pb${urgent ? ' is-alert' : ''}" id="hbMain">
+      <div class="hb-row"><p class="hb-label">${esc(t('bhTitle'))}</p>${urgent ? `<span class="hb-chip hot num">${esc(t('bhUrgent', urgent))}</span>` : ''}</div>
+      <p class="hb-big"><b class="num" data-count>${open.length}</b><span>${esc(t('bhOpen', open.length).replace(/^\d+\s*/, ''))}</span></p>
+      <span class="pb-minis">${open.slice(0, 2).map(row).join('')}</span>
+      <button type="button" class="hb-cta" data-hub="problems"><span>${esc(t('bhSee'))}</span>${HUB_ICO.go}</button></section>`;
+  }
+  const people = (boss.team || []).filter((u) => !u.removed).map((u) => teamTarget(u, today)).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start));
+  const todayCard = `<section class="hb-today"><h2>${hubIco('team')}${esc(t('todayGym'))}</h2>
+    ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i></div>'
+      : people.length ? `<div class="tw-people">${people.map(personRow).join('')}</div>` : `<p class="hb-quiet">${esc(t('nobodyToday'))}</p>`}
+  </section>`;
+  return `${main}${todayCard}
+    <nav class="hb-tiles">
+      ${tile('reports', 'reports', t('tReports'), t('tReportsSub'))}
+      ${tile('teamweek', 'team', t('tTeamWeek'), t('tTeamWeekSub'))}
+      ${tile('method', 'method', t('tMethod'), t('tMethodSub'))}
+      ${tile('access', 'access', t('tAccess'), t('tAccessSub'))}
+    </nav>`;
+}
+// Une personne à l'horaire : son nom, ses heures, et ce qu'elle fera (zone, miroirs, tâche de la semaine).
+function personRow(tg) {
+  const F = shiftFacts(tg);
+  const chips = F.facts.filter((x) => ['star', 'zone', 'mirror', 'week'].includes(x.k)).map((x) => `<span class="tw-chip k-${x.k}">${esc(x.k === 'zone' ? x.value : x.k === 'week' ? x.value.split(/[.;]/)[0] : x.value)}</span>`).join('');
+  return `<button type="button" class="tw-person" data-glance="${esc(JSON.stringify(tg))}">
+    <span class="tw-av" aria-hidden="true">${esc((tg.name[0] || '?').toUpperCase())}</span>
+    <span class="tw-who"><b>${esc(tg.name)}</b><small class="num">${hm(tg.start)} – ${hm(tg.end)} · ${esc(SHIFTS[F.shift][lang()].short)}</small><span class="tw-chips">${chips}</span></span>${CHEV_R}</button>`;
+}
+
+// ---------- « Ton quart en un coup d'œil » : la page ----------
+let glanceTarget = null;
+function openGlance(tg) {
+  glanceTarget = tg || glanceTarget || myShiftTarget();
+  if (!glanceTarget) { openHub(); return; }
+  paintStatic();
+  renderGlance();
+  show('glance');
+}
+function renderGlance() {
+  const tg = glanceTarget;
+  const F = shiftFacts(tg);
+  const own = tg.mine;
+  $('#glanceEyebrow').textContent = whenText(tg);
+  $('#glanceTitle').textContent = own ? t('glTitle') : t('glTitleOther', tg.name);
+  const now = tg.date === todayISO() ? new Date().getHours() * 60 + new Date().getMinutes() : null;
+  const rows = F.items.filter((i) => ['task', 'meal', 'pause'].includes(i.kind)).map((i, k) => {
+    const rest = i.kind !== 'task';
+    const isNow = now !== null && i.start <= now && now < i.end;
+    return `<li class="gl-row${rest ? ' rest' : ''}${isNow ? ' now' : ''}" style="--pc:var(--plate-${plateOf(i)});--k:${Math.min(k, 14)}">
+      <span class="gl-time num">${nb(f(i.start))}</span>
+      <span class="gl-line" aria-hidden="true"><i></i></span>
+      <span class="gl-main"><b>${esc(i.title)}</b>${i.summary ? `<small>${md(i.summary)}</small>` : ''}</span>
+      <span class="gl-min num">${esc(hours(i.minutes || 0))}</span></li>`;
+  }).join('');
+  const live = own && tg.live;
+  const cta = own ? `<button type="button" class="btn primary big gl-cta" data-hub="${live ? (shiftOver() ? 'finish' : 'tasks') : 'start'}">${esc(t(live ? (shiftOver() ? 'hbSend' : 'hbResume') : 'glStartThis'))}</button>` : '';
+  $('#glanceBody').innerHTML = `<div class="gl-wrap${reducedMotion() ? '' : ' cascade'}">
+    <div class="gl-facts">${F.facts.map(factHTML).join('')}</div>
+    <div class="gl-sum">${shiftBar(F.items)}<p class="num">${esc(t('glCount', F.tasks.length, hours(F.work)))}</p></div>
+    <h2 class="gl-h">${esc(t('glWork'))}</h2>
+    <ol class="gl-list">${rows}</ol>
+    ${cta}</div>`;
+}
+
+// ---------- Mes quarts : revoir et corriger (36 h) ----------
+async function openMine({ keep = false } = {}) {
+  paintStatic();
+  renderMine({ animate: !keep });
+  show('mine');
+  if (!hist.loaded || !keep) {
+    const r = await loadRecent(500).catch(() => null);
+    if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
+    if (current === 'mine') renderMine({ animate: false });
+  }
+}
+function renderMine({ animate = true } = {}) {
+  $('#mineEyebrow').textContent = [CONFIG.gymName, shiftName()].filter(Boolean).join(' · ');
+  const mine = myDoneShifts().sort((a, b) => b.date.localeCompare(a.date) || (b.submittedAt || '').localeCompare(a.submittedAt || ''));
+  hist.view = mine;
+  const today = todayISO(), mon = mondayOf(today);
+  const week = mine.filter((x) => x.date >= mon && x.date <= today).length;
+  const span = mine.filter((x) => x.date >= addDays(today, -29));
+  const tot = span.reduce((a, x) => a + metrics(x).total, 0), dn = span.reduce((a, x) => a + metrics(x).done, 0);
+  const pct = tot ? Math.round((100 * dn) / tot) : null;
+  const wait = !hist.loaded;
+  const row = (x, i) => {
+    const m = metrics(x); const all = m.total && m.done === m.total;
+    const at = new Date(x.savedAt || x.submittedAt || 0).getTime();
+    const left = ownFixable(x) ? Math.max(1, Math.ceil((EDIT_HOURS * 3600e3 - (Date.now() - at)) / 3600e3)) : 0;
+    return `<button type="button" class="d-shift mine-row" data-mine="${i}" style="--k:${Math.min(i, 10)}">${dDate(x.date)}<span class="d-st"><b class="num">${x.start ? `${nb(hhmm(x.start))} – ${nb(hhmm(x.end))}` : esc(SHIFTS[x.shift][lang()].short)}</b><small>${esc(cap(dateOf(x.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</small>${left ? `<span class="fix-left">${esc(t('fixLeft', left))}</span>` : ''}</span><span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>${CHEV_R}</button>`;
+  };
+  $('#mineBody').innerHTML = `<p class="page-lede">${esc(t('mineLede'))}</p>
+    <div class="d-stats">
+      <div class="d-stat"><p class="ds-label wk">${esc(t('mineWeek'))}</p><p class="ds-num num" ${wait ? '' : 'data-count'}>${wait ? '–' : week}</p><p class="ds-sub">${esc(t('mineShifts', week).replace(/^\d+\s*/, ''))}</p></div>
+      <div class="d-stat"><p class="ds-label mo">${esc(t('mineMonth'))}</p><p class="ds-num num" ${wait || pct === null ? '' : 'data-count'}>${wait || pct === null ? '–' : `${pct}<small>%</small>`}</p><p class="ds-sub">${esc(t('mineDone'))}</p></div>
+    </div>
+    <section class="d-card mine-list${animate && !reducedMotion() ? ' cascade' : ''}">${wait ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>' : mine.length ? mine.map(row).join('') : `<p class="d-none">${esc(t('mineEmpty'))}</p>`}</section>`;
+  if (animate) countUp($('#mineBody'));
+}
+$('#mineBody').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-mine]');
+  if (!b) return;
+  const s = hist.view[Number(b.dataset.mine)];
+  if (s) openReview(summaryReport(s), { from: 'history', back: 'mine' });
+});
+
+// ---------- Mon horaire ----------
+function openPlan({ keep = false } = {}) {
+  paintStatic();
+  renderPlan({ animate: !keep });
+  show('plan');
+}
+function renderPlan({ animate = true } = {}) {
+  $('#planEyebrow').textContent = [CONFIG.gymName, shiftName()].filter(Boolean).join(' · ');
+  $('#planBody').innerHTML = `<div class="${animate && !reducedMotion() ? 'cascade' : ''}">
+    <p class="page-lede">${esc(t('planLede'))}</p>
+    <section class="d-card d-week"><div class="d-head"><h2>${esc(t('planWeek'))}</h2></div>${dashWeek()}</section>
+    ${dashUpcoming('').replace('class="d-card d-up"', 'class="d-card d-up plan-up"')}
+    <button type="button" class="btn ghost big plan-edit" data-hub="sched">${HUB_ICO.plan}<span>${esc(t('planEdit'))}</span></button>
+    <section class="d-card plan-custom"><div class="d-head"><h2>${hubIco('star')}${esc(t('customActTitle'))}</h2></div><p>${esc(t('customActText'))}</p>
+      <button type="button" class="btn primary" data-hub="custom">${esc(t('customActBtn'))}</button></section>
+  </div>`;
+}
+$('#planBody').addEventListener('click', (ev) => {
+  const up = ev.target.closest('[data-up]');
+  if (!up) return;
+  const d = up.dataset.up;
+  const p = specialFor(d) || presetOf(mySchedule()?.[dowOf(d)]);
+  if (p) openGlance({ mine: true, live: Boolean(state && state.date === d), date: d, start: p.start, end: p.end, special: p.special || '' });
+});
+
+// ---------- La méthode ----------
+const method = { shift: 1, open: new Set() };
+function openMethod({ keep = false } = {}) {
+  paintStatic();
+  if (!keep) method.shift = myShiftTarget() ? detectShift(myShiftTarget().start, myShiftTarget().end) : 1;
+  renderMethod({ animate: !keep });
+  show('method');
+}
+function renderMethod({ animate = true } = {}) {
+  const M = METHOD[lang()];
+  $('#methodEyebrow').textContent = CONFIG.gymName || '';
+  $('#methodTitle').textContent = M.title;
+  const flow = M.flows[method.shift].map((s, i) => `<li class="mt-step${s.kind ? ` rest ${s.kind}` : ''}" style="--k:${Math.min(i, 16)}">
+      <span class="mt-n num" aria-hidden="true">${s.kind ? (s.kind === 'meal' ? HUB_ICO.meal : HUB_ICO.pause) : i + 1 - M.flows[method.shift].slice(0, i).filter((x) => x.kind).length}</span>
+      <span class="mt-body"><b>${esc(s.t)}</b><span>${md(s.what)}</span>${s.why ? `<span class="mt-why"><em>${esc(M.why)}</em> ${md(s.why)}</span>` : ''}</span></li>`).join('');
+  // Propriétaire : facile à lire. Chaque partie se replie; les deux premières sont ouvertes.
+  const sec = (k, title, sub, inner, open = false) => `<details class="mt-card mt-${k}" data-msec="${k}"${open || method.open.has(k) ? ' open' : ''}>
+      <summary><span class="mt-sum"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="mt-chev" aria-hidden="true">${CHEV_R}</span></summary>
+      <div class="mt-in">${inner}</div></details>`;
+  $('#methodBody').innerHTML = `<div class="mt-wrap${animate && !reducedMotion() ? ' cascade' : ''}">
+    <p class="page-lede">${esc(M.lede)}</p>
+    ${sec('idea', M.bigIdea.title, '', `<ul>${M.bigIdea.lines.map((l) => `<li>${md(l)}</li>`).join('')}</ul>`, true)}
+    ${sec('pri', M.priTitle, '', `<ol>${PRIORITY_ORDER[lang()].map((l, i) => `<li><span class="num">${i + 1}</span><span>${md(l)}</span></li>`).join('')}</ol>`, true)}
+    ${sec('flow', M.flowTitle, M.flowNote, `<div class="segmented mt-tabs" role="tablist">${[1, 2].map((k) => `<button type="button" role="tab" data-mshift="${k}" aria-selected="${method.shift === k}">${esc(M.shiftTab[k])} · ${nb(f(toMin(SHIFTS[k].start)))}</button>`).join('')}</div><ol class="mt-steps">${flow}</ol>`)}
+    ${sec('rot', M.rotTitle, M.rotNote, `<div class="mt-zones">${M.zones.map((z) => `<span class="mt-zone z${z.z}"><b>${z.z}</b><small>${esc(z.t)}</small></span>`).join('')}</div><ul class="mt-rots">${M.rotations.map((r) => `<li><b>${esc(r.t)}</b><span>${md(r.text)}</span></li>`).join('')}</ul>`)}
+    ${sec('done', M.doneTitle, '', `<ul>${M.done.map((d) => `<li>${HUB_ICO.check}<span><b>${esc(d.t)}</b> ${esc(d.text)}</span></li>`).join('')}</ul>`)}
+    ${sec('gold', M.goldTitle, '', `<ul>${M.gold.map((g) => `<li>${md(g)}</li>`).join('')}</ul>`, true)}
+    ${sec('moves', M.movesTitle, '', `<ul>${TECHNIQUES[lang()].map((x) => `<li>${md(x.text)}</li>`).join('')}</ul>`)}
+    <section class="mt-more"><h2>${esc(M.moreTitle)}</h2>
+      <button type="button" class="hb-tile t-map" data-hub="map">${hubIco('zone')}<span class="hb-tt"><b>${esc(M.mapLink)}</b><small>${esc(M.mapSub)}</small></span></button>
+      <button type="button" class="hb-tile t-tips" data-hub="tips">${hubIco('method')}<span class="hb-tt"><b>${esc(M.tipsLink)}</b><small>${esc(M.tipsSub)}</small></span></button></section>
+    <p class="mt-source">${esc(M.source)}</p></div>`;
+  for (const d of $('#methodBody').querySelectorAll('details')) d.addEventListener('toggle', () => { if (d.open) { method.open.add(d.dataset.msec); sfx('open'); } else method.open.delete(d.dataset.msec); });
+}
+$('#methodBody').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-mshift]');
+  if (!b) return;
+  method.shift = Number(b.dataset.mshift);
+  sfx('tab');
+  renderMethod({ animate: false });
+  const list = $('#methodBody .mt-steps');
+  if (list && !reducedMotion()) { list.classList.add('cascade'); }
+});
+
+// ---------- L'équipe cette semaine (superviseur) ----------
+const tw = { week: '' };
+async function openTeamWeek({ keep = false } = {}) {
+  paintStatic();
+  if (!keep || !tw.week) tw.week = mondayOf(todayISO());
+  renderTeamWeek({ animate: !keep });
+  show('teamweek');
+  try { boss.team = await listTeam(); boss.teamLoaded = true; } catch { boss.teamLoaded = true; }
+  if (current === 'teamweek') renderTeamWeek({ animate: false });
+}
+function renderTeamWeek({ animate = true } = {}) {
+  const thisWeek = mondayOf(todayISO());
+  $('#teamweekEyebrow').textContent = [CONFIG.gymName, weekRange(tw.week)].filter(Boolean).join(' · ');
+  const team = (boss.team || []).filter((u) => !u.removed);
+  const any = team.some((u) => u.schedule && Object.keys(u.schedule).length);
+  const days = weekDates(tw.week).map((d, i) => {
+    const people = team.map((u) => teamTarget(u, d)).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start));
+    const past = d < todayISO();
+    return `<section class="tw-dayc${d === todayISO() ? ' today' : ''}${past ? ' past' : ''}" style="--k:${i}">
+      <h3><span>${esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long' })))}</span><small class="num">${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
+      ${people.length ? `<div class="tw-people">${people.map(personRow).join('')}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}</section>`;
+  }).join('');
+  $('#teamBody').innerHTML = `<p class="page-lede">${esc(t('twLede'))}</p>
+    <div class="segmented tw-tabs" role="tablist">
+      <button type="button" role="tab" data-tw="0" aria-selected="${tw.week === thisWeek}">${esc(t('twThis'))}</button>
+      <button type="button" role="tab" data-tw="1" aria-selected="${tw.week === addDays(thisWeek, 7)}">${esc(t('twNext'))}</button>
+    </div>
+    ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>' : any ? `<div class="tw-days${animate && !reducedMotion() ? ' cascade' : ''}">${days}</div><p class="section-note">${esc(t('twHint'))}</p>` : `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('twEmpty'))}</p></div>`}`;
+}
+$('#teamBody').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-tw]');
+  if (!b) return;
+  tw.week = addDays(mondayOf(todayISO()), 7 * Number(b.dataset.tw));
+  sfx('tab');
+  renderTeamWeek();
+});
+
+// ---------- Les actions du tableau de bord ----------
+document.addEventListener('click', (ev) => {
+  const g = ev.target.closest('[data-glance]');
+  if (g) { try { openGlance(JSON.parse(g.dataset.glance)); } catch { /* ignore */ } return; }
+  const b = ev.target.closest('[data-hub]');
+  if (!b) return;
+  const k = b.dataset.hub;
+  if (k === 'tasks') { openChecklist(); return; }
+  if (k === 'finish') { openFinish(); return; }
+  if (k === 'start') {
+    const tg = glanceTarget && current === 'glance' ? glanceTarget : myShiftTarget();
+    if (state?.date) { openChecklist(); return; }
+    if (tg) startScheduled(tg);
+    return;
+  }
+  if (k === 'sched') { openScheduleSheet(); return; }
+  if (k === 'glance') { openGlance(myShiftTarget()); return; }
+  if (k === 'mine') { openMine(); return; }
+  if (k === 'plan') { openPlan(); return; }
+  if (k === 'flag') { openFlag(); return; }
+  if (k === 'method') { openMethod(); return; }
+  if (k === 'teamweek') { openTeamWeek(); return; }
+  if (k === 'reports') { if (location.hash === '#historique') openHistory({ team: true }); else location.hash = 'historique'; return; }
+  if (k === 'problems' || k === 'access') {
+    boss.tab = k === 'access' ? 'team' : 'problems';
+    if (location.hash === '#patron') openBoss(); else location.hash = 'patron';
+    return;
+  }
+  if (k === 'custom') {
+    if (!state?.date) { const nx = nextShift(); if (!nx) { openScheduleSheet(); return; } startScheduled(nx); }
+    setTimeout(() => openCustomize(), 380);
+    return;
+  }
+  if (k === 'map' || k === 'tips') {
+    ap.modeSet = true;
+    if (k === 'tips') { ap.mode = 'tips'; ap.tab = 'tips'; } else { ap.mode = 'overview'; ap.tab = 'day'; }
+    openApercu();
+  }
+});
+$('#hubDoor').addEventListener('click', () => goFront());
+// Le compte à rebours de la grande carte avance tout seul.
+setInterval(() => { if (!document.hidden && current === 'hub' && !bossWatching()) renderHub({ animate: false }); }, 30000);
+
 // ---------- Navigation ----------
 document.addEventListener('click', (ev) => {
   const go = ev.target.closest('[data-go]');
   if (!go) return;
+  if (go.dataset.go === 'hub') { openHub({ keep: true }); return; }
+  if (go.dataset.go === 'mine') { openMine({ keep: true }); return; }
+  if (go.dataset.go === 'home' && session.user && !state) { openHub(); return; } // l'accueil, c'est le tableau de bord
   if (go.dataset.go === 'apercu-keep') { openApercu({ keep: true }); return; }
   if (go.dataset.go === 'protocol') { goProtocol(); return; }
   if (go.dataset.go === 'history-keep') { openHistory({ keep: true }); return; }
@@ -4655,6 +5124,12 @@ function route() {
   if (accounts() && !session.user) return openAuth(); // le lien demandé s'ouvre après la connexion
   if (h.startsWith('#probleme=')) return openProblem(decodeURIComponent(h.slice(10)));
   if (h === '#patron') return openBoss();
+  if (h === '#accueil') return openHub();
+  if (h === '#mes-quarts') return openMine();
+  if (h === '#horaire') return openPlan();
+  if (h === '#quart') return openGlance();
+  if (h === '#methode') return openMethod();
+  if (h === '#equipe') return isBoss() ? openTeamWeek() : openHub();
   if (h === '#affiche') return openPoster();
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();

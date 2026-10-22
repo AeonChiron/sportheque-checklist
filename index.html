@@ -188,6 +188,80 @@
     </div>
   </section>
 
+
+  <!-- Tableau de bord : tout ce qu'on peut faire, le plus utile en premier (propriétaire). -->
+  <section id="hub" class="screen" hidden>
+    <header class="hub-top">
+      <button type="button" class="hub-door" id="hubDoor" data-label="frontDoor"><span class="mark" data-mark aria-hidden="true"></span></button>
+      <div class="hub-tools">
+        <button type="button" class="theme-btn gear-btn" data-settings data-label="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button type="button" class="acct-btn" id="hubAccount" data-account></button>
+      </div>
+    </header>
+    <div class="hub-hello">
+      <p class="eyebrow" id="hubDate"></p>
+      <h1 id="hubTitle"></h1>
+      <p class="hub-ask" id="hubAsk"></p>
+    </div>
+    <div id="hubBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <section id="mine" class="screen sub-page" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="hub">‹ <span data-t="hubBack"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <span class="hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2"/></svg></span>
+      <p class="eyebrow" id="mineEyebrow"></p>
+      <h1 id="mineTitle" data-t="mineTitle"></h1>
+    </header>
+    <div id="mineBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <section id="plan" class="screen sub-page" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="hub">‹ <span data-t="hubBack"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <span class="hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17h6"/></svg></span>
+      <p class="eyebrow" id="planEyebrow"></p>
+      <h1 id="planTitle" data-t="planTitle"></h1>
+    </header>
+    <div id="planBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <section id="glance" class="screen sub-page" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="hub">‹ <span data-t="hubBack"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <span class="hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      <p class="eyebrow" id="glanceEyebrow"></p>
+      <h1 id="glanceTitle" data-t="glTitle"></h1>
+    </header>
+    <div id="glanceBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <section id="method" class="screen sub-page" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="hub">‹ <span data-t="hubBack"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <span class="hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h5v17H6a2 2 0 0 0-2 2zM20 5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 1 2 2z"/></svg></span>
+      <p class="eyebrow" id="methodEyebrow"></p>
+      <h1 id="methodTitle" data-t="tMethod"></h1>
+    </header>
+    <div id="methodBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
+  <section id="teamweek" class="screen sub-page" hidden>
+    <header class="review-top">
+      <div class="review-nav"><button class="back" data-go="hub">‹ <span data-t="hubBack"></span></button><span class="mark" data-mark aria-hidden="true"></span></div>
+      <span class="hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.6 4.6 0 0 1 21 18.5"/></svg></span>
+      <p class="eyebrow" id="teamweekEyebrow"></p>
+      <h1 id="teamweekTitle" data-t="twTitle"></h1>
+    </header>
+    <div id="teamBody"></div>
+    <div class="bottom-spacer small"></div>
+  </section>
+
   <!-- 1. Début de quart -->
   <section id="setup" class="screen" hidden>
     <div class="setup-top">
