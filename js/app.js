@@ -110,7 +110,7 @@ if (document.startViewTransition) document.documentElement.classList.add('vt');
 const PILL_HIDDEN = new Set(['checklist', 'finish', 'sent', 'auth']);
 function paintShiftPill() {
   const pill = $('#shiftPill');
-  const on = Boolean(state && plan && !PILL_HIDDEN.has(current));
+  const on = Boolean(state && plan && !PILL_HIDDEN.has(current) && !(current === 'history' && !bossWatching())); // Mes shifts : la carte du quart fait déjà ce travail
   pill.hidden = !on;
   document.documentElement.classList.toggle('has-pill', on);
   if (!on) return;
@@ -2842,7 +2842,14 @@ function openHistory({ keep = false, team = false } = {}) {
 
 async function refreshHistory() {
   const { mode, week } = hist;
-  if (mode === 'upcoming') return;
+  if (mode === 'upcoming') { // le tableau de bord a besoin des quarts passés pour ses chiffres
+    if (hist.loaded || bossWatching()) return;
+    const r = await loadRecent(500);
+    if (current !== 'history' || hist.mode !== 'upcoming') return;
+    hist.recent = r.shifts; hist.loaded = true; hist.live = r.live;
+    renderHistory({ animate: false });
+    return;
+  }
   const res = mode === 'week' ? await loadWeek(weekDates(week)) : await loadRecent(500);
   if (current !== 'history' || hist.mode !== mode || hist.week !== week) return; // parti entre-temps
   const fresh = mode === 'week' ? hist.weekLoaded !== week : !hist.loaded;
@@ -2882,25 +2889,65 @@ function histCard(s, i) {
     </span>${CHEV_R}</button>`;
 }
 
-// En haut de « Mes shifts » : le quart en cours, ou le prochain, avec un seul gros bouton.
-function nextShiftCard() {
+// Le tableau de bord « Mes shifts » : la carte du quart (la seule pièce forte), deux chiffres,
+// la semaine, la liste, les raccourcis.
+function heroCard() {
   const live = state?.name && state?.date ? state : null;
   const nx = !live && nextShift();
-  if (!live && !nx) return '';
+  if (!live && !nx) {
+    return { skip: '', html: `<section class="d-hero empty"><p class="dh-label">${esc(t('schedTitle'))}</p><p class="dh-empty">${esc(t('schedEmpty'))}</p><button type="button" class="dh-btn" data-sched>${esc(t('schedSet'))}</button></section>` };
+  }
   const date = live ? live.date : nx.date;
   const start = live ? live.start : nx.start, end = live ? live.end : nx.end;
   const left = Math.ceil((startAt({ date, start }) - Date.now()) / 6e4);
-  let chip = '';
+  let side;
   if (live) {
-    const p = shiftPlan(live);
-    const tasks = p.items.filter((x) => x.kind === 'task');
-    chip = `${tasks.filter((x) => live.tasks?.[x.id]?.done).length}/${tasks.length} ${t('tasks')}`;
-  } else chip = left > 0 ? countdown(left) : t('nbGo');
-  return `<section class="hi-next${live ? ' live' : ''}">
-    <div class="hn-top"><small>${esc(t(live ? 'nowShiftLabel' : 'nbNext'))}</small><span class="hn-chip num">${esc(chip)}</span></div>
-    <div class="hn-main"><b>${esc(cap(dayWord(date)))}</b><span class="num">${nb(f(toMin(start)))} – ${nb(f(toMin(end)))}</span><small>${esc(SHIFTS[detectShift(start, end)][lang()].short)}</small></div>
-    <button type="button" class="btn primary big" data-hnext>${esc(t(live ? 'ovBack' : 'ovStart'))}</button>
-  </section>`;
+    const tasks = shiftPlan(live).items.filter((x) => x.kind === 'task');
+    const done = tasks.filter((x) => live.tasks?.[x.id]?.done).length;
+    const pct = tasks.length ? Math.round((100 * done) / tasks.length) : 0;
+    side = `<span class="dh-ring" style="--p:${pct}" role="img" aria-label="${esc(`${done}/${tasks.length} ${t('tasks')}`)}"><b class="num">${done}/${tasks.length}</b></span>`;
+  } else side = `<span class="dh-chip num">${esc(left > 0 ? countdown(left) : t('nbGo'))}</span>`;
+  return { skip: date, html: `<section class="d-hero${live ? ' is-live' : ''}">
+    <div class="dh-top"><p class="dh-label">${esc(t(live ? 'nowShiftLabel' : 'nbNext'))}</p>${side}</div>
+    <p class="dh-day">${esc(cap(dayWord(date)))}<span>${esc(SHIFTS[detectShift(start, end)][lang()].short)}</span></p>
+    <p class="dh-time num">${nb(f(toMin(start)))}<span> – ${nb(f(toMin(end)))}</span></p>
+    <button type="button" class="dh-btn" data-hnext>${esc(t(live ? 'ovBack' : 'ovStart'))}</button>
+  </section>` };
+}
+// Deux chiffres : les quarts faits cette semaine (sur ceux prévus) et les tâches faites sur 30 jours.
+function myDoneShifts() {
+  const me = shiftName().trim().toLowerCase();
+  return (hist.recent || []).filter((x) => !x.open && (x.name || '').trim().toLowerCase() === me);
+}
+function dashStats() {
+  const today = todayISO(), mon = mondayOf(today);
+  const mine = myDoneShifts();
+  const sc = mySchedule() || {};
+  const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => specialFor(addDays(mon, i)) || presetOf(sc[i])).length;
+  const week = new Set(mine.filter((x) => x.date >= mon && x.date <= today).map((x) => x.date)).size;
+  const span = mine.filter((x) => x.date >= addDays(today, -29));
+  const tot = span.reduce((a, x) => a + metrics(x).total, 0), dn = span.reduce((a, x) => a + metrics(x).done, 0);
+  const pct = tot ? Math.round((100 * dn) / tot) : null;
+  const wait = !hist.loaded;
+  return `<div class="d-stats">
+    <div class="d-stat"><p class="ds-label wk">${esc(t('dsWeek'))}</p><p class="ds-num num">${wait ? '–' : week}<small>/${planned}</small></p><p class="ds-sub">${esc(t('dsWeekSub'))}</p></div>
+    <div class="d-stat"><p class="ds-label mo">${esc(t('dsMonth'))}</p><p class="ds-num num">${wait || pct === null ? '–' : `${pct}<small>%</small>`}</p><p class="ds-sub">${esc(t('dsMonthSub'))}</p></div>
+  </div>`;
+}
+// La semaine en cours : une colonne par jour, l'heure du début, un crochet quand c'est fait.
+function dashWeek() {
+  const today = todayISO(), mon = mondayOf(today);
+  const sc = mySchedule() || {};
+  const doneDays = new Set(myDoneShifts().map((x) => x.date));
+  const names = WEEKDAYS[lang()];
+  return `<ol class="dw">${[0, 1, 2, 3, 4, 5, 6].map((i) => {
+    const d = addDays(mon, i);
+    const p = specialFor(d) || presetOf(sc[i]);
+    const done = doneDays.has(d);
+    const cls = ['dw-day', d === today && 'today', p && 'on', done && 'done', d < today && 'past'].filter(Boolean).join(' ');
+    const label = `${cap(names[i])}${p ? ` ${f(toMin(p.start))} – ${f(toMin(p.end))}` : ` ${t('schedOff')}`}${done ? ` ✓` : ''}`;
+    return `<li class="${cls}" aria-label="${esc(label)}"><span class="dw-name" aria-hidden="true">${esc(cap(names[i]).slice(0, 3))}</span><span class="dw-dot" aria-hidden="true">${done ? '✓' : new Date(`${d}T12:00:00`).getDate()}</span><span class="dw-time num" aria-hidden="true">${p ? esc(f(toMin(p.start))) : '—'}</span></li>`;
+  }).join('')}</ol>`;
 }
 document.addEventListener('click', (ev) => {
   if (!ev.target.closest('[data-hnext]')) return;
@@ -3021,6 +3068,7 @@ function renderHistory({ animate = true } = {}) {
       ${byDate.get(d).map((s) => { const i = k++; return isAdmin() ? `<div class="hi-row">${histCard(s, i)}<button type="button" class="hi-del" data-hdel="${i}" aria-label="${esc(t('histDelete'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>` : histCard(s, i); }).join('')}
     </section>`).join('');
 
+  $('#history').classList.remove('dash-mode');
   if (bossWatching()) {
     // La page du patron : une phrase, les filtres, ce qui manque, puis les quarts. Rien d'autre.
     const per = `<div class="segmented hi-period" role="tablist">${['day', 'week', 'month', 'year'].map((k2) => `<button type="button" role="tab" data-hper="${k2}" aria-selected="${hist.period === k2}">${esc(t(`per_${k2}`))}</button>`).join('')}</div>`;
@@ -3039,43 +3087,40 @@ function renderHistory({ animate = true } = {}) {
     return;
   }
 
-  // Employé (propriétaire : « plus ordonné ») : 1. le prochain quart, en grand; 2. mes quarts
-  // (à venir / passés); 3. mon horaire de la semaine; 4. les raccourcis.
-  const nextCard = nextShiftCard();
-  $('#historyBody').innerHTML = `
-    ${nextCard}
-    <section class="hi-block">
-      <div class="hi-blockhead"><h2>${esc(t('myShiftsList'))}</h2></div>
+  const dashHero = heroCard();
+  $('#history').classList.add('dash-mode');
+  $('#hiEyebrow').textContent = cap(dateOf(today).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }));
+  // Employé : un tableau de bord (propriétaire : « professionnel, épuré, style Apple »).
+  // Mêmes polices que le reste de l'app; seule la mise en page change.
+  const listBody = isUp
+    ? `<div class="ap-weekbar">
+        <button type="button" class="icon-btn" data-upwk="-1" aria-label="${esc(t('prevWeek'))}" ${hist.up <= mondayOf(today) ? 'disabled' : ''}>${CHEV_L}</button>
+        <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.up))}</b>${hist.up !== mondayOf(today) ? `<button type="button" class="link" data-upwk="0">${esc(t('thisWeek'))}</button>` : ''}</div>
+        <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
+      </div><div class="up-list">${upcomingList(dashHero.skip)}</div>`
+    : `<div class="hi-list${animate && ready ? ' cascade' : ''}">${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
+        : `${!hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${['week', 'month', 'all'].map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('histEmpty'))}</p></div>`}`}</div>`;
+  $('#historyBody').innerHTML = `<div class="dash">
+    ${dashHero.html}
+    ${dashStats()}
+    <section class="d-card d-week" aria-labelledby="dWeekH">
+      <div class="d-head"><h2 id="dWeekH">${esc(t('schedTitle'))}</h2><button type="button" class="link" data-sched>${esc(t(mySchedule() && Object.keys(mySchedule()).length ? 'schedEdit' : 'schedSet'))}</button></div>
+      ${dashWeek()}
+    </section>
+    <section class="d-card d-list" aria-labelledby="dListH">
+      <div class="d-head"><h2 id="dListH">${esc(t('myShiftsList'))}</h2></div>
       <div class="segmented hi-mode" role="tablist">
         <button type="button" role="tab" data-hmode="upcoming" aria-selected="${isUp}">${esc(t('upcoming'))}</button>
         <button type="button" role="tab" data-hmode="recent" aria-selected="${hist.mode === 'recent'}">${esc(t('recent'))}</button>
       </div>
-    ${isWeek ? `<div class="ap-weekbar">
-      <button type="button" class="icon-btn" data-hwk="-1" aria-label="${esc(t('prevWeek'))}">${CHEV_L}</button>
-      <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.week))}</b>${hist.week !== mondayOf(today) ? `<button type="button" class="link" data-hwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
-      <button type="button" class="icon-btn" data-hwk="1" aria-label="${esc(t('nextWeek'))}" ${hist.week >= mondayOf(today) ? 'disabled' : ''}>${CHEV_R}</button>
-    </div>` : ''}
-    ${isUp ? `<div class="ap-weekbar">
-      <button type="button" class="icon-btn" data-upwk="-1" aria-label="${esc(t('prevWeek'))}" ${hist.up <= mondayOf(today) ? 'disabled' : ''}>${CHEV_L}</button>
-      <div class="ap-weekmid"><b class="num">${esc(weekRange(hist.up))}</b>${hist.up !== mondayOf(today) ? `<button type="button" class="link" data-upwk="0">${esc(t('thisWeek'))}</button>` : `<span class="pill">${esc(t('thisWeek'))}</span>`}</div>
-      <button type="button" class="icon-btn" data-upwk="1" aria-label="${esc(t('nextWeek'))}">${CHEV_R}</button>
-    </div><div class="up-list">${upcomingList(nextCard ? nextShift()?.date : '')}</div>` : `<div class="hi-list${animate && ready ? ' cascade' : ''}">
-      ${!ready ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'
-        : `${isWeek || !hist.recent.length ? '' : `<div class="segmented hi-period" role="tablist">${(isBoss() ? ['day', 'week', 'month', 'all'] : ['week', 'month', 'all']).map((k) => `<button type="button" role="tab" data-hper="${k}" aria-selected="${hist.period === k}">${esc(t(`per_${k}`))}</button>`).join('')}</div>`}${whoBar}${strip}${tally}${groups || `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t(isWeek ? 'histEmptyWeek' : 'histEmpty'))}</p></div>`}`}
-    </div>`}
+      ${listBody}
     </section>
-    <section class="hi-block">
-      <div class="hi-blockhead"><h2>${esc(t('schedTitle'))}</h2>${mySchedule() && Object.keys(mySchedule()).length ? `<button type="button" class="link" data-sched>${esc(t('schedEdit'))}</button>` : ''}</div>
-      ${schedCard({ bare: true })}
+    <section class="d-card d-links" aria-labelledby="dLinksH">
+      <div class="d-head"><h2 id="dLinksH">${esc(t('shortcuts'))}</h2></div>
+      <button type="button" class="d-row" data-hlink="tips"><span class="d-ico tips">${HERO_ICONS.tips}</span><span class="d-txt"><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span>${CHEV_R}</button>
+      <button type="button" class="d-row" data-hlink="overview"><span class="d-ico overview">${HERO_ICONS.overview}</span><span class="d-txt"><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span>${CHEV_R}</button>
     </section>
-    <section class="hi-block">
-      <div class="hi-blockhead"><h2>${esc(t('shortcuts'))}</h2></div>
-      <div class="hi-links">
-        <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
-        <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
-      </div>
-    </section>
-    ${ready && !isUp ? `<p class="section-note">${esc(hist.live ? t('histLive') : t('histLocal'))}</p>` : ''}`;
+  </div>`;
   if (animate && ready) countUp($('#historyBody'));
 }
 

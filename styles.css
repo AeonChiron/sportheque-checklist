@@ -2495,3 +2495,100 @@ html.on-floor, html.on-floor body { overflow: hidden; height: 100%; }
 .finish-report .fr-text { margin: 0; display: grid; gap: 4px; }
 .finish-report .fr-text span { color: var(--muted); font-size: 14px; }
 .finish-report .btn { width: 100%; }
+
+/* ---------- Mes shifts : tableau de bord (propriétaire : épuré, style Apple; mêmes polices) ---------- */
+#history.dash-mode .review-top { margin: 0 0 18px; padding: 6px 2px 0; background: none; color: var(--ink); border-radius: 0; overflow: visible; }
+#history.dash-mode .review-top .hero-icon { display: none; }
+#history.dash-mode .review-top .eyebrow { order: 2; margin: 2px 0 0; color: var(--muted); font: 500 15px/1.3 var(--font); letter-spacing: 0; text-transform: none; }
+#history.dash-mode .review-top h1 { order: 1; margin: 0; font-size: 34px; line-height: 1.05; text-transform: none; color: var(--ink); }
+#history.dash-mode .review-nav { order: 0; }
+#history.dash-mode .review-nav .back { color: var(--link); }
+
+.dash { display: grid; gap: 14px; }
+.d-card { padding: 16px; border-radius: 18px; background: var(--surface); box-shadow: 0 1px 2px rgba(26, 28, 25, .06), 0 10px 28px -22px rgba(26, 28, 25, .45); }
+.d-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.d-head h2 { margin: 0; font: 750 19px/1.15 var(--serif); }
+.d-head .link { font-weight: 600; }
+
+/* La carte du quart : la seule pièce forte de la page. */
+.d-hero { display: grid; gap: 6px; padding: 18px 18px 16px; border-radius: 24px; background: #1a1c19; color: #fff; box-shadow: 0 18px 40px -26px rgba(0, 0, 0, .7); }
+:root[data-theme="dark"] .d-hero { background: #10181b; box-shadow: inset 0 0 0 1px #24343a; }
+.dh-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.dh-label { margin: 0; font: 600 15px/1.2 var(--font); color: rgba(255, 255, 255, .72); }
+.dh-chip { padding: 7px 12px; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: 600 15px/1 var(--display); }
+.dh-day { margin: 6px 0 0; display: flex; align-items: baseline; gap: 10px; font: 750 24px/1.1 var(--serif); }
+.dh-day span { font: 500 15px/1 var(--font); color: rgba(255, 255, 255, .62); }
+.dh-time { margin: 0 0 10px; font: 600 clamp(40px, 12vw, 56px)/1 var(--display); letter-spacing: -.01em; white-space: nowrap; }
+.dh-time span { color: rgba(255, 255, 255, .5); font-weight: 500; }
+.dh-btn { min-height: 52px; border: 0; border-radius: 14px; background: #fff; color: #1a1c19; font: 700 17px/1 var(--font); cursor: pointer; }
+.dh-btn:active { transform: scale(.98); }
+.dh-btn:focus-visible { outline: 3px solid var(--sun, #ffc83d); outline-offset: 3px; }
+.dh-ring { --p: 0; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: conic-gradient(#5cc28e calc(var(--p) * 1%), rgba(255, 255, 255, .14) 0); }
+.dh-ring b { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #1a1c19; font: 600 15px/1 var(--display); }
+:root[data-theme="dark"] .dh-ring b { background: #10181b; }
+.d-hero.empty .dh-empty { margin: 4px 0 12px; font: 500 17px/1.4 var(--font); color: rgba(255, 255, 255, .85); }
+
+/* Deux chiffres */
+.d-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.d-stat { padding: 14px 16px; border-radius: 18px; background: var(--surface); box-shadow: 0 1px 2px rgba(26, 28, 25, .06), 0 10px 28px -22px rgba(26, 28, 25, .45); }
+.ds-label { margin: 0 0 6px; font: 600 14px/1.2 var(--font); }
+.ds-label.wk { color: var(--accent); }
+.ds-label.mo { color: var(--ok); }
+.ds-num { margin: 0; font: 600 34px/1 var(--display); }
+.ds-num small { font-size: 18px; font-weight: 500; color: var(--muted); }
+.ds-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.3; color: var(--muted); }
+
+/* La semaine */
+.dw { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.dw-day { display: grid; justify-items: center; gap: 6px; padding: 4px 0; }
+.dw-name { font: 600 12px/1 var(--font); color: var(--muted); }
+.dw-dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font: 600 15px/1 var(--display); color: var(--ink); }
+.dw-day.on .dw-dot { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+.dw-day.done .dw-dot { background: var(--ok); color: #fff; }
+.dw-day.today .dw-dot { background: var(--ink); color: var(--surface); }
+.dw-day.today.done .dw-dot { background: var(--ok); }
+.dw-day.today .dw-name { color: var(--ink); }
+.dw-time { font: 500 12px/1 var(--display); color: var(--muted); white-space: nowrap; }
+.dw-day.on .dw-time { color: var(--ink); }
+.dw-day.past:not(.done) .dw-dot, .dw-day.past:not(.done) .dw-time { opacity: .45; }
+
+/* La liste des quarts, groupée comme les Réglages */
+.d-list .hi-mode { margin-bottom: 10px; }
+.d-list .ap-weekbar { margin: 4px 0 6px; }
+.d-list .up-list, .d-list .hi-list { display: block; margin: 0; }
+.d-list .up-card, .d-list .hi-card { margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 12px 2px; border-top: 1px solid var(--line); }
+.d-list .up-list > .up-card:first-child, .d-list .hi-day .hi-dayhead + .hi-card, .d-list .hi-day .hi-dayhead + .hi-row .hi-card { border-top: 0; }
+.d-list .hi-day { margin: 0 0 6px; }
+.d-list .hi-dayhead { margin: 10px 2px 2px; }
+.d-list .hi-dayhead h2 { font: 600 14px/1.2 var(--font); color: var(--muted); }
+.d-list .folder-empty { margin: 8px 0 0; }
+.d-list .section-note { margin: 8px 2px 0; }
+
+/* Raccourcis : des rangées avec une petite icône de couleur */
+.d-links { padding-bottom: 6px; }
+.d-links .d-head { margin-bottom: 4px; }
+.d-row { display: grid; grid-template-columns: 36px 1fr 18px; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 2px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.d-links .d-head + .d-row { border-top: 0; }
+.d-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: #fff; }
+.d-ico.tips { background: #f2a516; }
+.d-ico.overview { background: #15946f; }
+.d-ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.d-txt { display: grid; gap: 2px; min-width: 0; }
+.d-txt b { font: 600 16px/1.2 var(--font); }
+.d-txt small { font-size: 13px; color: var(--muted); }
+.d-row > svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; opacity: .4; }
+
+/* iPad et ordi : deux colonnes */
+@media (min-width: 760px) {
+  #history.dash-mode .review-top { margin: 0 0 22px; padding: 6px 4px 0; }
+  .dash { grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .d-hero { grid-column: 1; grid-row: 1 / span 2; align-self: stretch; padding: 22px; }
+  .d-stats { grid-column: 2; grid-row: 1; }
+  .d-week { grid-column: 2; grid-row: 2; }
+  .d-list { grid-column: 1 / -1; grid-row: 3; }
+  .d-links { grid-column: 1 / -1; grid-row: 4; display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+  .d-links .d-head { grid-column: 1 / -1; }
+  .d-links .d-row { border-top: 0; }
+  .d-hero .dh-btn { margin-top: auto; }
+  .dh-time { font-size: clamp(36px, 4.6vw, 56px); white-space: nowrap; }
+}
