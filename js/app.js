@@ -3321,8 +3321,9 @@ function paintFront() {
     $('#poolStart').setAttribute('aria-label', t('welcomeBackName', first));
     $('#poolStart').classList.toggle('unsent', Boolean(state && plan && shiftOver()));
   } else {
-    label.textContent = t('getStarted');
-    $('#poolStart').removeAttribute('aria-label');
+    // Propriétaire : « Commencer » au même niveau que la carte « Bon retour » (premium, pas de disques).
+    label.innerHTML = `<span class="wb-text gs-text"><b>${esc(t('getStarted'))}</b><em>${esc(t('getStartedSub'))}</em></span><span class="wb-go"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>`;
+    $('#poolStart').setAttribute('aria-label', t('getStarted'));
   }
   paintNextBox(inside);
   if (inside && !prefs.welcomed?.[session.user.email] && !paintFront.welcomeQueued) { paintFront.welcomeQueued = true; setTimeout(() => { paintFront.welcomeQueued = false; if (current === 'auth') maybeWelcome(); }, 1200); }
