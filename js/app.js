@@ -129,6 +129,7 @@ $('#shiftPill').addEventListener('click', () => {
 // quelques secondes de plus (un toucher de trop se répare tout de suite).
 function toast(msg, tone = 'ok', onUndo = null) {
   const el = $('#toast');
+  if (tone !== 'muted') sfx('notify'); // chaque message a son petit son (pas de doublon s'il suit un autre son)
   el.innerHTML = `<span>${esc(msg)}</span>${onUndo ? `<button type="button">${esc(t('undo'))}</button>` : ''}`;
   el.dataset.tone = tone;
   el.classList.toggle('has-undo', Boolean(onUndo));
@@ -1067,7 +1068,11 @@ let liftNext = false;
 function pipsHTML(done, total, plate, land = -1) {
   return Array.from({ length: total }, (_, j) => `<i class="${j < done ? 'on' : ''}${j === land ? ' pop' : ''}"></i>`).join('');
 }
-const sfx = (name) => { if (prefs.sound !== false) fxSound(name); };
+const sfx = (name, opts) => { if (prefs.sound !== false) fxSound(name, opts); };
+// iPhone : par défaut, le bouton silencieux coupe les sons et la musique de l'employé continue.
+// « Sons même en silencieux » (Menu) : les sons jouent quand même (la musique peut s'arrêter).
+function applyAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = prefs.soundSilent ? 'playback' : 'ambient'; } catch { /* ignore */ } }
+applyAudioSession();
 let glass = null;
 // Le pointage : un vrai « clac » (tampon doré, éclats, son) et il remplit le verre plus que les autres.
 let justPunched = false;
@@ -1103,45 +1108,10 @@ function renderTimeline() {
 }
 
 // Le son du disque qui tombe sur la barre (court, discret; coupé dans le Menu).
-let audio = null;
 function clank(kind = 'plate') {
-  if (prefs.sound === false) return;
-  if (kind === 'step') { sfx('tick'); return; } // la petite case : le son doux du studio
-  try {
-    audio ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === 'suspended') audio.resume();
-    const t0 = audio.currentTime + (kind === 'plate' && !reducedMotion() ? 0.24 : 0);
-    const out = audio.createGain();
-    out.gain.value = kind === 'step' ? 0.1 : kind === 'lift' ? 0.16 : 0.2;
-    out.connect(audio.destination);
-    const tones = kind === 'step' ? [[1760, 0.12], [2640, 0.08]] : kind === 'lift' ? [[523, 0.5], [659, 0.5], [784, 0.7]] : [[380, 0.22], [1090, 0.2], [2310, 0.12]];
-    tones.forEach(([fq, d], n) => {
-      const o = audio.createOscillator();
-      const g = audio.createGain();
-      const s0 = t0 + (kind === 'lift' ? n * 0.09 : 0);
-      o.type = kind === 'lift' ? 'triangle' : 'sine';
-      o.frequency.value = fq;
-      g.gain.setValueAtTime(0.0001, s0);
-      g.gain.exponentialRampToValueAtTime(0.7, s0 + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, s0 + d);
-      o.connect(g).connect(out);
-      o.start(s0);
-      o.stop(s0 + d + 0.03);
-    });
-    if (kind === 'plate') {
-      const len = Math.floor(audio.sampleRate * 0.07);
-      const buf = audio.createBuffer(1, len, audio.sampleRate);
-      const ch = buf.getChannelData(0);
-      for (let n = 0; n < len; n++) ch[n] = (Math.random() * 2 - 1) * (1 - n / len) ** 3;
-      const src = audio.createBufferSource();
-      const lp = audio.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 700;
-      src.buffer = buf;
-      src.connect(lp).connect(out);
-      src.start(t0);
-    }
-  } catch { /* pas de son ici : tant pis */ }
+  if (kind === 'step') sfx('step');
+  else if (kind === 'lift') sfx('save');
+  else sfx('check', { level: 0.15 });
 }
 function buzz(kind) {
   try { navigator.vibrate?.(kind === 'step' ? 8 : kind === 'lift' ? [20, 40, 20, 40, 60] : [10, 40, 22]); } catch { /* iPhone : pas de vibration */ }
@@ -1268,14 +1238,14 @@ function toggleDone(id) {
   if (e.done) landId = id;
   if (!wasAll && allDone()) liftNext = true;
   renderChecklist();
-  if (e.done) { sfx('pour'); buzz('plate'); }
-  if (!wasAll && allDone()) { sfx('full'); setTimeout(() => buzz('lift'), reducedMotion() ? 0 : 650); }
-  if (!wasAll && allDone()) setTimeout(showAllDone, reducedMotion() ? 0 : 900);
+  // Propriétaire : la grande fête (lapin, confettis, musique) seulement à « Fin du quart ».
+  if (e.done) { const ts = planTasks(); sfx('check', { level: ts.filter((x) => state.tasks[x.id]?.done).length / (ts.length || 1) }); buzz('plate'); } else sfx('uncheck');
+  if (!wasAll && allDone()) setTimeout(() => buzz('lift'), reducedMotion() ? 0 : 650);
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
   const tasks = planTasks();
   const left = tasks.filter((x) => !state.tasks[x.id]?.done).length;
   const half = Math.ceil(tasks.length / 2);
-  if (!wasAll && allDone()) { celebrate(); toast(t('allDone'), 'ok', undo); }
+  if (!wasAll && allDone()) toast(t('allDoneEnd'), 'ok', undo);
   else if (e.done && left === 1) toast(t('lastOne'), 'ok', undo);
   else if (e.done && tasks.length - left === half && tasks.length > 3) { celebrate(); toast(t('halfway'), 'ok', undo); }
   else toast(e.done ? pickCheer() : t('unchecked'), e.done ? 'ok' : 'muted', undo);
@@ -1884,7 +1854,7 @@ function flagMailLine(fl, i) {
 
 async function submitProblem(fl, s = state) {
   if (prefs.simShift || prefs.simNew) { toast(t('simulationLocal')); return; }
-  sfx('flag');
+  sfx(fl.urgent ? 'urgent' : 'flag');
   if (sending.has(fl) || !flagNeedsWork(fl)) {
     if (!sending.has(fl)) toast(t(fl.urgent ? 'flagDemo' : s.loose ? 'flagInBoss' : 'flagNoted'));
     return;
@@ -1969,6 +1939,7 @@ $('#menuBtn').addEventListener('click', () => {
       </div>
       ${switchRow('mLarge', t('largeText'), Boolean(prefs.large))}
       ${switchRow('mSound', t('sounds'), prefs.sound !== false)}
+      ${navigator.audioSession ? switchRow('mSilent', t('soundSilent'), Boolean(prefs.soundSilent)) : ''}
       <div class="inline-choice"><span>${t('listOrder')}</span>
         <div class="segmented tiny" role="radiogroup">
           <button type="button" role="radio" data-mview="time" aria-checked="${state.view !== 'zone'}">${t('byTime')}</button>
@@ -1986,6 +1957,11 @@ $('#menuBtn').addEventListener('click', () => {
       b.onclick = () => { closeSheet(); setLang(b.dataset.mlang); };
     }
     root.querySelector('#mLarge').onclick = (ev) => setLarge(!prefs.large, ev.currentTarget);
+    root.querySelector('#mSilent')?.addEventListener('click', (ev) => {
+      prefs.soundSilent = !prefs.soundSilent; savePrefs(); applyAudioSession();
+      ev.currentTarget.setAttribute('aria-checked', String(prefs.soundSilent));
+      sfx('tap');
+    });
     root.querySelector('#mSound').onclick = (ev) => {
       prefs.sound = prefs.sound === false;
       savePrefs();
@@ -2017,7 +1993,12 @@ $('#menuBtn').addEventListener('click', () => {
 });
 
 // ---------- 3. Fin de quart ----------
-$('#finishBtn').addEventListener('click', () => { if (canEnd()) openFinish(); else saveDraft({ manual: true }); });
+$('#finishBtn').addEventListener('click', () => {
+  if (!canEnd()) { saveDraft({ manual: true }); return; }
+  // Tout est coché : « Fin du quart » lance la fête (lapin, confettis, accord), puis le résumé.
+  if (allDone()) { showAllDone(); celebrate(); sfx('celebrate'); buzz('lift'); return; }
+  openFinish();
+});
 // Le quart peut se fermer : chaque tâche cochée ou marquée « Pas pu faire », ou l'heure de fin passée.
 function canEnd() {
   const tasks = planTasks();
@@ -2178,7 +2159,7 @@ async function saveShift() {
   const { name } = state;
   const summary = boardSummary();
   const where = await publishShift(summary);
-  sfx('sent');
+  sfx('save');
   write(LAST_SHIFT, { ...state, savedAt: new Date().toISOString() }); // pour le modifier jusqu'à minuit
   state = null;
   save();
@@ -3662,7 +3643,7 @@ function openViewMenu() {
   const view = curView();
   const opt = (v, name) => `<button type="button" class="view-opt" role="radio" aria-checked="${view === v && !prefs.simShift}" data-adminview="${v}">${esc(name)}</button>`;
   const nx = !prefs.simShift && nextShift();
-  openSheet(`<div class="sheet-head"><p class="eyebrow">${EYE}${esc(t('roleAdmin'))}</p><h2>${esc(t('viewAsTitle'))}</h2></div>
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${esc(t('roleAdmin'))}</p><h2>${esc(t('viewAsTitle'))}</h2></div>
     <div class="view-opts" role="radiogroup">${opt('admin', t('roleAdmin'))}${opt('employee', roleName('employee'))}${opt('boss', roleName('boss'))}${opt('newEmployee', t('newEmployee'))}${opt('newBoss', t('newBoss'))}</div>
     ${prefs.simShift ? `<button type="button" class="btn ghost big" data-adminact="exit">${esc(t('simulationExit'))}</button>` : nx ? `<button type="button" class="btn ghost big" data-adminact="sim">${esc(t('simulationStart'))}</button>` : ''}`, (root) => {
     root.addEventListener('click', (ev) => {

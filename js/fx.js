@@ -3,176 +3,262 @@
 // (WebAudio, aucun fichier son). Tout part en silence si les sons sont coupés.
 
 // ---------- Sons ----------
-// Tous les sons passent par un même « studio » : un compresseur doux (rien ne
-// sature) et une petite réverbération de pièce (plus plein, moins « bip »).
+// Propriétaire : « des sons variés, haut de gamme, très satisfaisants ». Dix sons
+// signature, tous synthétisés ici (aucun fichier), chacun avec son propre caractère :
+//   tap       toucher d'interface : un petit « toc » de bois arrondi
+//   step      étape cochée : une note de kalimba qui monte à chaque étape
+//   check     tâche faite : maillet de marimba + quinte + scintillement (monte avec le progrès)
+//   uncheck   tâche décochée / annulée : deux notes de marimba qui redescendent, feutrées
+//   notify    petit message (toast) : une bulle qui « pop » et un tintement aérien
+//   save      enregistré : un accord de piano électrique chaleureux
+//   swish     une feuille s'ouvre / se ferme : un souffle d'air
+//   error     pas possible : un double « bonk » doux, jamais agressif
+//   flag      signalement envoyé : papier qui part + « ping » de cloche
+//   urgent    signalement urgent : deux cloches claires qui appellent
+//   celebrate fin du quart : un accord qui s'épanouit, une pluie d'étincelles
+// Une seule chaîne de son : filtre des graves, compresseur doux, réverbération de pièce
+// stéréo, et une limite finale pour que rien ne sature.
 let ac = null;
-let bus = null;
+let master = null;
+let verbIn = null;
+let lastAt = 0;
+let stepN = 0;
+let stepAt = 0;
+const AC = () => window.AudioContext || window.webkitAudioContext;
 function A() {
   if (!ac) {
-    ac = new (window.AudioContext || window.webkitAudioContext)();
+    ac = new (AC())({ latencyHint: 'interactive' });
+    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 60;
     const comp = ac.createDynamicsCompressor();
-    comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.2;
-    comp.connect(ac.destination);
-    bus = ac.createGain();
-    bus.gain.value = 0.9;
-    bus.connect(comp);
-    // Réverbération : une réponse de pièce faite de bruit qui s'éteint.
-    const len = Math.floor(ac.sampleRate * 1.1);
+    comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 2.6; comp.attack.value = 0.002; comp.release.value = 0.16;
+    const lim = ac.createDynamicsCompressor();
+    lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.06;
+    master = ac.createGain(); master.gain.value = 0.9;
+    master.connect(hp).connect(comp).connect(lim).connect(ac.destination);
+    // Réverbération : une pièce douce, stéréo, qui s'assombrit en s'éteignant.
+    const len = Math.floor(ac.sampleRate * 1.6);
     const ir = ac.createBuffer(2, len, ac.sampleRate);
-    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3.2; }
-    const verb = ac.createConvolver(), wet = ac.createGain();
-    verb.buffer = ir; wet.gain.value = 0.16;
-    bus.connect(verb).connect(wet).connect(comp);
+    for (let c = 0; c < 2; c++) {
+      const d = ir.getChannelData(c);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const k = i / len;
+        const a = 0.35 + 0.6 * k; // de plus en plus sombre
+        lp = lp * a + (Math.random() * 2 - 1) * (1 - a);
+        d[i] = lp * (1 - k) ** 2.6 * 2.2;
+      }
+    }
+    const pre = ac.createDelay(0.1); pre.delayTime.value = 0.014;
+    const conv = ac.createConvolver(); conv.buffer = ir;
+    const wet = ac.createGain(); wet.gain.value = 0.32;
+    verbIn = ac.createGain();
+    verbIn.connect(pre).connect(conv).connect(wet).connect(hp);
   }
-  if (ac.state === 'suspended') ac.resume();
+  if (ac.state !== 'running') ac.resume().catch(() => {});
   return ac;
 }
-function osc(type, f0, f1, at, dur, gain) {
-  const c = A(), t0 = c.currentTime + at;
-  const o = c.createOscillator(), g = c.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(f0, t0);
-  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g).connect(bus);
-  o.start(t0);
-  o.stop(t0 + dur + 0.05);
+// iPhone : le son ne part qu'après un vrai toucher. Au premier toucher (et au retour
+// dans l'app), on réveille le son avec un silence d'un instant.
+function unlock() {
+  try {
+    const c = A();
+    const b = c.createBuffer(1, 1, c.sampleRate), src = c.createBufferSource();
+    src.buffer = b; src.connect(c.destination); src.start(0);
+  } catch { /* pas de son ici */ }
 }
-function noise(at, dur, gain, { type = 'bandpass', f0 = 1000, f1 = f0, q = 1 } = {}) {
-  const c = A(), t0 = c.currentTime + at;
+if (typeof window !== 'undefined') {
+  for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, unlock, { passive: true, capture: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running') ac.resume().catch(() => {}); });
+}
+// Une voix : gain → panoramique → sortie + envoi vers la réverbération.
+function voice(t0, { pan = 0, verb = 0.25 } = {}) {
+  const c = A();
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t0);
+  const p = c.createStereoPanner ? c.createStereoPanner() : null;
+  if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(master); } else g.connect(master);
+  if (verb) { const s = c.createGain(); s.gain.value = verb; g.connect(s).connect(verbIn); }
+  return g;
+}
+// Enveloppe naturelle : attaque rapide, déclin exponentiel.
+function env(g, t0, peak, attack, decay) {
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(peak, t0 + attack);
+  g.gain.setTargetAtTime(0.0001, t0 + attack, decay / 4.5);
+}
+function sine(f, t0, dur, out, { type = 'sine', bend = 0 } = {}) {
+  const o = A().createOscillator();
+  o.type = type;
+  o.frequency.setValueAtTime(f * (1 + bend), t0);
+  if (bend) o.frequency.exponentialRampToValueAtTime(f, t0 + 0.03);
+  o.connect(out); o.start(t0); o.stop(t0 + dur + 0.1);
+  return o;
+}
+function partial(f, t0, dur, gain, opts = {}) {
+  const g = voice(t0, opts);
+  env(g, t0, gain, opts.attack ?? 0.003, dur);
+  sine(f, t0, dur, g, opts);
+}
+function burst(t0, dur, gain, { type = 'bandpass', f0 = 2000, f1 = f0, q = 1, pan = 0, verb = 0.1, attack = 0.002 } = {}) {
+  const c = A();
   const len = Math.max(1, Math.floor(c.sampleRate * dur));
   const buf = c.createBuffer(1, len, c.sampleRate);
   const ch = buf.getChannelData(0);
   for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
-  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
-  src.buffer = buf;
-  f.type = type;
-  f.Q.value = q;
+  const src = c.createBufferSource(), f = c.createBiquadFilter();
+  src.buffer = buf; f.type = type; f.Q.value = q;
   f.frequency.setValueAtTime(f0, t0);
   if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  const g = voice(t0, { pan, verb });
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.02, dur / 4));
+  g.gain.linearRampToValueAtTime(gain, t0 + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(f).connect(g).connect(bus);
-  src.start(t0);
+  src.connect(f).connect(g); src.start(t0);
 }
-
-// Une cloche douce : la note et deux harmoniques qui s'éteignent plus vite.
-function bell(f, at, dur, gain) {
-  osc('sine', f, f, at, dur, gain);
-  osc('sine', f * 2.01, f * 2.01, at, dur * 0.55, gain * 0.32);
-  osc('sine', f * 3.98, f * 3.98, at, dur * 0.3, gain * 0.12);
+// ---- Instruments ----
+// Marimba : la note, ses partiels de lame (×3,93 et ×9,2) qui s'éteignent vite, et le coup du maillet.
+function marimba(f, t0, { gain = 0.25, dur = 1, pan = 0, verb = 0.28, bright = 1 } = {}) {
+  partial(f, t0, dur, gain, { pan, verb, bend: 0.004 });
+  partial(f * 3.93, t0, dur * 0.28, gain * 0.22 * bright, { pan, verb });
+  partial(f * 9.2, t0, dur * 0.09, gain * 0.07 * bright, { pan, verb: 0 });
+  burst(t0, 0.012, gain * 0.35 * bright, { f0: f * 4, q: 2, pan, verb: 0 });
 }
-// Un petit « tock » de bois (touches, cases).
-function tock(at, f = 1500, gain = 0.16) {
-  osc('sine', f, f * 0.6, at, 0.05, gain);
-  noise(at, 0.025, gain * 0.6, { f0: f * 1.6, q: 3 });
+// Cloche FM : un modulateur au rapport inharmonique donne l'éclat, qui s'adoucit en tenant.
+function bell(f, t0, { gain = 0.12, dur = 1.4, ratio = 3.5, index = 2.2, pan = 0, verb = 0.45 } = {}) {
+  const c = A();
+  const g = voice(t0, { pan, verb });
+  env(g, t0, gain, 0.004, dur);
+  const car = sine(f, t0, dur, g);
+  const mod = c.createOscillator(), mg = c.createGain();
+  mod.frequency.value = f * ratio;
+  mg.gain.setValueAtTime(f * index, t0);
+  mg.gain.setTargetAtTime(f * index * 0.08, t0, dur / 6);
+  mod.connect(mg).connect(car.frequency);
+  mod.start(t0); mod.stop(t0 + dur + 0.1);
 }
+// Piano électrique : deux porteuses à peine désaccordées (chorus), une « dent » brillante au début.
+function epiano(f, t0, { gain = 0.14, dur = 1.6, pan = 0, verb = 0.35 } = {}) {
+  for (const [det, p] of [[-0.0018, pan - 0.25], [0.0018, pan + 0.25]]) {
+    const c = A();
+    const g = voice(t0, { pan: p, verb });
+    env(g, t0, gain * 0.6, 0.006, dur);
+    const car = sine(f * (1 + det), t0, dur, g);
+    const mod = c.createOscillator(), mg = c.createGain();
+    mod.frequency.value = f;
+    mg.gain.setValueAtTime(f * 1.3, t0);
+    mg.gain.setTargetAtTime(f * 0.15, t0, dur / 8);
+    mod.connect(mg).connect(car.frequency);
+    mod.start(t0); mod.stop(t0 + dur + 0.1);
+  }
+  partial(f * 7.02, t0, 0.12, gain * 0.1, { pan, verb: 0.1 }); // la dent
+}
+// Kalimba : la lame pincée, un partiel aigu (×5,95) très court, un léger pincement de hauteur.
+function kalimba(f, t0, { gain = 0.16, dur = 0.7, pan = 0, verb = 0.3 } = {}) {
+  partial(f, t0, dur, gain, { pan, verb, bend: 0.012 });
+  partial(f * 5.95, t0, dur * 0.12, gain * 0.25, { pan, verb: 0.1 });
+}
+// Un corps de bois : une note grave qui tombe vite (le « toc » sous les touchers).
+function thump(f, t0, gain = 0.2, dur = 0.12) {
+  const g = voice(t0, { verb: 0.04 });
+  env(g, t0, gain, 0.002, dur);
+  const o = A().createOscillator();
+  o.frequency.setValueAtTime(f * 2.2, t0);
+  o.frequency.exponentialRampToValueAtTime(f, t0 + 0.035);
+  o.connect(g); o.start(t0); o.stop(t0 + dur + 0.1);
+}
+// La gamme : pentatonique de mi majeur (toutes les notes sonnent bien ensemble).
+const PENTA = [329.63, 369.99, 415.3, 493.88, 554.37, 659.25, 739.99, 830.61, 987.77, 1108.73, 1318.51, 1479.98, 1661.22, 1975.53, 2217.46, 2637.02];
+const r = (x) => x * (1 + (Math.random() - 0.5) * 0.012); // un rien d'humain d'une fois à l'autre
 
 const SOUNDS = {
-  // ---- Interface : courts et doux, pour ne jamais fatiguer l'oreille ----
-  tick() { tock(0, 1700, 0.14); bell(2349, 0.02, 0.18, 0.035); }, // une étape cochée
-  tab() { tock(0, 1200, 0.09); },
-  toggle() { tock(0, 900, 0.12); osc('sine', 1320, 1760, 0.03, 0.07, 0.05); },
-  open() { noise(0, 0.16, 0.05, { f0: 500, f1: 2200, q: 0.7 }); osc('sine', 660, 880, 0.04, 0.12, 0.03); },
-  close() { noise(0, 0.12, 0.04, { f0: 1800, f1: 500, q: 0.7 }); },
-  save() { bell(1047, 0, 0.35, 0.08); bell(1568, 0.07, 0.45, 0.07); },
-  locked() { osc('sine', 220, 180, 0, 0.16, 0.14); tock(0.01, 600, 0.1); osc('sine', 330, 300, 0.12, 0.14, 0.06); },
-  // ---- Moments ----
-  punch() { // le pointeuse : clac du carton, puis une petite cloche
-    noise(0, 0.05, 0.35, { type: 'lowpass', f0: 900 });
-    osc('sine', 180, 90, 0, 0.09, 0.3);
-    tock(0.09, 2200, 0.1);
-    bell(1319, 0.16, 0.6, 0.09); bell(1976, 0.26, 0.7, 0.07);
+  tap(t) {
+    thump(r(520), t, 0.55, 0.08);
+    burst(t, 0.012, 0.14, { f0: 3200, q: 1.4, verb: 0 });
   },
-  ready() { bell(988, 0, 0.6, 0.09); bell(1319, 0.12, 0.8, 0.09); },
-  welcome() { [523, 659, 784, 1047].forEach((f, i) => bell(f, i * 0.11, 0.9, 0.07)); },
-  flag() { // le papier part : un froissement, un « pop » d'envoi
-    noise(0, 0.18, 0.12, { f0: 1500, f1: 4000, q: 0.8 });
-    osc('sine', 500, 1100, 0.16, 0.12, 0.1);
-    bell(1568, 0.26, 0.4, 0.06);
+  step(t) {
+    stepN = performance.now() - stepAt < 2500 ? stepN + 1 : 0; // chaque étape monte d'une note
+    stepAt = performance.now();
+    const f = PENTA[7 + (stepN % 6)];
+    kalimba(f, t, { gain: 0.32, pan: -0.15 + (stepN % 3) * 0.15 });
+    burst(t, 0.008, 0.08, { f0: 4500, q: 2, verb: 0 });
   },
-  sent() { // fin de quart envoyée : petite fanfare et étincelles
-    [523, 659, 784].forEach((f, i) => osc('triangle', f, f, i * 0.1, 0.5, 0.1));
-    osc('triangle', 1047, 1047, 0.32, 0.9, 0.12);
-    osc('sine', 523, 523, 0.32, 0.9, 0.06);
-    [2093, 2637, 3136, 3951].forEach((f, i) => bell(f, 0.45 + i * 0.07, 0.4, 0.03));
+  check(t, { level = 0.5 } = {}) {
+    const i = 4 + Math.round(Math.max(0, Math.min(1, level)) * 6); // plus le quart avance, plus ça monte
+    thump(110, t, 0.3, 0.16);
+    marimba(PENTA[i], t, { gain: 0.3, dur: 1.1, pan: -0.12 });
+    marimba(PENTA[i + 2], t + 0.075, { gain: 0.24, dur: 1.3, pan: 0.14 });
+    bell(PENTA[i + 2] * 2, t + 0.16, { gain: 0.035, dur: 1.4, ratio: 3.5, index: 1.4, pan: 0.3, verb: 0.7 });
   },
-  pour() { // un « glouglou » d'eau qui tombe dans le verre
-    noise(0, 0.28, 0.12, { f0: 500, f1: 1400, q: 2.5 });
-    osc('sine', 620, 300, 0.08, 0.12, 0.16);
-    osc('sine', 760, 380, 0.2, 0.11, 0.13);
-    osc('sine', 900, 480, 0.3, 0.1, 0.1);
+  uncheck(t) {
+    marimba(PENTA[8], t, { gain: 0.16, dur: 0.5, bright: 0.35, pan: 0.1 });
+    marimba(PENTA[6], t + 0.08, { gain: 0.15, dur: 0.6, bright: 0.3, pan: -0.1 });
   },
-  full() {
-    [523, 659, 784, 1047].forEach((f, i) => osc('triangle', f, f, 0.35 + i * 0.09, 0.45, 0.14));
+  notify(t) {
+    const c = A(), g = voice(t, { verb: 0.2 });
+    env(g, t, 0.42, 0.004, 0.09);
+    const o = c.createOscillator();
+    o.frequency.setValueAtTime(420, t);
+    o.frequency.exponentialRampToValueAtTime(1250, t + 0.05);
+    o.connect(g); o.start(t); o.stop(t + 0.2);
+    bell(PENTA[12], t + 0.045, { gain: 0.11, dur: 0.9, ratio: 3.5, index: 1.6, pan: 0.2, verb: 0.55 });
   },
-  rag() {
-    noise(0.05, 0.13, 0.32, { f0: 900, f1: 2600, q: 0.8 });
-    noise(0.36, 0.13, 0.32, { f0: 900, f1: 2600, q: 0.8 });
-    noise(0.78, 0.08, 0.25, { type: 'lowpass', f0: 600 });
+  save(t) {
+    epiano(PENTA[5], t, { gain: 0.16, dur: 1.4, pan: -0.2 });
+    epiano(PENTA[7], t + 0.085, { gain: 0.15, dur: 1.5 });
+    epiano(PENTA[8], t + 0.17, { gain: 0.14, dur: 1.8, pan: 0.2 });
   },
-  trash() {
-    noise(0.28, 0.18, 0.4, { type: 'lowpass', f0: 320 });
-    osc('sine', 95, 55, 0.28, 0.22, 0.45);
-    osc('square', 700, 520, 0.62, 0.05, 0.08);
-    noise(0.62, 0.06, 0.25, { type: 'highpass', f0: 2800 });
+  swish(t, { down = false } = {}) {
+    burst(t, 0.24, 0.22, { f0: down ? 2600 : 500, f1: down ? 500 : 2600, q: 0.9, verb: 0.15, attack: 0.08, pan: down ? 0.2 : -0.2 });
   },
-  spray() {
-    noise(0.12, 0.38, 0.22, { type: 'highpass', f0: 4200 });
-    osc('sine', 2093, 2093, 0.62, 0.3, 0.04);
-    osc('sine', 2794, 2794, 0.7, 0.3, 0.035);
+  error(t) {
+    for (const [at, f] of [[0, 196], [0.14, 165]]) {
+      const c = A(), g = voice(t + at, { verb: 0.1 });
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+      env(g, t + at, 0.24, 0.003, 0.16);
+      const o = c.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(f * 1.15, t + at);
+      o.frequency.exponentialRampToValueAtTime(f, t + at + 0.04);
+      o.connect(lp).connect(g); o.start(t + at); o.stop(t + at + 0.3);
+    }
   },
-  vacuum() {
-    noise(0.05, 0.75, 0.22, { f0: 300, f1: 2400, q: 1.4 });
-    osc('sawtooth', 110, 330, 0.05, 0.75, 0.03);
-    osc('sine', 900, 1300, 0.82, 0.08, 0.12);
+  flag(t) {
+    burst(t, 0.22, 0.09, { f0: 700, f1: 3800, q: 0.8, verb: 0.15, attack: 0.06, pan: -0.3 });
+    SOUNDS.notify(t + 0.17);
+    bell(PENTA[13], t + 0.24, { gain: 0.07, dur: 1.2, ratio: 3.5, index: 2, pan: 0.35, verb: 0.6 });
   },
-  mop() {
-    osc('sine', 900, 1600, 0.1, 0.16, 0.12);
-    osc('sine', 1100, 1900, 0.34, 0.16, 0.12);
-    osc('triangle', 1320, 1320, 0.75, 0.2, 0.06);
+  urgent(t) {
+    thump(90, t, 0.25, 0.2);
+    bell(PENTA[10], t, { gain: 0.2, dur: 1.4, ratio: 1.4, index: 3, pan: -0.15, verb: 0.5 });
+    bell(PENTA[8], t + 0.24, { gain: 0.2, dur: 1.8, ratio: 1.4, index: 3, pan: 0.15, verb: 0.5 });
   },
-  mirror() {
-    osc('sine', 2637, 2637, 0.25, 0.9, 0.09);
-    osc('sine', 3951, 3951, 0.3, 0.7, 0.05);
-  },
-  sparkle() {
-    [784, 988, 1175, 1568].forEach((f, i) => osc('triangle', f, f, 0.15 + i * 0.08, 0.35, 0.1));
-  },
-  bike() {
-    osc('sawtooth', 240, 70, 0.05, 0.75, 0.035);
-    noise(0.05, 0.7, 0.1, { f0: 1600, f1: 400, q: 2 });
-    osc('sine', 1760, 1760, 0.8, 0.5, 0.1);
-    osc('sine', 2637, 2637, 0.8, 0.4, 0.05);
-  },
-  stamp() {
-    noise(0.36, 0.12, 0.45, { type: 'lowpass', f0: 420 });
-    osc('sine', 150, 70, 0.36, 0.16, 0.45);
-  },
-  power() {
-    osc('sine', 220, 880, 0.1, 0.35, 0.12);
-    osc('sine', 1320, 1320, 0.48, 0.25, 0.08);
-  },
-  clipboard() {
-    [0.15, 0.33, 0.51].forEach((at) => osc('square', 1800, 1800, at, 0.03, 0.05));
-    osc('sine', 1568, 1568, 0.72, 0.4, 0.1);
-  },
-  lock() {
-    noise(0.4, 0.03, 0.3, { type: 'highpass', f0: 2500 });
-    osc('square', 1200, 900, 0.4, 0.025, 0.06);
-    noise(0.52, 0.03, 0.3, { type: 'highpass', f0: 2000 });
-    osc('sine', 300, 300, 0.56, 0.12, 0.08);
-  },
-  rack() {
-    noise(0.42, 0.08, 0.3, { type: 'lowpass', f0: 700 });
-    [380, 1090, 2310].forEach((f, i) => osc('sine', f, f, 0.42, 0.22 - i * 0.04, 0.12));
+  celebrate(t) {
+    // Une basse qui gonfle, un accord de piano qui s'égrène, puis une pluie d'étincelles.
+    const g = voice(t, { verb: 0.2 });
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.12, t + 0.25);
+    g.gain.setTargetAtTime(0.0001, t + 0.35, 0.45);
+    sine(82.41, t, 2, g);
+    [164.81, 246.94, 329.63, 415.3, 493.88, 622.25].forEach((f, i) => epiano(f, t + i * 0.04, { gain: 0.1, dur: 2.6, pan: -0.4 + i * 0.16, verb: 0.45 }));
+    [PENTA[9], PENTA[10], PENTA[11], PENTA[12], PENTA[13], PENTA[14], PENTA[15]].forEach((f, i) => kalimba(f, t + 0.3 + i * 0.065, { gain: 0.07, dur: 0.8, pan: i % 2 ? 0.45 : -0.45, verb: 0.6 }));
+    bell(PENTA[15], t + 0.8, { gain: 0.05, dur: 2, ratio: 3.5, index: 1.2, verb: 0.8 });
   },
 };
-export function fxSound(name) {
-  try { SOUNDS[name]?.(); } catch { /* pas de son ici : tant pis */ }
+// Les anciens noms (et les scènes de fin de tâche) passent par les dix sons.
+const ALIAS = {
+  tick: 'step', tab: 'tap', toggle: 'tap', open: 'swish', close: 'swish', locked: 'error',
+  punch: 'check', ready: 'notify', welcome: 'celebrate', sent: 'celebrate', pour: 'check', full: 'celebrate',
+};
+export function fxSound(name, opts = {}) {
+  const key = ALIAS[name] || name;
+  const fn = SOUNDS[key];
+  if (!fn) return; // les scènes de tâche : le son « check » part déjà quand la tâche se coche
+  try {
+    const c = A();
+    const now = performance.now();
+    if (key === 'notify' && now - lastAt < 350) return; // un message qui suit un autre son : pas de doublon
+    lastAt = now;
+    fn(c.currentTime + 0.01, { ...opts, down: name === 'close' || opts.down, level: name === 'punch' ? 0.2 : opts.level });
+  } catch { /* pas de son ici : tant pis */ }
 }
 
 // ---------- Verre d'eau (progrès du quart) ----------
