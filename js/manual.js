@@ -63,8 +63,8 @@ export const TV_CHANNELS = [
 export const TECHNIQUES = {
   fr: [
     { area: 'gym', text: '**Range au fur et à mesure, pendant tout ton quart** : un poids qui traîne, tu le replaces tout de suite.' },
-    { area: 'gym', text: '**Désinfecter = au moins 30 secondes.** Vaporise toute une rangée, puis reviens à la première et tapote doucement.' },
-    { area: 'cardio', text: '**Écrans : guenille sèche, pas de produit.** Juste enlever les traces de doigts.' },
+    { area: 'gym', text: '**Désinfecter :** vaporise toute une rangée, puis reviens à la première et tapote doucement.' },
+    { area: 'cardio', text: '**Écrans : guenille à peine humide.** Très sale? Un peu de produit **sur la guenille**, jamais sur l’écran.' },
     { area: 'cardio', text: '**Poussière : guenille sèche** (ou à peine humide). Trop mouillée, elle étale la poussière.' },
     { area: 'gym', text: '**Traces de doigts et sueur : guenille à peine humide** avec du produit.' },
     { area: 'zone', text: 'La guenille du profondeur **touche jamais** aux poignées ni aux sièges : tu étalerais les microbes.' },
@@ -78,8 +78,8 @@ export const TECHNIQUES = {
   ],
   en: [
     { area: 'gym', text: '**Put things away as you go, all shift long**: a weight lying around, put it back right away.' },
-    { area: 'gym', text: '**Disinfecting = at least 30 seconds.** Spray a whole row, then go back to the first and pat gently.' },
-    { area: 'cardio', text: '**Screens: dry rag, no product.** Just wipe off the fingerprints.' },
+    { area: 'gym', text: '**Disinfecting:** spray a whole row, then go back to the first and pat gently.' },
+    { area: 'cardio', text: '**Screens: barely damp rag.** Very dirty? A little product **on the rag**, never on the screen.' },
     { area: 'cardio', text: '**Dust: dry rag** (or barely damp). Too wet, it spreads the dust.' },
     { area: 'gym', text: '**Fingerprints and sweat: barely damp rag** with product.' },
     { area: 'zone', text: 'The deep-clean rag **never touches** handles or seats: you’d spread germs.' },
@@ -118,16 +118,16 @@ export const GUIDE = {
       'La laveuse et la sécheuse tournent pendant que tu fais autre chose.',
     ],
     disinfect: [
-      '**Écrans : pas besoin de produit.** Une guenille sèche, juste pour enlever les traces de doigts.',
+      '**Écrans : une guenille à peine humide** (pas trop mouillée) pour les traces de doigts. Si c’est très sale, mets un peu de produit **sur la guenille**, jamais directement sur l’écran.',
       'Avec la **même guenille**, va derrière les machines de cardio et frotte jusqu’à ce qu’il reste plus de poussière.',
-      '**Désinfecter, c’est au moins 30 secondes.** Vaporise une machine, puis passe aux autres de la même section (une dizaine).',
-      'Quand t’as fait le tour, ça fait 30 secondes à une minute : **reviens à la première** et tapote **doucement**. Enlève juste un peu de liquide, pas tout.',
+      '**Désinfecter :** vaporise une machine, puis passe aux autres de la même section (une dizaine).',
+      'Quand t’as fait le tour, **reviens à la première** et tapote **doucement**. Enlève juste un peu de liquide, pas tout.',
       'Traces de doigts et sueur : guenille à peine humide avec du produit.',
       'Même si ça a l’air propre, essuie : poignées, sièges, dossiers, boutons, tiges de réglage, supports à bouteilles.',
       'Guenille trop mouillée = poussière qui s’étale. Pour la poussière, toujours sec.',
     ],
     contact: [
-      '**Désinfecter, c’est au moins 30 secondes.** Vaporise une machine, puis passe aux autres de la même rangée.',
+      '**Désinfecter :** vaporise une machine, puis passe aux autres de la même rangée.',
       'Quand t’as fait le tour, **reviens à la première** et tapote **doucement**. Enlève juste un peu de liquide.',
       'Même si ça a l’air propre, essuie : poignées, sièges, dossiers, boutons, tiges de réglage, supports à bouteilles.',
       'Traces de doigts et sueur : guenille à peine humide avec du produit.',
@@ -177,7 +177,7 @@ export const GUIDE = {
     ],
     spin: [
       'Tous les vélos : guidon, selle, cadre.',
-      '**Désinfecter, c’est au moins 30 secondes** : vaporise plusieurs vélos, puis reviens au premier.',
+      '**Désinfecter :** vaporise plusieurs vélos, puis reviens au premier.',
       'Le spinning, c’est juste le matin.',
     ],
     weekly: [
@@ -209,16 +209,16 @@ export const GUIDE = {
       'The washer and dryer run while you do something else.',
     ],
     disinfect: [
-      '**Screens: no product needed.** A dry rag, just to wipe off fingerprints.',
+      '**Screens: a barely damp rag** (not too wet) for fingerprints. If they’re very dirty, put a little product **on the rag**, never straight on the screen.',
       'With the **same rag**, go behind the cardio machines and rub until there’s no dust left.',
-      '**Disinfecting takes at least 30 seconds.** Spray one machine, then move on to the others in the same section (about ten).',
-      'Once you’ve done the round, it’s been 30 seconds to a minute: **go back to the first** and pat **gently**. Take off just a little liquid, not all of it.',
+      '**Disinfecting:** spray one machine, then move on to the others in the same section (about ten).',
+      'Once you’ve done the round, **go back to the first** and pat **gently**. Take off just a little liquid, not all of it.',
       'Fingerprints and sweat: barely damp rag with product.',
       'Even if it looks clean, wipe it: handles, seats, backrests, buttons, pins, bottle holders.',
       'Rag too wet = dust that smears. For dust, always dry.',
     ],
     contact: [
-      '**Disinfecting takes at least 30 seconds.** Spray one machine, then move on to the others in the same row.',
+      '**Disinfecting:** spray one machine, then move on to the others in the same row.',
       'Once you’ve done the round, **go back to the first** and pat **gently**. Take off just a little liquid.',
       'Even if it looks clean, wipe it: handles, seats, backrests, buttons, pins, bottle holders.',
       'Fingerprints and sweat: barely damp rag with product.',
@@ -268,7 +268,7 @@ export const GUIDE = {
     ],
     spin: [
       'Every bike: handlebars, seat, frame.',
-      '**Disinfecting takes at least 30 seconds**: spray several bikes, then go back to the first.',
+      '**Disinfecting:** spray several bikes, then go back to the first.',
       'The spin room is mornings only.',
     ],
     weekly: [
@@ -353,12 +353,12 @@ export const PRIORITY_ORDER = {
 
 // Petits morceaux réutilisés.
 const DUST = {
-  fr: ['**Écrans : guenille sèche, pas de produit.** Juste enlever les traces de doigts.'],
-  en: ['**Screens: dry rag, no product.** Just wipe off the fingerprints.'],
+  fr: ['**Écrans : guenille à peine humide.** Très sale? Un peu de produit **sur la guenille**, jamais sur l’écran.'],
+  en: ['**Screens: barely damp rag.** Very dirty? A little product **on the rag**, never on the screen.'],
 };
 const SECONDS30 = {
-  fr: '**Désinfecter = au moins 30 secondes.** Vaporise toute la rangée, puis reviens à la première et tapote doucement.',
-  en: '**Disinfecting = at least 30 seconds.** Spray the whole row, then go back to the first and pat gently.',
+  fr: '**Désinfecter :** vaporise toute la rangée, puis reviens à la première et tapote doucement.',
+  en: '**Disinfecting:** spray the whole row, then go back to the first and pat gently.',
 };
 const BOTTLES = {
   fr: 'Vaporisateurs : change juste ceux **sous 30 %**, et remets-les **au-dessus des distributeurs de papier**.',
@@ -441,9 +441,9 @@ export const SHIFTS = {
           title: 'Désinfection générale',
           summary: 'Cardio, logos, panneaux; remettre en ordre.',
           steps: [
-            'Écrans du cardio : **guenille sèche**, juste pour enlever les traces de doigts. Pas besoin de produit.',
+            'Écrans du cardio : guenille **à peine humide** pour les traces de doigts. Très sale? Un peu de produit **sur la guenille**, jamais sur l’écran.',
             'Même guenille : le devant et l’**arrière du cardio**, les logos et les panneaux, jusqu’à ce qu’il reste plus de poussière.',
-            'Désinfecte les **machines les plus utilisées** (pas toutes) : vaporise-en une dizaine de la même section, puis **reviens à la première** et tapote doucement. Au moins 30 secondes.',
+            'Désinfecte les **machines les plus utilisées** (pas toutes) : vaporise-en une dizaine de la même section, puis **reviens à la première** et tapote doucement.',
             'Remets les poids, les accessoires et les bancs à leur place. Ramasse les petits déchets dans les allées.',
           ],
           tips: [...DUST.fr, 'Les autres machines, c’est à 10 h.'],
@@ -452,9 +452,9 @@ export const SHIFTS = {
           title: 'General disinfection',
           summary: 'Cardio, logos, panels; tidy up.',
           steps: [
-            'Cardio screens: **dry rag**, just to wipe off fingerprints. No product needed.',
+            'Cardio screens: **barely damp rag** for fingerprints. Very dirty? A little product **on the rag**, never on the screen.',
             'Same rag: the front and **back of the cardio**, logos and panels, until there’s no dust left.',
-            'Disinfect the **most-used machines** (not all of them): spray about ten in the same section, then **go back to the first** and pat gently. At least 30 seconds.',
+            'Disinfect the **most-used machines** (not all of them): spray about ten in the same section, then **go back to the first** and pat gently.',
             'Put weights, accessories and benches back. Pick up small trash in the aisles.',
           ],
           tips: [...DUST.en, 'The other machines are at 10:00.'],
@@ -735,8 +735,8 @@ export const SHIFTS = {
           summary: 'Points de contact, écrans, surfaces.',
           steps: [
             'Points de contact : poignées, sièges, dossiers, **machines de bench**, réglages. Commence par les **machines les plus utilisées**.',
-            'Vaporise une dizaine de machines de la même section, puis **reviens à la première** et tapote doucement. Au moins 30 secondes. Enlève les traces de sueur.',
-            'Écrans : **guenille sèche**, juste pour les traces de doigts. Pas besoin de produit.',
+            'Vaporise une dizaine de machines de la même section, puis **reviens à la première** et tapote doucement. Enlève les traces de sueur.',
+            'Écrans : guenille **à peine humide** pour les traces de doigts. Très sale? Un peu de produit **sur la guenille**, jamais sur l’écran.',
             'Au besoin : tablettes, thermostats, télés, boîtiers Vidéotron, distributeurs de papier, miroirs.',
           ],
           tips: [...DUST.fr, 'À faire même si le matin l’a fait.'],
@@ -746,8 +746,8 @@ export const SHIFTS = {
           summary: 'Touch points, screens, surfaces.',
           steps: [
             'Touch points: handles, seats, backrests, **bench machines**, adjusters. Start with the **most-used machines**.',
-            'Spray about ten machines in the same section, then **go back to the first** and pat gently. At least 30 seconds. Wipe off sweat.',
-            'Screens: **dry rag**, just for fingerprints. No product needed.',
+            'Spray about ten machines in the same section, then **go back to the first** and pat gently. Wipe off sweat.',
+            'Screens: **barely damp rag** for fingerprints. Very dirty? A little product **on the rag**, never on the screen.',
             'As needed: shelves, thermostats, TVs, Vidéotron boxes, paper dispensers, mirrors.',
           ],
           tips: [...DUST.en, 'Do it even if the morning shift did.'],
