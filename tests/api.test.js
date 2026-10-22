@@ -177,3 +177,25 @@ test('Historique : seul l’admin efface un quart', async () => {
   assert.equal((await c3('board?dates=2026-10-21', { token: admin })).data.days['2026-10-21'].length, 0);
   assert.equal((await c3('board', { method: 'POST', token: admin, body: del })).status, 404);
 });
+
+test('Activités personnalisées : à valider; seul un superviseur valide; un changement redevient à valider', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const emp = (await go('auth', { action: 'signup', name: 'Chadi', email: 'c@x.ca', password: 'secret1', code: 'e' })).data.token;
+  const boss = (await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' })).data.token;
+  const custom = [{ id: 'cabc123', title: 'Studio Fit', start: '09:00', end: '10:30' }];
+  const shift = { date: '2026-10-25', shift: 1, name: 'Chadi', items: [], flags: [], custom, customStatus: 'approved' };
+  const stored = async () => (await go('board?dates=2026-10-25', null, boss)).data.days['2026-10-25'][0];
+  assert.equal((await go('board', shift, emp)).status, 200);
+  assert.equal((await stored()).customStatus, 'pending'); // le téléphone ne se valide pas lui-même
+  const ok = { action: 'custom', date: '2026-10-25', shift: 1, name: 'chadi', status: 'approved' };
+  assert.equal((await go('board', ok, emp)).status, 403);
+  assert.equal((await go('board', ok, boss)).status, 200);
+  assert.equal((await stored()).customStatus, 'approved');
+  assert.equal((await stored()).customBy, 'Daniel');
+  assert.equal((await go('board', { ...shift, open: true }, emp)).status, 200); // sauvegarde : mêmes activités
+  assert.equal((await stored()).customStatus, 'approved');
+  assert.equal((await go('board', { ...shift, custom: [{ ...custom[0], end: '11:00' }] }, emp)).status, 200);
+  assert.equal((await stored()).customStatus, 'pending');
+});

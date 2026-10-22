@@ -31,15 +31,14 @@ export const CONFIG = {
   ],
 
   // Quarts spéciaux pour une personne (propriétaire). names : prénom du compte,
-  // sans accents ni majuscules. weekday : 0 = lundi … 6 = dimanche. Ce jour-là, ce
-  // quart remplace l'horaire de la personne; la liste n'a que ces tâches, sans détails.
+  // sans accents ni majuscules. weekday : 0 = lundi … 6 = dimanche. Ce jour-là, la
+  // liste n'a que ces tâches, sans détails. Les heures viennent de l'horaire de la
+  // personne (« Mon horaire ») : elles ne sont pas connues d'avance (propriétaire).
   specialShifts: [
     {
       id: 'studio-yama',
       names: ['chadi', 'shadi'],
       weekday: 6,
-      start: '09:00',
-      end: '13:00',
       tasks: [
         { id: 'studio-fit', fr: 'Studio Fit', en: 'Studio Fit' },
         { id: 'yama', fr: 'Yama', en: 'Yama' },

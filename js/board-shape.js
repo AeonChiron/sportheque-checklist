@@ -7,6 +7,8 @@ const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const count = (v) => (Number.isInteger(v) && v >= 0 && v <= 99 ? v : null);
 const STATUSES = new Set(['done', 'notdone', 'unchecked']);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const CUSTOM_STATUS = new Set(['pending', 'approved', 'rejected']);
 
 export function sanitizeShift(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -23,6 +25,16 @@ export function sanitizeShift(raw) {
     submittedAt: str(raw.submittedAt, 30),
     special: str(raw.special, 30), // quart spécial (ex. Studio Fit + Yama)
     open: raw.open === true, // quart en cours, enregistré en chemin (pas encore « Fin du quart »)
+    // Activités personnalisées par l'employé : elles remplacent les tâches prévues à ces heures,
+    // et un superviseur doit les valider (customStatus, décidé par le serveur).
+    custom: (Array.isArray(raw.custom) ? raw.custom : []).slice(0, 8).map((c) => ({
+      id: /^c[a-z0-9]{3,16}$/.test(c?.id || '') ? c.id : '',
+      title: str(c?.title, 60).trim(),
+      start: HM.test(c?.start || '') ? c.start : '',
+      end: HM.test(c?.end || '') ? c.end : '',
+    })).filter((c) => c.id && c.title && c.start && c.end),
+    customStatus: CUSTOM_STATUS.has(raw.customStatus) ? raw.customStatus : '',
+    customBy: str(raw.customBy, 40),
     notes: str(raw.notes, 1000),
     handoff: str(raw.handoff, 200), // un mot pour le prochain quart
     done: count(raw.done),

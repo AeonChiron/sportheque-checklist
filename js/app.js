@@ -371,15 +371,19 @@ const firstName = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036
 function specialFor(iso) {
   const me = firstName(shiftName());
   const sp = me && SPECIALS.find((x) => x.names?.includes(me) && x.weekday === dowOf(iso));
-  return sp ? { id: 'custom', special: sp.id, start: sp.start, end: sp.end } : null;
+  const base = sp && presetOf(mySchedule()?.[dowOf(iso)]); // les heures : celles de son horaire ce jour-là
+  return base?.start ? { ...base, special: sp.id } : null;
 }
 // Un plan de quart : celui du manuel, ou, pour un quart spécial, seulement ses tâches
 // (un titre chacune, rien d'autre), réparties sur les heures du quart.
-function planOf({ special = '', ...args }) {
-  const p = buildPlan(args);
+function planOf({ special = '', custom = [], ...args }) {
+  const p = withCustom(specialPlan(buildPlan(args), special, args.lang), custom);
+  return p;
+}
+function specialPlan(p, special, L0) {
   const sp = special && SPECIALS.find((x) => x.id === special);
   if (!sp) return p;
-  const L = args.lang || lang();
+  const L = L0 || lang();
   const n = sp.tasks.length || 1;
   const step = Math.floor((p.end - p.start) / n);
   p.items = sp.tasks.map((x, i) => {
@@ -391,6 +395,24 @@ function planOf({ special = '', ...args }) {
   p.deficit = 0;
   p.outOfRange = [];
   p.special = sp.id;
+  return p;
+}
+// Activités personnalisées : chacune prend sa place à ses heures et remplace les tâches
+// prévues qui tombent pendant ce temps (les pauses restent). p.replaced : ce qu'elles remplacent.
+function withCustom(p, custom) {
+  const list = (Array.isArray(custom) ? custom : []).filter((c) => c?.id && c.title && c.start && c.end);
+  p.replaced = [];
+  if (!list.length) return p;
+  const norm = (hm) => { let m = toMin(hm); if (m < p.start && p.end > 1440) m += 1440; return m; };
+  const wins = list.map((c) => { const s0 = norm(c.start); let e0 = norm(c.end); if (e0 <= s0) e0 += 1440; return { ...c, s0, e0 }; });
+  p.items = p.items.filter((it) => {
+    if (it.kind !== 'task' || it.custom) return true;
+    const hit = wins.some((w) => it.start < w.e0 && w.s0 < it.end);
+    if (hit) p.replaced.push(it.title);
+    return !hit;
+  });
+  for (const w of wins) p.items.push({ id: w.id, kind: 'task', custom: true, special: true, minutes: w.e0 - w.s0, start: w.s0, end: w.e0, area: 'gym', reminders: [], steps: [], tips: [], title: w.title, summary: t('customTag') });
+  p.items.sort((a, b) => a.start - b.start);
   return p;
 }
 function renderPresets() {
@@ -1188,6 +1210,7 @@ function renderChecklist() {
   renderNow();
 
   $('#listCount').textContent = counting() ? `${done}/${tasks.length}` : '';
+  paintCustomNote();
   // « Enregistrer » tant qu'il reste des tâches; « Fin du quart » quand tout est coché
   // (ou marqué « Pas pu faire »), ou quand l'heure de fin est passée.
   const ready = canEnd();
@@ -2051,6 +2074,7 @@ function boardSummary() {
     date: state.date,
     shift: state.shift,
     special: state.special || '',
+    custom: state.custom || [],
     name: state.name,
     supervisor: state.supervisor || '',
     handoff: (state.handoff || '').trim(),
@@ -2124,7 +2148,7 @@ async function restoreDraft() {
   }
   state = {
     name: d.name, supervisor: d.supervisor || '', date: d.date, simulation: false,
-    start: d.start, end: d.end, shift: d.shift, special: d.special || '', tasks,
+    start: d.start, end: d.end, shift: d.shift, special: d.special || '', custom: d.custom || [], tasks,
     flags: (d.flags || []).map((fl) => ({ ...fl, photos: [] })),
     notes: d.notes || '', handoff: d.handoff || '', view: 'time',
     createdAt: d.submittedAt || new Date().toISOString(),
@@ -2251,6 +2275,7 @@ function openReview(r, opts = {}) {
         <span class="num">${r.completion.done}/${r.completion.total} ${esc(T.done)}</span>
       </div>
     </div>
+    ${customPanel(r)}
     ${attention.length ? `<div class="section-head"><h2>${esc(R.attention)}</h2><span class="num">${attention.length}</span></div><ul class="rv-list attention">${attention.join('')}</ul>` : ''}
     ${r.notes ? `<div class="section-head"><h2>${esc(T.notes)}</h2></div><div class="panel rv-notes">${esc(r.notes)}</div>` : ''}
     <div class="section-head"><h2>${esc(R.full)}</h2><span class="num">${r.completion.done}/${r.completion.total}</span></div>
@@ -2262,6 +2287,96 @@ function openReview(r, opts = {}) {
   paintStatic();
   show('review');
 }
+// ---------- Personnaliser mon quart (propriétaire) ----------
+// L'employé met ses propres activités, avec leurs heures; elles remplacent les tâches prévues
+// à ces heures. Un superviseur doit les valider : l'employé le sait avant d'ajouter, et le
+// superviseur le voit dans l'historique (Valider / Refuser).
+function paintCustomNote() {
+  const box = $('#customNote');
+  const n = state?.custom?.length || 0;
+  box.hidden = false;
+  box.innerHTML = n
+    ? `<button type="button" class="custom-banner" data-customize><span><b>${esc(t('customBanner', n))}</b><small>${esc(t('customPending'))}</small></span>${CHEV_R}</button>`
+    : `<button type="button" class="btn ghost small custom-open" data-customize>${esc(t('customize'))}</button>`;
+}
+document.addEventListener('click', (ev) => { if (ev.target.closest('[data-customize]') && state) openCustomize(); });
+function openCustomize() {
+  const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes() < 30 ? 0 : 30).padStart(2, '0')}`; };
+  const draw = (root) => {
+    const list = state.custom || [];
+    root.querySelector('#cuList').innerHTML = list.length ? list.map((c) => `<li class="cu-row"><span class="num">${esc(f(toMin(c.start)))} – ${esc(f(toMin(c.end)))}</span><b>${esc(c.title)}</b><button type="button" class="btn small ghost" data-cu-del="${esc(c.id)}" aria-label="${esc(t('customRemove'))} ${esc(c.title)}">✕</button></li>`).join('') : '';
+    const pv = root.querySelector('#cuPreview');
+    const s0 = root.querySelector('#cuStart').value, e0 = root.querySelector('#cuEnd').value;
+    if (s0 && e0) {
+      const test = withCustom(planOf({ shift: state.shift, date: state.date, start: state.start, end: state.end, special: state.special, custom: list, lang: lang() }), [{ id: 'cpreview', title: 'x', start: s0, end: e0 }]);
+      pv.textContent = test.replaced.length ? t('customReplaces', test.replaced.join(', ')) : t('customNone');
+    } else pv.textContent = '';
+  };
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('customize'))}</p><h2>${esc(t('customTitle'))}</h2></div>
+    <div class="notice warn"><b>${esc(t('customWarnTitle'))}</b>${esc(t('customWarn'))}</div>
+    <ul class="cu-list" id="cuList"></ul>
+    <div class="cu-form">
+      <label class="field"><span>${esc(t('customName'))}</span><input id="cuTitle" maxlength="60" autocomplete="off" placeholder="${esc(t('customNamePh'))}"></label>
+      <div class="cu-times">
+        <label class="field"><span>${esc(t('customFrom'))}</span><input id="cuStart" type="time" value="${esc(nowHM())}"></label>
+        <label class="field"><span>${esc(t('customTo'))}</span><input id="cuEnd" type="time"></label>
+      </div>
+      <p class="section-note" id="cuPreview" aria-live="polite"></p>
+      <p class="section-note bad" id="cuMsg" aria-live="polite"></p>
+    </div>`, (root) => {
+    draw(root);
+    root.addEventListener('input', () => { root.querySelector('#cuMsg').textContent = ''; draw(root); });
+    root.addEventListener('click', (ev) => {
+      const del = ev.target.closest('[data-cu-del]');
+      if (!del) return;
+      state.custom = (state.custom || []).filter((c) => c.id !== del.dataset.cuDel);
+      save(); plan = shiftPlan(state); renderChecklist(); draw(root);
+    });
+    $('#cuAdd').onclick = () => {
+      const title = root.querySelector('#cuTitle').value.trim();
+      const start = root.querySelector('#cuStart').value, end = root.querySelector('#cuEnd').value;
+      const msg = root.querySelector('#cuMsg');
+      if (!title) { msg.textContent = t('customNeedName'); root.querySelector('#cuTitle').focus(); return; }
+      if (!start || !end || start === end) { msg.textContent = t('customBadTime'); return; }
+      state.custom = [...(state.custom || []), { id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, title, start, end }].slice(0, 8);
+      save(); plan = shiftPlan(state); renderChecklist();
+      root.querySelector('#cuTitle').value = ''; root.querySelector('#cuEnd').value = '';
+      draw(root); sfx('save'); toast(t('customAdded'), 'ok');
+    };
+    $('#cuDone').onclick = closeSheet;
+  }, `<button type="button" class="btn ghost" id="cuDone">${esc(t('close'))}</button><button type="button" class="btn primary" id="cuAdd">${esc(t('customAdd'))}</button>`);
+}
+
+// Le panneau « Activités personnalisées » d'un quart : ce que l'employé a mis à la place,
+// ce que ça remplace, et la décision du superviseur (Valider / Refuser).
+function customPanel(r) {
+  const c = r.custom;
+  if (!c) return '';
+  const status = c.status === 'approved' ? `<span class="tag ok">${esc(t('customApproved', c.by))}</span>` : c.status === 'rejected' ? `<span class="tag bad">${esc(t('customRejected', c.by))}</span>` : `<span class="tag time">${esc(t('customToApprove'))}</span>`;
+  const rows = c.list.map((x) => `<li class="rv-row"><span class="rv-mark">${ICON.clock}</span><span class="rv-main"><span class="rv-title">${esc(x.title)}</span></span><span class="rv-time num">${esc(f(toMin(x.start)))} – ${esc(f(toMin(x.end)))}</span></li>`).join('');
+  const acts = isBoss() && !r.local ? `<div class="custom-acts"><button type="button" class="btn small ghost" data-custom="rejected">${esc(t('customReject'))}</button><button type="button" class="btn small primary" data-custom="approved">${esc(t('customApprove'))}</button></div>` : '';
+  return `<div class="section-head"><h2>${esc(t('customSection'))}</h2>${status}</div>
+    <div class="panel custom-panel" data-cdate="${esc(r.date)}" data-cshift="${c.shift}" data-cname="${esc(r.name)}"><ul class="rv-list">${rows}</ul>
+    <p class="section-note">${esc(c.replaced.length ? t('customReplaces', c.replaced.join(', ')) : t('customNone'))}</p>${acts}</div>`;
+}
+$('#reviewBody').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-custom]');
+  if (!b) return;
+  const box = b.closest('.custom-panel');
+  for (const x of box.querySelectorAll('button')) x.disabled = true;
+  try {
+    await request('board', { method: 'POST', body: { action: 'custom', date: box.dataset.cdate, shift: Number(box.dataset.cshift), name: box.dataset.cname, status: b.dataset.custom } });
+    sfx('save');
+    const [r, opts] = lastReview;
+    r.custom.status = b.dataset.custom;
+    r.custom.by = session.user?.name || '';
+    hist.loaded = false; hist.weekLoaded = '';
+    openReview(r, opts);
+  } catch {
+    toast(t('customLater'), 'muted');
+    for (const x of box.querySelectorAll('button')) x.disabled = false;
+  }
+});
 
 async function openReviewFromHash() {
   try {
@@ -2624,7 +2739,7 @@ function openDayReport(i) {
 // (les remarques restent telles qu'écrites).
 function summaryReport(s) {
   const L = lang();
-  const p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, lang: L });
+  const p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, custom: s.custom, lang: L });
   const st = new Map(s.items.map((i) => [i.id, i]));
   const line = (it, withTime = true) => {
     const x = st.get(it.id) || {};
@@ -2636,6 +2751,7 @@ function summaryReport(s) {
     hours: `${f(p.start)} – ${f(p.end)}`, items, overflow: p.overflow.map((it) => line(it, false)).filter((i) => i.status !== 'unchecked'), deficit: fmtDuration(p.deficit, L), outOfRange: [],
     flags: s.flags.map((fl) => ({ category: FLAG_CATEGORIES[fl.category]?.[L] || fl.category, location: fl.location, text: fl.text, at: clock(fl.at), photos: [], urgent: fl.urgent, emailed: fl.emailed, id: fl.id || '' })),
     notes: s.notes || '', completion: { done: items.filter((i) => i.status === 'done').length, total: items.length },
+    custom: s.custom?.length ? { list: s.custom, replaced: p.replaced, status: s.customStatus || 'pending', by: s.customBy || '', shift: s.shift } : null,
   };
 }
 
@@ -2744,6 +2860,7 @@ function histCard(s, i) {
   const all = m.total && m.done === m.total;
   const tags = [
     s.open ? `<span class="tag now">${esc(t('inProgress'))}</span>` : '',
+    s.custom?.length ? `<span class="tag ${s.customStatus === 'approved' ? 'ok' : s.customStatus === 'rejected' ? 'bad' : 'time'}">${esc(t(s.customStatus === 'approved' ? 'customTagOk' : s.customStatus === 'rejected' ? 'customTagNo' : 'customTagPending'))}</span>` : '',
     m.flags ? `<span class="tag bad">⚑ ${esc(t('nFlags', m.flags))}${urgent ? ` · ${esc(t('nUrgent', urgent))}` : ''}</span>` : '',
     m.notdone ? `<span class="tag bad">${esc(t('nNotDone', m.notdone))}</span>` : '',
     !all && unchecked && !s.open ? `<span class="tag time">${esc(t('nUnchecked', unchecked))}</span>` : '',

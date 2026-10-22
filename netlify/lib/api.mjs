@@ -269,6 +269,19 @@ export function createApi({ getStore, env }) {
       await store.setJSON(raw.date, left);
       return json({ ok: true });
     }
+    // Un superviseur valide (ou refuse) les activités personnalisées d'un quart.
+    if (raw?.action === 'custom') {
+      if (!['boss', 'admin'].includes(me?.role)) return json({ error: 'boss' }, 403);
+      if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift)) || !['approved', 'rejected'].includes(raw.status)) return json({ error: 'invalid' }, 400);
+      const name = String(raw.name || '').trim().toLowerCase();
+      const list = (await store.get(raw.date, { type: 'json' })) || [];
+      const s = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
+      if (!s?.custom?.length) return json({ error: 'missing' }, 404);
+      s.customStatus = raw.status;
+      s.customBy = me.name || '';
+      await store.setJSON(raw.date, list);
+      return json({ ok: true });
+    }
     const shift = sanitizeShift(raw);
     if (!shift) return json({ error: 'invalid' }, 400);
     const list = (await store.get(shift.date, { type: 'json' })) || [];
@@ -279,6 +292,11 @@ export function createApi({ getStore, env }) {
     const oldDay = old && (old.savedOn || (old.submittedAt && localDay(old.submittedAt)));
     // Un quart encore « en cours » (sauvegarde en chemin) peut toujours se continuer.
     if (oldDay && oldDay !== today && !old.open) return json({ error: 'locked' }, 409);
+    // La validation vient du superviseur, jamais du téléphone : elle reste tant que les
+    // activités ne changent pas; une activité changée redevient « à valider ».
+    const sameCustom = old && JSON.stringify(old.custom || []) === JSON.stringify(shift.custom);
+    shift.customStatus = shift.custom.length ? (sameCustom && old.customStatus) || 'pending' : '';
+    shift.customBy = shift.custom.length && sameCustom ? old.customBy || '' : '';
     await store.setJSON(shift.date, mergeShift(list, { ...shift, savedOn: today }));
     return json({ ok: true });
   }
