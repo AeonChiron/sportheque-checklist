@@ -35,7 +35,9 @@ export function mountPool(root) {
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
     const big = root.closest('#auth')?.classList.contains('inside'); // connecté : moins de boutons, lapin plus grand
-    s.size = Math.max(84, Math.min(big ? 250 : 170, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
+    // Grand écran (ordinateur) : le lapin grandit avec la hauteur de l'écran (propriétaire).
+    const cap = big ? Math.max(250, Math.min(620, H * 0.5)) : Math.max(170, Math.min(420, H * 0.34));
+    s.size = Math.max(84, Math.min(cap, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
     hero.style.width = `${s.size}px`;
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
     if (!s.touched && W > 200) { const b = bounds(); s.x = W * 0.5; s.y = (b.minY + b.maxY) / 2; }
@@ -48,6 +50,12 @@ export function mountPool(root) {
     2.2 * Math.sin(x * 0.022 - t * 0.9 + y * 0.012) + 1.2 * Math.sin(x * 0.05 + t * 0.6),
   ];
 
+  // Les rayons : position (part de l'écran), largeur, force, vitesse, phase.
+  const RAYS = [
+    { x: -0.34, w: 0.07, a: 0.24, sp: 0.06, ph: 0 }, { x: -0.18, w: 0.03, a: 0.34, sp: 0.09, ph: 1.7 },
+    { x: -0.04, w: 0.10, a: 0.2, sp: 0.05, ph: 3.1 }, { x: 0.1, w: 0.025, a: 0.36, sp: 0.08, ph: 4.4 },
+    { x: 0.22, w: 0.06, a: 0.22, sp: 0.07, ph: 2.2 }, { x: 0.38, w: 0.035, a: 0.3, sp: 0.1, ph: 5.3 },
+  ];
   function draw() {
     const D = dark();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -66,16 +74,48 @@ export function mountPool(root) {
       for (let y0 = 0; y0 <= H; y0 += TILE) for (let x = -10; x <= W + 10; x += 26) { const [, oy] = wobble(x, y0); x === -10 ? ctx.moveTo(x, y0 + oy) : ctx.lineTo(x, y0 + oy); }
       ctx.stroke();
     }
-    // Reflets des lumières du gym qui glissent lentement sur le plancher mouillé.
+    // Lumière (propriétaire : « de vrais rayons », plus de profondeur, un reflet 3D).
+    // 1. La source : une grande lueur douce en haut, et les bords plus sombres (profondeur).
+    const R = Math.max(W, H);
+    const glow = ctx.createRadialGradient(W * 0.5, -H * 0.08, 0, W * 0.5, -H * 0.08, R * 0.95);
+    glow.addColorStop(0, D ? 'rgba(140,210,255,.22)' : 'rgba(200,245,255,.42)');
+    glow.addColorStop(0.45, D ? 'rgba(80,160,255,.06)' : 'rgba(150,215,255,.12)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    const vig = ctx.createRadialGradient(W * 0.5, H * 0.42, R * 0.25, W * 0.5, H * 0.5, R * 0.85);
+    vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, D ? 'rgba(0,8,25,.55)' : 'rgba(5,35,90,.32)');
+    ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+    // 2. Les rayons : des cônes de lumière aux bords doux, qui respirent et glissent lentement.
     ctx.save();
-    ctx.translate(W / 2 + Math.sin(t * 0.08) * W * 0.25, H / 2 + Math.cos(t * 0.06) * 40);
-    ctx.rotate(-28 * Math.PI / 180);
-    for (const [y, h, a] of [[-H * 0.32, 46, 1], [0, 90, 0.7], [H * 0.26, 34, 1]]) {
-      const lg = ctx.createLinearGradient(-W, 0, W, 0);
-      lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, `rgba(255,255,255,${0.16 * a})`); lg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = lg; ctx.fillRect(-W * 1.1, y, W * 2.2, h);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.translate(W * 0.5, -H * 0.12);
+    ctx.rotate(-22 * Math.PI / 180);
+    const L = R * 1.9;
+    for (const b of RAYS) {
+      const cx = R * b.x + Math.sin(t * b.sp + b.ph) * R * 0.05;
+      const w0 = R * b.w * 0.35, w1 = R * b.w * (1.6 + 0.2 * Math.sin(t * 0.3 + b.ph));
+      const a = b.a * (D ? 0.55 : 1) * (0.7 + 0.3 * Math.sin(t * 0.45 + b.ph * 2));
+      const lg = ctx.createLinearGradient(cx - w1, 0, cx + w1, 0);
+      lg.addColorStop(0, 'rgba(210,248,255,0)');
+      lg.addColorStop(0.42, `rgba(200,246,255,${a * 0.55})`);
+      lg.addColorStop(0.5, `rgba(235,253,255,${a})`);
+      lg.addColorStop(0.58, `rgba(200,246,255,${a * 0.55})`);
+      lg.addColorStop(1, 'rgba(210,248,255,0)');
+      ctx.fillStyle = lg;
+      ctx.beginPath(); ctx.moveTo(cx - w0, 0); ctx.lineTo(cx + w0, 0); ctx.lineTo(cx + w1, L); ctx.lineTo(cx - w1, L); ctx.closePath(); ctx.fill();
     }
     ctx.restore();
+    // 3. Un reflet spéculaire passe de temps en temps sur le plancher mouillé.
+    const sweep = (t * 0.06) % 1.6 - 0.3;
+    if (sweep > -0.2 && sweep < 1.2) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.translate(W * sweep, H * 0.5); ctx.rotate(-28 * Math.PI / 180);
+      const sg = ctx.createLinearGradient(-R * 0.12, 0, R * 0.12, 0);
+      sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, `rgba(255,255,255,${D ? 0.07 : 0.13})`); sg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sg; ctx.fillRect(-R * 0.12, -R, R * 0.24, R * 2);
+      ctx.restore();
+    }
     // Les ronds dans l'eau : bord fin et clair, bande plus sombre juste en dedans.
     for (const rp of ripples) {
       const life = 1.5;

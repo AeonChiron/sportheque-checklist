@@ -3162,3 +3162,10 @@ details.mt-card > summary:active { background: var(--sunk); }
 .rv-ownacts { display: flex; gap: 10px; flex-wrap: wrap; }
 .rv-ownacts .btn { flex: 1 1 160px; }
 .rv-del[data-armed] { background: var(--bad); color: #fff; border-color: transparent; }
+/* Grand écran (ordinateur, 27 po) : le titre, les boutons du haut et le grand bouton grandissent aussi. */
+@media (min-width: 1300px) and (min-height: 850px) {
+  #auth .pool-head, #auth .pool-bottom, #auth .pool-top { zoom: 1.45; }
+}
+@media (min-width: 1900px) and (min-height: 1200px) {
+  #auth .pool-head, #auth .pool-bottom, #auth .pool-top { zoom: 1.75; }
+}
