@@ -3001,7 +3001,7 @@ body.calm #auth.inside .pool-cta.fh::before, body.calm #auth.inside .pool-cta.fh
 .hb-tt b { font: 750 18px/1.15 var(--font); }
 .hb-tt small { font-size: 14px; line-height: 1.3; color: var(--muted); }
 .t-mine .hb-ico, .t-reports .hb-ico { background: linear-gradient(145deg, #3fb6f0, #1d5fc4); --tc: rgba(29, 95, 196, .8); }
-.t-plan .hb-ico, .t-teamweek .hb-ico { background: linear-gradient(145deg, #9a7cff, #5a3fd6); --tc: rgba(90, 63, 214, .8); }
+.t-plan .hb-ico { background: linear-gradient(145deg, #9a7cff, #5a3fd6); --tc: rgba(90, 63, 214, .8); }
 .t-flag .hb-ico { background: linear-gradient(145deg, #ff8a6b, #e0402a); --tc: rgba(224, 64, 42, .8); }
 .t-method .hb-ico, .t-tips .hb-ico { background: linear-gradient(145deg, #3ad19a, #138a63); --tc: rgba(19, 138, 99, .8); }
 .t-access .hb-ico { background: linear-gradient(145deg, #7f93a8, #45576b); --tc: rgba(69, 87, 107, .8); }
@@ -3385,3 +3385,15 @@ body.fictive .screen:not(.pool-screen) { padding-top: var(--fict-pad) !important
 .tw-grp.g-lead .tw-lead .tw-av { width: 32px; height: 32px; font-size: 14px; }
 .tw-grp.g-lead .tw-who b { font-size: 15px; }
 .tw-grp .tw-half + .tw-half { margin-top: 10px; }
+
+/* « Avec toi » : qui travaille en même temps (sur la grande carte bleue) */
+.hb-crew { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 9px 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.12); color: inherit; text-align: left; font: inherit; cursor: pointer; transition: background .18s, transform .18s; }
+.hb-crew:hover { background: rgba(255,255,255,.18); }
+.hb-crew:active { transform: scale(.98); }
+.hb-crew-avs { display: flex; padding-left: 6px; flex: none; }
+.hb-crew .tw-av.mini { border-color: rgba(255,255,255,.9); }
+.hb-crew .tw-av.mini.lead { box-shadow: 0 0 0 2px #f2c14e; }
+.hb-crew > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.hb-crew small { font: 700 11px/1 var(--font); letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+.hb-crew b { font: 650 14.5px/1.3 var(--font); }
+.t-teamweek .hb-ico { background: linear-gradient(145deg, #ff86b0, #d6407c); --tc: rgba(214, 64, 124, .8); }

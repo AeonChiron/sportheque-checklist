@@ -383,3 +383,26 @@ test('Superviseur : change l’horaire d’un employé, un seul jour, et ajoute 
   assert.ok(sent.some((x) => /Laver la vitrine/.test(x.title)));
   assert.equal((await go('plan', { action: 'task', date: '2026-10-29', title: 'x', who: '*' }, noah)).status, 403);
 });
+
+test('Tout le monde voit l’horaire de l’équipe : noms, rôles, heures, changements — pas les courriels, pas l’admin', async () => {
+  const a = createApi({ getStore: memoryStores(), env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p', ADMIN_CODE: 'a' }) });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const sign = async (name, role, code) => (await go('auth', { action: 'signup', name, email: `${name.toLowerCase()}@x.ca`, password: 'secret1', role, code })).data.token;
+  const boss = await sign('Martine', 'boss', 'p'), noah = await sign('Noah', 'employee', 'e');
+  await sign('Owner', 'admin', 'a');
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '08:00', end: '16:00' } } }, boss);
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '07:30', end: '15:30' } } }, noah);
+  await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-10-29', start: '18:00', end: '23:00' }, boss);
+  assert.equal((await go('roster')).status, 401);
+  const r = await go('roster?from=2026-10-26&to=2026-11-01', null, noah);
+  assert.equal(r.status, 200);
+  const names = r.data.people.map((p) => p.name);
+  assert.deepEqual(names, ['Martine', 'Noah']); // l'admin est un fantôme
+  assert.ok(!JSON.stringify(r.data).includes('@x.ca')); // pas de courriels
+  const m = r.data.people.find((p) => p.name === 'Martine'), n = r.data.people.find((p) => p.name === 'Noah');
+  assert.equal(m.role, 'boss');
+  assert.equal(m.schedule['3'].start, '08:00');
+  assert.equal(n.me, true);
+  assert.equal(n.overrides['2026-10-29'].start, '18:00');
+  assert.equal(m.me, undefined);
+});

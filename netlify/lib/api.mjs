@@ -538,6 +538,24 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
   //  tasks:<date>  → [{ id, title, time, minutes, who: courriel | '*', by, at }]
   const plans = () => getStore('plan');
   const dayName = (d, lang) => new Date(`${d}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+  // L'horaire de toute l'équipe, pour tout le monde (propriétaire, 23 oct.) : qui travaille, quand,
+  // avec qui. Seulement le nom, la photo, le rôle et les heures (pas de courriel, pas de résultats).
+  // L'admin est un fantôme : il n'y paraît pas (sauf pour lui-même).
+  async function roster(req, me) {
+    if (req.method !== 'GET') return json({ error: 'method' }, 405);
+    const params = new URL(req.url).searchParams;
+    const from = params.get('from') || localDay(Date.now()), to = params.get('to') || from;
+    if (!DATE.test(from) || !DATE.test(to) || to < from) return json({ error: 'invalid' }, 400);
+    const { blobs } = await users().list();
+    const all = (await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })))).filter((u) => u && !u.removed && (u.role !== 'admin' || u.email === me.email));
+    const people = await Promise.all(all.map(async (u) => {
+      const ov = (await plans().get(`ov:${u.email}`, { type: 'json' })) || {};
+      const overrides = Object.fromEntries(Object.entries(ov).filter(([d]) => d >= from && d <= to).map(([d, v]) => [d, v.off ? { off: true } : { start: v.start, end: v.end }]));
+      return { id: createHash('sha256').update(`roster:${u.email}`).digest('hex').slice(0, 12), name: u.name, role: u.role === 'employee' ? 'employee' : 'boss', avatar: u.avatar || '', schedule: cleanSchedule(u.schedule), overrides, ...(u.email === me.email ? { me: true } : {}) };
+    }));
+    return json({ people: people.sort((a, b) => a.name.localeCompare(b.name)) });
+  }
+
   async function planApi(req, me) {
     const params = new URL(req.url).searchParams;
     if (req.method === 'GET') {
@@ -628,7 +646,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const route = new URL(req.url).pathname.replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'auth') return await auth(req);
-      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi, plan: planApi };
+      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi, plan: planApi, roster };
       if (!routes[route]) return json({ error: 'route' }, 404);
       const me = await currentUser(req);
       if (!me) return json({ error: 'auth' }, 401);

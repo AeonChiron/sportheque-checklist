@@ -12,7 +12,7 @@ import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } fro
 import { mountGlass, playFinish, fxSound, clickTap } from './fx.js';
 import { hapticTrigger } from '../vendor/ios-haptics/index.js';
 import autoAnimate from '../vendor/auto-animate/index.js';
-import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs, FICTIVE } from './auth.js';
+import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, listRoster, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs, FICTIVE } from './auth.js';
 import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
@@ -4823,6 +4823,31 @@ function teamTarget(u, date) {
   const sp = SPECIALS.find((x) => x.names?.includes(firstName(u.name)) && x.weekday === dowOf(date));
   return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, avatar: u.avatar || '', lead: isLeadUser(u), changed: Boolean(ov), by: ov?.by || '' };
 }
+// Tout le monde voit l'horaire de l'équipe (propriétaire, 23 oct.). Le superviseur a la liste complète;
+// l'employé reçoit seulement les noms, photos, rôles et heures (le serveur cache les courriels).
+async function loadTeamView(from, to) {
+  if (isBoss()) {
+    try { boss.team = await listTeam(); } catch { /* garde la liste d'avant */ }
+    boss.teamLoaded = true;
+    await refreshTeamPlan(from, to);
+    return;
+  }
+  try {
+    const people = await listRoster(from, to);
+    const key = (p) => (p.me ? myEmail() : `id:${p.id}`);
+    boss.team = people.map((p) => ({ email: key(p), name: p.name, role: p.role, avatar: p.avatar, schedule: p.schedule || {} }));
+    teamPlan = { overrides: Object.fromEntries(people.map((p) => [key(p), p.overrides || {}])), tasks: [], from, to };
+  } catch { /* hors ligne : on garde ce qu'on avait */ }
+  boss.teamLoaded = true;
+}
+// Avec qui je travaille : les heures qui se croisent avec les miennes ce jour-là.
+function crewWith(tg) {
+  if (!tg || !boss.teamLoaded) return [];
+  const on = peopleOn(tg.date);
+  const s0 = toMin(tg.start), e0 = toMin(tg.end) + (toMin(tg.end) <= s0 ? 1440 : 0);
+  const over = (x) => { const s = toMin(x.start), e = toMin(x.end) + (toMin(x.end) <= s ? 1440 : 0); return s < e0 && s0 < e; };
+  return [...on.lead, ...on.emp].filter((x) => x.email !== myEmail() && over(x));
+}
 async function refreshTeamPlan(from, to) {
   try { const r = await request(`plan?team=1&from=${from}&to=${to}`); teamPlan = { overrides: r.overrides || {}, tasks: r.tasks || [], from, to }; return true; } catch { return false; }
 }
@@ -4902,10 +4927,13 @@ async function refreshHub() {
     if (tm.status === 'fulfilled') { boss.team = tm.value; boss.teamLoaded = true; }
     await refreshTeamPlan(todayISO(), addDays(todayISO(), 13));
     paintBossCount();
-  } else if (!hist.loaded) {
-    const r = await loadRecent(500).catch(() => null);
-    if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
-  } else return;
+  } else {
+    if (!hist.loaded) {
+      const r = await loadRecent(500).catch(() => null);
+      if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
+    }
+    if (session.user && accounts()) await loadTeamView(todayISO(), addDays(todayISO(), 13)); // pour « Avec toi »
+  }
   if (current === 'hub') renderHub({ animate: false });
 }
 function renderHub({ animate = true } = {}) {
@@ -4931,6 +4959,7 @@ function hubEmployee() {
     <nav class="hb-tiles" aria-label="${esc(t('hubAsk'))}">
       ${tile('mine', 'mine', t('tMine'), t('tMineSub'), fixable ? `<span class="hb-badge num">${esc(t('fixBadge', fixable))}</span>` : '')}
       ${tile('plan', 'plan', t('tPlan'), t('tPlanSub'))}
+      ${tile('teamweek', 'team', t('tTeamAll'), t('tTeamAllSub'))}
       ${tile('flag', 'flag', t('tFlag'), t('tFlagSub'))}
       ${tile('method', 'method', t('tMethod'), t('tMethodSub'))}
     </nav>`;
@@ -4952,6 +4981,7 @@ function hubMainCard(tg) {
     const ring = `<span class="hb-ring" style="--p:${pct}"><b class="num">${done}/${ts.length}</b></span>`;
     return `<section class="hb-main${over ? ' is-alert' : ' is-live'}" id="hbMain">${head(`<span class="hb-dot"></span>${esc(t(over ? 'hbUnsent' : 'hbLive'))}`, ring)}
       <p class="hb-sub">${esc(t('hbProgress', done, ts.length))}</p>
+      ${crewLine(tg)}
       <button type="button" class="hb-cta" data-hub="${over ? 'finish' : 'tasks'}"><span>${esc(t(over ? 'hbSend' : 'hbResume'))}</span>${over ? HUB_ICO.send : HUB_ICO.go}</button></section>`;
   }
   const left = Math.ceil((startAt(tg) - Date.now()) / 6e4);
@@ -4962,7 +4992,15 @@ function hubMainCard(tg) {
   return `<section class="hb-main${tg.ready ? ' is-now' : ''}" id="hbMain">${head(esc(t(tg.ready ? 'hbNow' : 'hbNext')), chip)}
     <button type="button" class="hb-cta" data-hub="start"><span>${esc(t(tg.ready || today ? 'hbStart' : 'hbOpen'))}</span>${HUB_ICO.play}</button>
     ${tg.changed && tg.by ? `<p class="hb-note hb-changed">${esc(t('hbChangedBy', tg.by))}</p>` : ''}
+    ${crewLine(tg)}
     ${later ? `<p class="hb-note">${esc(t('hbEarly', when))}</p>` : ''}</section>`;
+}
+// « Avec toi » : les visages et les prénoms de ceux qui travaillent en même temps (le superviseur en or).
+function crewLine(tg) {
+  const crew = crewWith(tg);
+  if (!crew.length) return '';
+  const names = crew.map((x) => (x.lead ? `${x.name} (${t('crewBoss')})` : x.name));
+  return `<button type="button" class="hb-crew" data-hub="teamweek"><span class="hb-crew-avs" aria-hidden="true">${crew.slice(0, 4).map((x) => `<span class="tw-av mini${x.lead ? ' lead' : ''}${x.avatar ? ' has-pic' : ''}">${avatarOf({ avatar: x.avatar }, esc((x.name[0] || '?').toUpperCase()))}</span>`).join('')}</span><span><small>${esc(t('crewWith'))}</small><b>${esc(names.join(', '))}</b></span></button>`;
 }
 function factHTML(x) {
   return `<span class="hg-fact k-${x.k}">${hubIco(x.k)}<span class="hg-txt"><small>${esc(x.label)}</small><b>${esc(x.value)}</b>${x.sub ? `<em>${esc(x.sub)}</em>` : ''}</span></span>`;
@@ -5127,8 +5165,7 @@ async function openToday(kind) {
   paintStatic();
   renderToday();
   show('todaygym');
-  try { boss.team = await listTeam(); boss.teamLoaded = true; } catch { boss.teamLoaded = true; }
-  await refreshTeamPlan(todayISO(), todayISO());
+  await loadTeamView(todayISO(), todayISO());
   if (current === 'todaygym') renderToday({ animate: false });
 }
 function renderToday({ animate = true } = {}) {
@@ -5143,8 +5180,8 @@ function renderToday({ animate = true } = {}) {
     </div>
     ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
       : `<div class="td-list${animate && !reducedMotion() ? ' cascade' : ''}">${list.length ? halves(list, lead ? leadRow : personRow) : `<p class="hb-quiet">${esc(t(lead ? 'grpNoLead' : 'grpNoEmp'))}</p>`}
-      ${lead ? '' : `${allTasks(d)}<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</div>`}
-    ${lead && !on.lead.some((x) => x.email === session.user?.email) ? `<button type="button" class="btn ghost td-mine" data-hub="myhours">${HUB_ICO.plan}<span>${esc(t('grpSetMine'))}</span></button>` : ''}`;
+      ${lead || !isBoss() ? '' : `${allTasks(d)}<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</div>`}
+    ${lead && isBoss() && !on.lead.some((x) => x.email === session.user?.email) ? `<button type="button" class="btn ghost td-mine" data-hub="myhours">${HUB_ICO.plan}<span>${esc(t('grpSetMine'))}</span></button>` : ''}`;
 }
 document.addEventListener('click', (e) => {
   const g = e.target.closest('[data-today]');
@@ -5325,8 +5362,7 @@ async function openTeamWeek({ keep = false } = {}) {
   if (!keep || !tw.week) tw.week = mondayOf(todayISO());
   renderTeamWeek({ animate: !keep });
   show('teamweek');
-  try { boss.team = await listTeam(); boss.teamLoaded = true; } catch { boss.teamLoaded = true; }
-  await refreshTeamPlan(mondayOf(todayISO()), addDays(mondayOf(todayISO()), 13));
+  await loadTeamView(mondayOf(todayISO()), addDays(mondayOf(todayISO()), 13));
   if (current === 'teamweek') renderTeamWeek({ animate: false });
 }
 function renderTeamWeek({ animate = true } = {}) {
@@ -5342,9 +5378,9 @@ function renderTeamWeek({ animate = true } = {}) {
       <h3><span>${esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long' })))}</span><small class="num">${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
       ${on.lead.length || on.emp.length ? `${grp('lead', on.lead, leadRow)}${grp('emp', on.emp, personRow)}` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
       ${allTasks(d)}
-      ${past ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
+      ${past || !isBoss() ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
   }).join('');
-  $('#teamBody').innerHTML = `<p class="page-lede">${esc(t('twLede'))}</p>
+  $('#teamBody').innerHTML = `<p class="page-lede">${esc(t(isBoss() ? 'twLede' : 'twLedeAll'))}</p>
     <div class="segmented tw-tabs" role="tablist">
       <button type="button" role="tab" data-tw="0" aria-selected="${tw.week === thisWeek}">${esc(t('twThis'))}</button>
       <button type="button" role="tab" data-tw="1" aria-selected="${tw.week === addDays(thisWeek, 7)}">${esc(t('twNext'))}</button>
@@ -5550,8 +5586,8 @@ function route() {
   if (h === '#horaire') return openPlan();
   if (h === '#quart') return openGlance();
   if (h === '#methode') return openMethod();
-  if (h === '#equipe') return isBoss() ? openTeamWeek() : openHub();
-  if (h === '#aujourdhui') return isBoss() ? openToday() : openHub();
+  if (h === '#equipe') return session.user ? openTeamWeek() : goFront();
+  if (h === '#aujourdhui') return session.user ? openToday() : goFront();
   if (h === '#affiche') return openPoster();
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();

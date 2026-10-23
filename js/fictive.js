@@ -208,6 +208,11 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
     if (P.has('id')) { const p = d.problems.find((x) => x.id === P.get('id')); if (!p) throw err(404, 'missing'); return { problem: p }; }
     return { problems: d.problems.slice(0, 150) };
   }
+  if (route === 'roster') { // l'horaire de toute l'équipe, pour tout le monde
+    const from = P.get('from') || d.today, to = P.get('to') || from;
+    const people = Object.values(d.users).map((u) => ({ id: u.email.split('@')[0], name: u.name, role: u.role, avatar: u.avatar || '', schedule: u.schedule || {}, overrides: Object.fromEntries(Object.entries(d.overrides[u.email] || {}).filter(([k]) => k >= from && k <= to).map(([k, v]) => [k, v.off ? { off: true } : { start: v.start, end: v.end }])), ...(u.email === me.email ? { me: true } : {}) }));
+    return { people: people.sort((a, b) => a.name.localeCompare(b.name)) };
+  }
   if (route === 'alerts') return { to: Object.values(d.users).filter((u) => u.role === 'boss').slice(0, 1).map((u) => ({ name: u.name, email: '' })) };
   if (route === 'plan') {
     if (method === 'GET') {

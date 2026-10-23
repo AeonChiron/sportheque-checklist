@@ -3,6 +3,26 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-23-roster',
+    date: '2026-10-23',
+    fr: {
+      title: 'Tout le monde voit l’horaire',
+      items: [
+        'Les employés voient l’horaire de toute l’équipe (superviseurs et employés, AM et PM).',
+        '« Avec toi » sur ton prochain quart : qui travaille en même temps que toi.',
+        'Seulement les noms, photos et heures : pas de courriels, pas de résultats de quart.',
+      ],
+    },
+    en: {
+      title: 'Everyone sees the schedule',
+      items: [
+        'Employees see the whole team’s schedule (supervisors and employees, AM and PM).',
+        '“With you” on your next shift: who works at the same time as you.',
+        'Only names, photos and hours: no emails, no shift results.',
+      ],
+    },
+  },
+  {
     id: '2026-10-22-ampm',
     date: '2026-10-22',
     fr: {

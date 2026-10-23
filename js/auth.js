@@ -177,6 +177,11 @@ export async function listTeam() {
   if (session.mode === 'demo') return Object.values(readJSON(localStorage, DEMO_USERS) || {});
   return (await request('users')).users;
 }
+// L'horaire de toute l'équipe (tout le monde le voit) : noms, photos, rôles, heures.
+export async function listRoster(from, to) {
+  if (session.mode === 'demo') return [];
+  return (await request(`roster?from=${from}&to=${to}`)).people || [];
+}
 export async function teamAction(action, email, extra = {}) {
   if (session.mode === 'demo') {
     if (action === 'remove') {

@@ -164,3 +164,8 @@ Plain static site + one serverless function. No build step.
 - AM = start before 12:00; everything else PM. `isLeadUser` = role boss or admin. Helpers `peopleOn(date)`, `halves`, `leadRow`.
 - Week page `#equipe`: each day Superviseurs then Employés, each AM/PM. Supervisors show name + hours only (no zones/weekly tasks); employees keep their chips. Tasks and « + Quelqu'un » are employees only.
 - Supervisors set their own hours via the « Mon horaire » tile (same one-tap picker). Pretend supervisors have made-up schedules.
+
+## Everyone sees the team schedule (owner 23 oct.)
+- Server route `roster?from&to` (any signed-in user): `{people:[{id, name, role employee|boss, avatar, schedule, overrides, me?}]}`. No emails (id = sha256 slice), admin hidden (ghost) except to himself. Needs a Netlify deploy.
+- Client `loadTeamView(from,to)`: boss → `listTeam` + plan; employee → `listRoster`, mapped into `boss.team` / `teamPlan.overrides` (keys `id:<id>`, own = my email).
+- Employee hub tile « L'horaire de l'équipe » → `#equipe` (read-only: no + buttons, no tasks of others). « Avec toi » line on the main card (`crewWith`: overlapping hours that day; supervisors flagged).
