@@ -3887,7 +3887,7 @@ setInterval(() => {
 // s'installe tout seul (les bonnes heures, la liste prête). Rien à toucher.
 const AUTO_MIN = 10;
 function autoStart() {
-  if (state || !session.user || bossWatching() || prefs.simShift || prefs.simNew || isVisitor()) return false;
+  if (FICTIVE || state || !session.user || bossWatching() || prefs.simShift || prefs.simNew || isVisitor()) return false; // l'équipe fictive : on choisit soi-même
   if (location.hash && location.hash !== '#') return false; // un lien précis (rapport, historique) passe d'abord
   const nx = nextShift();
   if (!nx || nx.date !== todayISO()) return false;
@@ -4927,14 +4927,16 @@ async function refreshHub() {
     const [pr, tm] = await Promise.allSettled([listProblems(), listTeam()]);
     if (pr.status === 'fulfilled') { boss.problems = pr.value; boss.loaded = true; boss.error = ''; } else if (!boss.loaded) boss.error = pr.reason?.status === 0 ? 'errNetwork' : 'errServer';
     if (tm.status === 'fulfilled') { boss.team = tm.value; boss.teamLoaded = true; }
-    await refreshTeamPlan(todayISO(), addDays(todayISO(), 13));
+    await refreshTeamPlan(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13));
+    ensureWeek(wk.mon);
     paintBossCount();
   } else {
     if (!hist.loaded) {
       const r = await loadRecent(500).catch(() => null);
       if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
     }
-    if (session.user && accounts()) await loadTeamView(todayISO(), addDays(todayISO(), 13)); // pour « Avec toi »
+    if (session.user && accounts()) await loadTeamView(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13)); // « Avec toi », la semaine
+    ensureWeek(wk.mon);
   }
   if (current === 'hub') renderHub({ animate: false });
 }
@@ -4952,12 +4954,119 @@ function renderHub({ animate = true } = {}) {
   paintAdminTools();
   if (animate) countUp(body);
 }
+// ---------- « Ta semaine en un coup d'œil » (propriétaire, 23 oct.) ----------
+// Sur le tableau de bord : les 7 jours de la semaine, comme un petit calendrier. Les jours passés
+// montrent ce qui a été fait (le gym au complet, pas une note par personne : on aide, on ne
+// surveille pas); les jours à venir, qui travaille. On change de semaine avec les flèches.
+// Toucher un jour ouvre sa journée : qui a travaillé, ce qui a été fait, les mots laissés.
+const wk = { mon: '', days: {}, loading: {} };
+const WK_BACK = 8; // jusqu'à 8 semaines en arrière
+async function ensureWeek(mon) {
+  if (!mon || mon > todayISO() || wk.days[mon] || wk.loading[mon]) return;
+  wk.loading[mon] = true;
+  try {
+    const r = await loadWeek(weekDates(mon).filter((d) => d <= todayISO()));
+    wk.days[mon] = Object.fromEntries(Object.entries(r.days || {}).map(([d, list]) => [d, (list || []).filter((x) => !x.open)]));
+  } catch { wk.days[mon] = {}; }
+  wk.loading[mon] = false;
+  if (current === 'hub') renderHub({ animate: false });
+}
+const shiftsOn = (d) => wk.days[mondayOf(d)]?.[d] || [];
+// Le résumé d'une journée, pour tout le gym.
+function dayDigest(d) {
+  const list = shiftsOn(d);
+  const done = new Map(), left = new Map(), flags = [], notes = [];
+  let n = 0, tot = 0;
+  for (const s of list) {
+    let p = null;
+    try { p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, custom: s.custom, lang: lang() }); } catch { p = null; }
+    const st = new Map((s.items || []).map((i) => [i.id, i.status]));
+    for (const it of (p?.items || []).filter((x) => x.kind === 'task' && x.id !== 'pointage')) {
+      tot++;
+      // Les grosses tâches d'abord (zone à fond, tâche de la semaine, tâches spéciales), puis le reste.
+      const big = /profondeur|hebdo|special|^as-|miroir|tuile/.test(it.id) ? 0 : 1;
+      if (st.get(it.id) === 'done') { n++; if (!done.has(it.title)) done.set(it.title, big); } else if (!left.has(it.title)) left.set(it.title, big);
+    }
+    for (const fl of s.flags || []) flags.push(fl);
+    if (s.handoff?.trim()) notes.push({ name: s.name.split(' ')[0], text: s.handoff.trim() });
+  }
+  const order = (m) => [...m.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => k);
+  return { shifts: list, n, tot, pct: tot ? Math.round((100 * n) / tot) : 0, done: order(done), left: order(left).filter((k) => !done.has(k)), flags, notes };
+}
+const wkRing = (pct, cls = '') => `<span class="wk-ring${cls}" style="--p:${pct}"><b class="num">${pct}</b></span>`;
+function weekCard() {
+  const thisMon = mondayOf(todayISO());
+  if (!wk.mon) wk.mon = thisMon;
+  const mon = wk.mon, off = Math.round((dateOf(mon) - dateOf(thisMon)) / (7 * 864e5));
+  ensureWeek(mon);
+  const lead = bossWatching();
+  const label = off === 0 ? t('wkThis') : off === -1 ? t('wkLast') : off === 1 ? t('wkNext') : weekRange(mon);
+  const loaded = mon > todayISO() || wk.days[mon];
+  const cells = weekDates(mon).map((d) => {
+    const past = d < todayISO(), today = d === todayISO();
+    const on = peopleOn(d);
+    const people = on.lead.length + on.emp.length;
+    const mine = !lead && mySched(d);
+    const dg = past || today ? dayDigest(d) : null;
+    const mark = dg && dg.tot ? wkRing(dg.pct, dg.pct >= 90 ? ' ok' : dg.pct >= 60 ? ' mid' : ' low')
+      : past ? `<span class="wk-none">${loaded ? '–' : '·'}</span>`
+      : `<span class="wk-ppl">${HUB_ICO.team}<b class="num">${people}</b></span>`;
+    const dn = dateOf(d).toLocaleDateString(locale(), { weekday: 'short' }).replace('.', '');
+    return `<button type="button" class="wk-day${past ? ' past' : ''}${today ? ' today' : ''}${mine ? ' mine' : ''}" data-wk-day="${d}" aria-label="${esc(longDay(d))}">
+      <span class="wk-dn">${esc(dn)}</span><b class="wk-dd num">${dateOf(d).getDate()}</b>${mark}${mine ? `<span class="wk-mine num">${esc(hm(mine.start).replace(/\s/g, ' '))}</span>` : '<span class="wk-mine none"></span>'}</button>`;
+  }).join('');
+  return `<section class="hb-week" id="hbWeek">
+    <div class="wk-head"><h2>${hubIco('week')}${esc(t(lead ? 'wkTitleBoss' : 'wkTitle'))}</h2>
+      <div class="wk-nav"><button type="button" class="wk-arrow" data-wk-nav="-1" aria-label="${esc(t('wkPrev'))}"${off <= -WK_BACK ? ' disabled' : ''}>${CHEV_R}</button><span class="wk-label"><b>${esc(label)}</b><small class="num">${esc(weekRange(mon))}</small></span><button type="button" class="wk-arrow next" data-wk-nav="1" aria-label="${esc(t('wkNextBtn'))}"${off >= 1 ? ' disabled' : ''}>${CHEV_R}</button></div></div>
+    <div class="wk-days">${cells}</div>
+    <p class="wk-legend"><span>${wkRing(100, ' ok tiny')}${esc(t('wkLegendDone'))}</span><span class="wk-ppl">${HUB_ICO.team}${esc(t('wkLegendPeople'))}</span>${lead ? '' : `<span><i class="wk-dot"></i>${esc(t('wkLegendMine'))}</span>`}</p>
+  </section>`;
+}
+document.addEventListener('click', (e) => {
+  const nav = e.target.closest('[data-wk-nav]');
+  if (nav) { sfx('tick'); wk.mon = addDays(wk.mon || mondayOf(todayISO()), 7 * Number(nav.dataset.wkNav)); renderHub({ animate: false }); return; }
+  const day = e.target.closest('[data-wk-day]');
+  if (day) openDaySheet(day.dataset.wkDay);
+});
+// La journée : qui a travaillé (ou travaillera), ce qui a été fait, ce qui reste, les mots laissés.
+async function openDaySheet(d) {
+  const mon = mondayOf(d);
+  if (d <= todayISO() && !wk.days[mon]) await ensureWeek(mon);
+  const past = d < todayISO(), today = d === todayISO();
+  const on = peopleOn(d);
+  const dg = past || today ? dayDigest(d) : null;
+  const byName = (n) => (boss.team || []).find((u) => (u.name || '').split(' ')[0].toLowerCase() === (n || '').split(' ')[0].toLowerCase());
+  const chip = (name, sub, avatar, isLead) => `<span class="dy-person${isLead ? ' lead' : ''}"><span class="tw-av mini${avatar ? ' has-pic' : ''}">${avatarOf({ avatar }, esc((name[0] || '?').toUpperCase()))}</span><span><b>${esc(name)}</b><small class="num">${esc(sub)}</small></span></span>`;
+  // Qui : pour un jour passé, ceux qui ont envoyé leur quart (+ les superviseurs à l'horaire); sinon l'horaire.
+  const worked = dg && dg.shifts.length
+    ? dg.shifts.map((s) => chip(s.name.split(' ')[0], s.start ? `${hm(s.start)} – ${hm(s.end)}` : SHIFTS[s.shift][lang()].short, byName(s.name)?.avatar, false)).join('')
+    : on.emp.map((x) => chip(x.name, `${hm(x.start)} – ${hm(x.end)}`, x.avatar, false)).join('');
+  const leads = on.lead.map((x) => chip(x.name, `${hm(x.start)} – ${hm(x.end)}`, x.avatar, true)).join('');
+  const status = past ? `<span class="pill dy-done">${HUB_ICO.check}${esc(t('wkDayDone'))}</span>` : today ? `<span class="pill is-live">${esc(t('today'))}</span>` : `<span class="pill">${esc(t('wkDayAhead'))}</span>`;
+  const mine = mySched(d);
+  const myCard = !bossWatching() && mine && !past ? `<button type="button" class="dy-mine" data-dy-glance="${d}">${HUB_ICO.plan}<span><small>${esc(t('wkYourShift'))}</small><b class="num">${hm(mine.start)} – ${hm(mine.end)}</b></span>${CHEV_R}</button>` : '';
+  const summary = dg && dg.tot ? `<div class="dy-sum">${wkRing(dg.pct, ` big${dg.pct >= 90 ? ' ok' : dg.pct >= 60 ? ' mid' : ' low'}`)}<div><b>${esc(t('wkGymDone', dg.pct))}</b><small>${esc(t('wkShiftsSent', dg.shifts.length, dg.n, dg.tot))}</small></div></div>`
+    : past ? `<p class="hb-quiet">${esc(t('wkNoReport'))}</p>` : '';
+  const list = (k, arr, cls) => (arr.length ? `<p class="block-label">${esc(t(k))} <span class="num">${arr.length}</span></p><div class="dy-chips ${cls}">${arr.slice(0, 10).map((x) => `<span>${cls === 'ok' ? HUB_ICO.check : ''}${esc(x)}</span>`).join('')}${arr.length > 10 ? `<span class="more">+${arr.length - 10}</span>` : ''}</div>` : '');
+  const flags = dg?.flags.length ? `<p class="block-label">${esc(t('wkFlags'))} <span class="num">${dg.flags.length}</span></p><div class="dy-flags">${dg.flags.map((fl) => `<span class="pb-mini${fl.urgent ? ' urgent' : ''}">${catIcon(fl.category)}<span><b>${esc(catName(fl.category))}</b><small>${esc(fl.location || fl.text || '')}</small></span></span>`).join('')}</div>` : '';
+  const notes = dg?.notes.length ? `<p class="block-label">${esc(t('wkNotes'))}</p>${dg.notes.map((x) => `<blockquote class="dy-note">« ${esc(x.text)} »<cite>${esc(x.name)}</cite></blockquote>`).join('')}` : '';
+  const tasks = (teamPlan.tasks || []).concat(extras.tasks || []).filter((x, i, a) => x.date === d && a.findIndex((y) => y.id === x.id) === i && (bossWatching() || x.who === '*' || x.who === myEmail()));
+  const special = tasks.length ? `<p class="block-label">${esc(t('wkSpecial'))}</p><div class="dy-chips star">${tasks.map((x) => `<span>${HUB_ICO.star}${esc(x.title)}${x.time ? ` · ${hm(x.time)}` : ''}</span>`).join('')}</div>` : '';
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.week.replace('<svg ', '<svg class="ico" aria-hidden="true" ')}${esc(t(past ? 'wkEyebrowPast' : 'wkEyebrowDay'))}</p><h2>${esc(longDay(d))}</h2>${status}</div>
+    ${myCard}${summary}
+    ${leads ? `<p class="block-label">${esc(t('grpLead'))} <span class="num">${on.lead.length}</span></p><div class="dy-people">${leads}</div>` : ''}
+    ${worked ? `<p class="block-label">${esc(t(past || (dg && dg.shifts.length) ? 'wkWorked' : 'wkWorking'))} <span class="num">${dg && dg.shifts.length ? dg.shifts.length : on.emp.length}</span></p><div class="dy-people">${worked}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
+    ${dg ? list('wkWhatDone', dg.done, 'ok') + list(past ? 'wkNotDone' : 'wkWhatLeft', dg.left, 'left') : ''}
+    ${special}${flags}${notes}`, (root) => {
+    root.querySelector('[data-dy-glance]')?.addEventListener('click', () => { closeSheet(); const m = mySched(d); setTimeout(() => openGlance({ mine: true, live: false, date: d, start: m.start, end: m.end }), 320); });
+  }, bossWatching() && dg && dg.shifts.length ? `<button type="button" class="btn ghost" data-hub="reports">${esc(t('wkSeeReports'))}</button>` : '');
+}
 const tile = (k, ico, title, sub, extra = '') => `<button type="button" class="hb-tile t-${k}" data-hub="${k}">${hubIco(ico)}<span class="hb-tt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>${extra}</button>`;
 
 function hubEmployee() {
   const tg = myShiftTarget();
   const fixable = (hist.recent || []).filter((s) => !s.open && ownFixable(s)).length;
-  return `${hubMainCard(tg)}${tg ? glanceCard(tg) : ''}
+  return `${hubMainCard(tg)}${weekCard()}${tg ? glanceCard(tg) : ''}
     <nav class="hb-tiles" aria-label="${esc(t('hubAsk'))}">
       ${tile('mine', 'mine', t('tMine'), t('tMineSub'), fixable ? `<span class="hb-badge num">${esc(t('fixBadge', fixable))}</span>` : '')}
       ${tile('plan', 'plan', t('tPlan'), t('tPlanSub'))}
@@ -5112,7 +5221,7 @@ function hubBoss() {
     ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i></div>'
       : `<div class="hb-grps">${groupTile('lead', on.lead)}${groupTile('emp', on.emp)}</div>`}
   </section>`;
-  return `${main}${todayCard}
+  return `${main}${todayCard}${weekCard()}
     <nav class="hb-tiles">
       ${tile('reports', 'reports', t('tReports'), t('tReportsSub'))}
       ${tile('teamweek', 'team', t('tTeamWeek'), t('tTeamWeekSub'))}

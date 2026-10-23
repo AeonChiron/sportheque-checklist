@@ -248,7 +248,10 @@ export function enterFictive(email) {
   try {
     localStorage.setItem('fict:gym-shift-prefs', JSON.stringify({ lang: real.lang || 'fr', theme: real.theme || 'light', sound: real.sound, welcomed: { [email]: true }, installSeen: true, swipeSeen: true, schedules: { [email]: u?.schedule || {} } }));
   } catch { /* ignore */ }
-  location.replace(location.pathname);
+  // Propriétaire : on arrive sur le tableau de bord, pas dans un quart. (Changer seulement le « # »
+  // ne recharge pas la page : on pose l'adresse, puis on recharge.)
+  history.replaceState(null, '', `${location.pathname}#accueil`);
+  location.reload();
 }
 export function exitFictive() {
   clearFictiveKeys();

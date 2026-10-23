@@ -176,3 +176,8 @@ Plain static site + one serverless function. No build step.
 - Check sound: one flowing melody in a soft register (~250–900 Hz), shorter and no bass when tapped fast; never octave jumps with progress. Last task plays `brim` instead.
 - Glass: full = to the brim (BRIM 7.2, meniscus dome), water gradient + lit surface line, overflow drips, sweep shine, sparkles, ring. Pours tapped quickly add less slosh/splash.
 - Week page: "Jours qui restent" (today + future) then a folded "Jours terminés" with each past day as a one-line `<details>`. No pale/opacity days. Pretend supervisors' PM hours end at 19 h.
+
+## Week at a glance (owner 23 oct.)
+- Hub card `weekCard()` (employee: after the main card; supervisor: after « Aujourd'hui dans le gym »): 7 day cells, ‹ › arrows (8 weeks back, 1 ahead). Past/today: ring = % of gym tasks done (all shifts that day, `dayDigest`); future: people count; employee's own shift as a blue time chip.
+- Tap a day → `openDaySheet(d)`: supervisors + who worked (from sent shifts) or who works (schedule), gym-level summary, what got done (big tasks first), not done, reports, handoff notes, special tasks; « Ton quart » button → glance. Results are for the whole gym, never a score per person for employees.
+- Pretend team entry lands on `#accueil` (must `history.replaceState` + `location.reload()` — changing only the hash doesn't reload) and never auto-starts a shift (`autoStart` returns false when FICTIVE).

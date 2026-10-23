@@ -3,6 +3,28 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-23-week',
+    date: '2026-10-23',
+    fr: {
+      title: 'Ta semaine en un coup d’œil',
+      items: [
+        'Sur le tableau de bord : les 7 jours de la semaine, avec flèches pour la semaine d’avant ou d’après.',
+        'Jours passés : combien du ménage a été fait (pour tout le gym). Jours à venir : combien au travail. Ton quart en bleu.',
+        'Toucher un jour : qui a travaillé, ce qui a été fait, ce qui manque, les signalements et les mots laissés.',
+        'L’équipe fictive arrive sur le tableau de bord (plus directement dans un quart).',
+      ],
+    },
+    en: {
+      title: 'Your week at a glance',
+      items: [
+        'On the dashboard: the 7 days of the week, with arrows for the week before or after.',
+        'Past days: how much of the cleaning got done (whole gym). Coming days: how many are working. Your shift in blue.',
+        'Tap a day: who worked, what got done, what is missing, reports and notes left.',
+        'The pretend team opens on the dashboard (no longer straight into a shift).',
+      ],
+    },
+  },
+  {
     id: '2026-10-23-polish',
     date: '2026-10-23',
     fr: {
