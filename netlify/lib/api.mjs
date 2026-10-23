@@ -52,7 +52,7 @@ function cleanSchedule(raw) {
 const lead = (u) => u?.role === 'boss' || u?.role === 'admin';
 // Photo de profil : une mascotte (« m:ours ») ou une petite image JPEG/WebP (96 px, ~10 ko).
 const cleanAvatar = (v) => (typeof v === 'string' && (/^m:[a-z]{2,12}$/.test(v) || (/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 40000)) ? v : '');
-const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule), avatar: cleanAvatar(u.avatar) });
+const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule), scheduleBy: u.scheduleBy || '', scheduleAt: u.scheduleAt || '', avatar: cleanAvatar(u.avatar) });
 // Courriels des problèmes urgents : par défaut, les superviseurs marqués
 // alerts dans la config (Daniel); les autres peuvent s'abonner eux-mêmes.
 const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
@@ -68,8 +68,8 @@ const webPush = {
   },
 };
 const PUSH_TEXT = {
-  fr: { remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' } },
-  en: { remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' } },
+  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' } },
+  en: { sched: (by) => ({ title: 'Your schedule changed', body: `${by} changed your schedule. Tap to see it.` }), day: (by, d) => ({ title: 'Your shift changed', body: `${by} changed your shift on ${d}.` }), task: (by, title, h) => ({ title: `New task: ${title}`, body: `Added by ${by}${h ? `, at ${h}` : ''}.` }), remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' } },
 };
 
 export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => fetch(...a) }) {
@@ -202,6 +202,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
       u.schedule = cleanSchedule(b.schedule);
+      u.scheduleBy = ''; u.scheduleAt = new Date().toISOString();
       await users().setJSON(u.email, u);
       return json({ user: publicUser(u) });
     }
@@ -242,6 +243,14 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       u.hash = hashPassword(password, u.salt);
       await users().setJSON(email, u);
       return json({ ok: true });
+    }
+    // Propriétaire : un superviseur (ou l'admin) peut changer l'horaire d'un employé. L'employé est averti.
+    if (b.action === 'schedule') {
+      u.schedule = cleanSchedule(b.schedule);
+      u.scheduleBy = me.name; u.scheduleAt = new Date().toISOString();
+      await users().setJSON(email, u);
+      if (email !== me.email && !b.quiet) { try { await sendTo(email, (T) => ({ ...T.sched(me.name), tag: 'sched', url: './#horaire' })); } catch { /* jamais bloquant */ } }
+      return json({ user: publicUser(u) });
     }
     if (b.action === 'remove') {
       if (email === me.email) return json({ error: 'self' }, 400);
@@ -524,6 +533,80 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     return json({ error: 'action' }, 400);
   }
 
+  // ---------- Changements d'un jour et tâches spéciales (superviseurs, propriétaire) ----------
+  //  ov:<courriel> → { 'AAAA-MM-JJ': { start, end, by } | { off: true, by } }
+  //  tasks:<date>  → [{ id, title, time, minutes, who: courriel | '*', by, at }]
+  const plans = () => getStore('plan');
+  const dayName = (d, lang) => new Date(`${d}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+  async function planApi(req, me) {
+    const params = new URL(req.url).searchParams;
+    if (req.method === 'GET') {
+      const from = params.get('from') || localDay(Date.now()), to = params.get('to') || from;
+      if (!DATE.test(from) || !DATE.test(to)) return json({ error: 'invalid' }, 400);
+      const dates = [];
+      for (let d = new Date(`${from}T12:00:00Z`); dates.length < 60; d.setUTCDate(d.getUTCDate() + 1)) { const iso = d.toISOString().slice(0, 10); if (iso > to) break; dates.push(iso); }
+      const team = params.has('team') && lead(me);
+      const tasks = (await Promise.all(dates.map((d) => plans().get(`tasks:${d}`, { type: 'json' })))).flat().filter(Boolean)
+        .filter((x) => team || x.who === '*' || x.who === me.email);
+      const overrides = {};
+      if (team) {
+        const { blobs } = await plans().list();
+        for (const { key } of blobs.filter((x) => x.key.startsWith('ov:'))) {
+          const all = (await plans().get(key, { type: 'json' })) || {};
+          const inRange = Object.fromEntries(Object.entries(all).filter(([d]) => d >= from && d <= to));
+          if (Object.keys(inRange).length) overrides[key.slice(3)] = inRange;
+        }
+      } else {
+        const all = (await plans().get(`ov:${me.email}`, { type: 'json' })) || {};
+        overrides[me.email] = Object.fromEntries(Object.entries(all).filter(([d]) => d >= from && d <= to));
+      }
+      return json({ overrides, tasks });
+    }
+    if (!lead(me)) return json({ error: 'boss' }, 403);
+    const b = await body(req);
+    const date = String(b.date || '');
+    if (!DATE.test(date)) return json({ error: 'invalid' }, 400);
+    const rec = async (email) => (await pushes().get(email, { type: 'json' }))?.lang || 'fr';
+    if (b.action === 'override') {
+      const email = String(b.email || '').trim().toLowerCase();
+      const u = await users().get(email, { type: 'json' });
+      if (!u || u.removed) return json({ error: 'user' }, 404);
+      const all = (await plans().get(`ov:${email}`, { type: 'json' })) || {};
+      if (b.clear) delete all[date];
+      else if (b.off) all[date] = { off: true, by: me.name };
+      else if (HHMM.test(b.start) && HHMM.test(b.end) && b.start !== b.end) all[date] = { start: b.start, end: b.end, by: me.name };
+      else return json({ error: 'invalid' }, 400);
+      await plans().setJSON(`ov:${email}`, all);
+      if (email !== me.email) { const L = await rec(email); try { await sendTo(email, (T) => ({ ...T.day(me.name, dayName(date, L)), tag: `ov-${date}`, url: './#horaire' })); } catch { /* ignore */ } }
+      return json({ ok: true });
+    }
+    if (b.action === 'task') {
+      const title = String(b.title || '').trim().slice(0, 80);
+      const who = b.who === '*' ? '*' : String(b.who || '').trim().toLowerCase();
+      if (!title || !who || (b.time && !HHMM.test(b.time))) return json({ error: 'invalid' }, 400);
+      const minutes = Math.max(5, Math.min(240, Number(b.minutes) || 15));
+      const list = (await plans().get(`tasks:${date}`, { type: 'json' })) || [];
+      const task = { id: randomBytes(5).toString('hex'), date, title, time: b.time || '', minutes, who, by: me.name, at: new Date().toISOString() };
+      await plans().setJSON(`tasks:${date}`, [...list, task].slice(0, 60));
+      // Avertir : une personne, ou tous ceux qui travaillent ce jour-là (d'après leur horaire).
+      let targets = [];
+      if (who === '*') {
+        const { blobs } = await users().list();
+        const wd = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
+        const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
+        targets = all.filter((u) => u && !u.removed && cleanSchedule(u.schedule)[String(wd)]).map((u) => u.email);
+      } else targets = [who];
+      for (const email of targets.filter((e) => e !== me.email)) { try { await sendTo(email, (T) => ({ ...T.task(me.name, title, task.time), tag: `task-${task.id}`, url: './' })); } catch { /* ignore */ } }
+      return json({ task });
+    }
+    if (b.action === 'deltask') {
+      const list = (await plans().get(`tasks:${date}`, { type: 'json' })) || [];
+      await plans().setJSON(`tasks:${date}`, list.filter((x) => x.id !== b.id));
+      return json({ ok: true });
+    }
+    return json({ error: 'action' }, 400);
+  }
+
   // ---------- Avis de l'admin sur les mises à jour (lus par Claude pour la suite) ----------
   async function feedbackApi(req, me) {
     if (me?.role !== 'admin') return json({ error: 'admin' }, 403);
@@ -545,7 +628,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const route = new URL(req.url).pathname.replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'auth') return await auth(req);
-      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi };
+      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi, plan: planApi };
       if (!routes[route]) return json({ error: 'route' }, 404);
       const me = await currentUser(req);
       if (!me) return json({ error: 'auth' }, 401);

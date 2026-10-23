@@ -46,7 +46,7 @@ const save = () => {
 let plan = null;
 // Le plan du quart en cours, avec le pointage en premier : coché tout seul en commençant (jamais à zéro).
 function shiftPlan(st) {
-  const p = planOf({ ...st, lang: lang() });
+  const p = planOf({ ...st, lang: lang(), who: myEmail() });
   const S = p.items[0]?.start ?? 0;
   p.forKey = `${st.date}|${st.start}|${st.end}`;
   p.items.unshift({ id: 'pointage', kind: 'task', auto: true, minutes: 0, start: S, end: S, area: 'gym', reminders: [], steps: [], tips: [], title: t('punchTitle'), summary: t('punchSub') });
@@ -426,8 +426,18 @@ function specialFor(iso) {
 }
 // Un plan de quart : celui du manuel, ou, pour un quart spécial, seulement ses tâches
 // (un titre chacune, rien d'autre), réparties sur les heures du quart.
-function planOf({ special = '', custom = [], ...args }) {
+function planOf({ special = '', custom = [], who = '', ...args }) {
   const p = withCustom(specialPlan(buildPlan(args), special, args.lang), custom);
+  // Les tâches spéciales d'un superviseur, à leur heure (ou au début du quart si pas d'heure).
+  const add = who ? assignedFor(args.date, who) : [];
+  if (add.length) {
+    for (const x of add) {
+      let st = x.time ? toMin(x.time) : p.start;
+      if (p.end > 1440 && st < p.start) st += 1440;
+      p.items.push({ id: `as-${x.id}`, kind: 'task', minutes: x.minutes, start: st, end: st + x.minutes, area: 'gym', assigned: true, by: x.by, reminders: [], steps: [], tips: [], title: x.title, summary: t('assignedBy', x.by) });
+    }
+    p.items.sort((a, b) => a.start - b.start);
+  }
   return p;
 }
 function specialPlan(p, special, L0) {
@@ -522,15 +532,47 @@ function adoptSchedule(u) {
   if (u.schedule && Object.keys(u.schedule).length) {
     if (JSON.stringify(u.schedule) === JSON.stringify(mySchedule())) return;
     saveSchedule(u.schedule, { push: false });
+    if (u.scheduleBy && u.scheduleAt && u.scheduleAt !== prefs.schedSeenAt) { prefs.schedSeenAt = u.scheduleAt; savePrefs(); setTimeout(() => toast(t('schedChangedBy', u.scheduleBy)), 900); }
     if (current === 'auth') paintFront();
     if (current === 'history') renderHistory({ animate: false });
   } else if (mySchedule() && Object.keys(mySchedule()).length) pushSchedule(mySchedule());
 }
-authEvents.user = adoptSchedule;
+authEvents.user = (u) => { adoptSchedule(u); refreshExtras(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshExtras(); });
 const dowOf = (iso) => (dateOf(iso).getDay() + 6) % 7; // 0 = lundi
 // Un jour = un quart habituel (id) ou des heures perso { start, end }.
 const presetOf = (v) => (v && typeof v === 'object' ? { id: 'custom', start: v.start, end: v.end } : PRESETS.find((p) => p.id === v) || null);
-const todaySched = () => specialFor(todayISO()) || presetOf(mySchedule()?.[dowOf(todayISO())]);
+// Propriétaire : un superviseur peut changer un seul jour (heures ou congé) et ajouter des tâches
+// à une heure précise. On les garde ici (copie du serveur) pour que tout l'app en tienne compte.
+const EXTRAS = 'gym-plan-extras';
+let extras = read(EXTRAS, { overrides: {}, tasks: [] });
+let teamPlan = { overrides: {}, tasks: [], from: '', to: '' }; // superviseur : les changements de toute l'équipe
+const myEmail = () => session.user?.email || '';
+function mySched(date) {
+  const ov = extras.overrides?.[date];
+  if (ov) return ov.off ? null : { id: 'custom', start: ov.start, end: ov.end, by: ov.by || '', changed: true };
+  return specialFor(date) || presetOf(mySchedule()?.[dowOf(date)]);
+}
+async function refreshExtras() {
+  if (session.mode !== 'accounts' || !session.token || prefs.simNew || prefs.simShift) return;
+  const today = todayISO();
+  try {
+    const r = await request(`plan?from=${addDays(today, -2)}&to=${addDays(today, 28)}`);
+    const next = { overrides: r.overrides?.[myEmail()] || {}, tasks: r.tasks || [] };
+    if (JSON.stringify(next) === JSON.stringify(extras)) return;
+    extras = next; write(EXTRAS, extras);
+    refreshScheduleStatus();
+    if (state) { plan = shiftPlan(state); if (current === 'checklist') renderChecklist(); }
+    if (current === 'hub') renderHub({ animate: false });
+    if (current === 'plan') renderPlan({ animate: false });
+  } catch { /* serveur pas à jour ou hors ligne : on garde la copie */ }
+}
+// Les tâches ajoutées par un superviseur, pour une personne et une date (dans son plan, à leur heure).
+function assignedFor(date, email) {
+  const pool = email && email !== myEmail() ? (teamPlan.tasks || []) : (extras.tasks || []);
+  return pool.filter((x) => x.date === date && (x.who === '*' || x.who === email));
+}
+const todaySched = () => mySched(todayISO());
 // Le prochain quart à l'horaire. ready : on peut le partir, de 30 min avant le début jusqu'à la fin.
 const EARLY_MIN = 30;
 const nb = (x) => String(x).replace(/ /g, '\u00a0'); // « 7 h 30 » ne se coupe pas
@@ -542,7 +584,7 @@ function nextShift() {
   const today = todayISO();
   for (let i = 0; i < 8; i++) {
     const date = addDays(today, i);
-    const p = specialFor(date) || presetOf(sc[dowOf(date)]);
+    const p = mySched(date);
     if (!p?.start || !p?.end) continue;
     if (i > 0) return { ...p, date, ready: false };
     const s0 = toMin(p.start);
@@ -586,11 +628,11 @@ function schedEditor(sc) {
 }
 // Pas encore d'horaire : un choix rapide (le quart habituel + les jours, lundi à vendredi déjà cochés).
 // L'horaire jour par jour reste à un toucher, mais ce n'est pas le chemin par défaut.
-function openQuickSchedule({ first = false } = {}) {
+function openQuickSchedule({ first = false, target = null } = {}) {
   // Propriétaire : un toucher par jour. Chaque jour a ses choix : Congé, les quarts habituels
   // (Jour, Soir, Soir court) ou « Autre » pour des heures à soi. Chaque jour peut être différent.
   const days = WEEKDAYS[lang()];
-  const old = mySchedule() || {};
+  const old = (target ? target.schedule : mySchedule()) || {};
   const modeOf = (v) => (v?.start ? (PRESETS.find((p) => p.start === v.start && p.end === v.end)?.id || 'custom') : 'off');
   let lastCustom = { start: '15:00', end: '21:00' };
   const pick = Object.fromEntries(days.map((_, i) => {
@@ -626,7 +668,7 @@ function openQuickSchedule({ first = false } = {}) {
     const n = on.length;
     $('#qsSave').textContent = n ? t('qsSaveN', n) : t('qsSave');
   };
-  openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${esc(t('qsTitle'))}</h2><p class="lede">${esc(t('qsLede2'))}</p></div>
+  openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${esc(target ? t('qsTitleFor', target.name.split(' ')[0]) : t('qsTitle'))}</h2><p class="lede">${esc(target ? t('qsLedeFor') : t('qsLede2'))}</p></div>
     <div class="qs-list2">${days.map(row).join('')}</div>`, (root) => {
     paint(root);
     root.addEventListener('click', (e) => {
@@ -652,8 +694,15 @@ function openQuickSchedule({ first = false } = {}) {
       if (d.start && d.end) lastCustom = { start: d.start, end: d.end };
       paint(root);
     });
-    $('#qsSave').onclick = () => {
-      saveSchedule(Object.fromEntries(Object.entries(pick).filter(([, d]) => d.mode !== 'off').map(([i, d]) => [i, { start: d.start, end: d.end }])));
+    $('#qsSave').onclick = async () => {
+      const chosen = Object.fromEntries(Object.entries(pick).filter(([, d]) => d.mode !== 'off').map(([i, d]) => [i, { start: d.start, end: d.end }]));
+      if (target) { // un superviseur change l'horaire d'un employé (il est averti)
+        try { const r = await request('users', { method: 'POST', body: { action: 'schedule', email: target.email, schedule: chosen } }); Object.assign(target, r.user || { schedule: chosen }); }
+        catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+        closeSheet(); toast(t('dayEditDone', target.name.split(' ')[0])); sfx('save'); rerenderBossViews();
+        return;
+      }
+      saveSchedule(chosen);
       // Un quart en cours aujourd'hui prend les nouvelles heures du jour (les tâches cochées restent).
       const td = pick[dowOf(todayISO())];
       if (state && state.date === todayISO() && td.mode !== 'off' && (td.start !== state.start || td.end !== state.end)) {
@@ -2796,7 +2845,8 @@ function planCount(s) {
   if (metricsCache.has(s)) return metricsCache.get(s);
   let r = null;
   try {
-    const p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, custom: s.custom, lang: lang() });
+    const own = (s.name || '').trim().toLowerCase() === (shiftName() || '').trim().toLowerCase();
+    const p = planOf({ shift: s.shift, date: s.date, start: s.start || SHIFTS[s.shift].start, end: s.end || SHIFTS[s.shift].end, special: s.special, custom: s.custom, lang: lang(), who: own ? myEmail() : '' });
     const st = new Map((s.items || []).map((i) => [i.id, i.status]));
     const ids = p.items.filter((x) => x.kind === 'task').map((x) => x.id);
     if (ids.length) r = { done: ids.filter((id) => st.get(id) === 'done').length, total: ids.length };
@@ -3292,7 +3342,7 @@ function dashStats() {
   const today = todayISO(), mon = mondayOf(today);
   const mine = myDoneShifts();
   const sc = mySchedule() || {};
-  const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => specialFor(addDays(mon, i)) || presetOf(sc[i])).length;
+  const planned = [0, 1, 2, 3, 4, 5, 6].filter((i) => mySched(addDays(mon, i))).length;
   const week = new Set(mine.filter((x) => x.date >= mon && x.date <= today).map((x) => x.date)).size;
   const span = mine.filter((x) => x.date >= addDays(today, -29));
   const tot = span.reduce((a, x) => a + metrics(x).total, 0), dn = span.reduce((a, x) => a + metrics(x).done, 0);
@@ -3314,7 +3364,7 @@ function upcomingShifts(skip, n = 4) {
   const out = [];
   for (let i = 0; i < 28 && out.length < n; i++) {
     const d = addDays(today, i);
-    const p = specialFor(d) || presetOf(sc[dowOf(d)]);
+    const p = mySched(d);
     if (!p?.start) continue;
     if (d === today && (editableShift() || nowMin >= toMin(p.end))) continue;
     if (d === skip && state?.date === d) continue; // le quart déjà ouvert vit dans la carte du haut
@@ -3360,7 +3410,7 @@ function dashWeek() {
   const names = WEEKDAYS[lang()];
   return `<ol class="dw">${[0, 1, 2, 3, 4, 5, 6].map((i) => {
     const d = addDays(mon, i);
-    const p = specialFor(d) || presetOf(sc[i]);
+    const p = mySched(d);
     const done = doneDays.has(d);
     const cls = ['dw-day', d === today && 'today', p && 'on', done && 'done', d < today && 'past'].filter(Boolean).join(' ');
     const label = `${cap(names[i])}${p ? ` ${f(toMin(p.start))} – ${f(toMin(p.end))}` : ` ${t('schedOff')}`}${done ? ` ✓` : ''}`;
@@ -3383,7 +3433,7 @@ function upcomingList(skip = '') {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const rows = weekDates(hist.up).map((d) => {
-    const p = specialFor(d) || presetOf(sc[dowOf(d)]);
+    const p = mySched(d);
     if (!p?.start || d < today || d === skip) return '';
     if (d === today && (editableShift() || nowMin >= toMin(p.end))) return '';
     const left = Math.ceil((startAt({ date: d, start: p.start }) - Date.now()) / 6e4);
@@ -3547,7 +3597,7 @@ $('#historyBody').addEventListener('click', (ev) => {
     });
     return;
   }
-  if (ds.up) { const p = specialFor(ds.up) || presetOf(mySchedule()?.[dowOf(ds.up)]); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
+  if (ds.up) { const p = mySched(ds.up); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
   if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
   if (ds.hby) { hist.by = ds.hby; hist.who = ''; sfx('tab'); renderHistory({ animate: false }); return; }
@@ -4726,23 +4776,30 @@ function myShiftTarget() {
 }
 // Le quart d'un employé de l'équipe ce jour-là (pour le superviseur), d'après son horaire.
 function teamTarget(u, date) {
+  const ov = teamPlan.overrides?.[u.email]?.[date];
+  if (ov?.off) return null;
   const v = u.schedule?.[dowOf(date)] ?? u.schedule?.[String(dowOf(date))];
-  const p = presetOf(v);
+  const p = ov ? { start: ov.start, end: ov.end } : presetOf(v);
   if (!p?.start) return null;
   const sp = SPECIALS.find((x) => x.names?.includes(firstName(u.name)) && x.weekday === dowOf(date));
-  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email };
+  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, changed: Boolean(ov), by: ov?.by || '' };
+}
+async function refreshTeamPlan(from, to) {
+  try { const r = await request(`plan?team=1&from=${from}&to=${to}`); teamPlan = { overrides: r.overrides || {}, tasks: r.tasks || [], from, to }; return true; } catch { return false; }
 }
 // Ce qu'il faut savoir d'un quart, en quelques lignes : la zone, les miroirs ou tuiles,
 // la tâche de la semaine, les pauses, le compost. Tout vient du plan (js/planner.js).
 function shiftFacts(tg) {
   const shift = detectShift(tg.start, tg.end);
-  const p = planOf({ shift, date: tg.date, start: tg.start, end: tg.end, special: tg.special, custom: tg.custom || [], lang: lang() });
+  const p = planOf({ shift, date: tg.date, start: tg.start, end: tg.end, special: tg.special, custom: tg.custom || [], lang: lang(), who: tg.email || (tg.mine ? myEmail() : '') });
   const items = p.items;
   const tasks = items.filter((i) => i.kind === 'task');
   const work = tasks.reduce((a, i) => a + (i.minutes || 0), 0);
   const find = (re) => items.find((i) => re.test(i.id || ''));
   const facts = [];
   if (tg.special) facts.push({ k: 'star', label: t('glSpecial'), value: tasks.map((x) => x.title).join(' + ') });
+  const asg = tasks.filter((x) => x.assigned);
+  if (asg.length) facts.unshift({ k: 'star', label: t('glAssigned'), value: asg.map((x) => `${x.title}${x.start ? ` · ${nb(f(x.start))}` : ''}`).join(' + '), sub: t('assignedBy', asg[0].by) });
   const deep = find(/-profondeur$/);
   if (deep) {
     const z = dayInfo(tg.date).zones[shift];
@@ -4788,6 +4845,7 @@ function frontStatus() {
 const hub = { anim: true };
 function openHub({ keep = false } = {}) {
   if (!session.user) { goFront(); return; }
+  refreshExtras();
   paintStatic();
   renderHub({ animate: !keep });
   show('hub');
@@ -4803,6 +4861,7 @@ async function refreshHub() {
     const [pr, tm] = await Promise.allSettled([listProblems(), listTeam()]);
     if (pr.status === 'fulfilled') { boss.problems = pr.value; boss.loaded = true; boss.error = ''; } else if (!boss.loaded) boss.error = pr.reason?.status === 0 ? 'errNetwork' : 'errServer';
     if (tm.status === 'fulfilled') { boss.team = tm.value; boss.teamLoaded = true; }
+    await refreshTeamPlan(todayISO(), addDays(todayISO(), 13));
     paintBossCount();
   } else if (!hist.loaded) {
     const r = await loadRecent(500).catch(() => null);
@@ -4863,6 +4922,7 @@ function hubMainCard(tg) {
   const when = today ? t('sendAtTime', hm(tg.start)) : t('sendAtDay', dayWord(tg.date).toLowerCase(), hm(tg.start));
   return `<section class="hb-main${tg.ready ? ' is-now' : ''}" id="hbMain">${head(esc(t(tg.ready ? 'hbNow' : 'hbNext')), chip)}
     <button type="button" class="hb-cta" data-hub="start"><span>${esc(t(tg.ready || today ? 'hbStart' : 'hbOpen'))}</span>${HUB_ICO.play}</button>
+    ${tg.changed && tg.by ? `<p class="hb-note hb-changed">${esc(t('hbChangedBy', tg.by))}</p>` : ''}
     ${later ? `<p class="hb-note">${esc(t('hbEarly', when))}</p>` : ''}</section>`;
 }
 function factHTML(x) {
@@ -4984,9 +5044,11 @@ function hubBoss() {
 function personRow(tg) {
   const F = shiftFacts(tg);
   const chips = F.facts.filter((x) => ['star', 'zone', 'mirror', 'week'].includes(x.k)).map((x) => `<span class="tw-chip k-${x.k}">${esc(x.k === 'zone' ? x.value : x.k === 'week' ? x.value.split(/[.;]/)[0] : x.value)}</span>`).join('');
+  const nTask = assignedFor(tg.date, tg.email).length;
+  const extra = `${tg.changed ? `<span class="tw-chip k-changed">${esc(t('twChanged'))}</span>` : ''}${nTask ? `<span class="tw-chip k-task">${esc(t('twTasks', nTask))}</span>` : ''}`;
   return `<button type="button" class="tw-person" data-glance="${esc(JSON.stringify(tg))}">
     <span class="tw-av" aria-hidden="true">${esc((tg.name[0] || '?').toUpperCase())}</span>
-    <span class="tw-who"><b>${esc(tg.name)}</b><small class="num">${hm(tg.start)} – ${hm(tg.end)} · ${esc(SHIFTS[F.shift][lang()].short)}</small><span class="tw-chips">${chips}</span></span>${CHEV_R}</button>`;
+    <span class="tw-who"><b>${esc(tg.name)}</b><small class="num">${hm(tg.start)} – ${hm(tg.end)} · ${esc(SHIFTS[F.shift][lang()].short)}</small><span class="tw-chips">${extra}${chips}</span></span>${CHEV_R}</button>`;
 }
 
 // ---------- « Ton quart en un coup d'œil » : la page ----------
@@ -5015,7 +5077,14 @@ function renderGlance() {
       <span class="gl-min num">${esc(hours(i.minutes || 0))}</span></li>`;
   }).join('');
   const live = own && tg.live;
-  const cta = own ? `<button type="button" class="btn primary big gl-cta" data-hub="${live ? (shiftOver() ? 'finish' : 'tasks') : 'start'}">${esc(t(live ? (shiftOver() ? 'hbSend' : 'hbResume') : 'glStartThis'))}</button>` : '';
+  const bossActs = !own && tg.email && isBoss() && tg.date >= todayISO()
+    ? `<div class="gl-boss"><p class="block-label">${esc(t('glBossActs', tg.name))}</p><div class="gl-bossbtns">
+        <button type="button" class="btn ghost" data-gl-act="day">${HUB_ICO.plan}<span>${esc(t('glActDay'))}</span></button>
+        <button type="button" class="btn ghost" data-gl-act="week">${HUB_ICO.team}<span>${esc(t('glActWeek'))}</span></button>
+        <button type="button" class="btn primary" data-gl-act="task">${HUB_ICO.star}<span>${esc(t('glActTask'))}</span></button></div>
+        ${assignedFor(tg.date, tg.email).filter((x) => x.who !== '*').map((x) => `<span class="tw-task">${hubIco('star')}<span><b>${esc(x.title)}</b><small>${esc([x.time && hm(x.time), x.by].filter(Boolean).join(' · '))}</small></span><button type="button" class="link danger" data-deltask="${esc(x.id)}" data-date="${tg.date}" aria-label="${esc(t('remove'))}">✕</button></span>`).join('')}</div>`
+    : '';
+  const cta = own ? `<button type="button" class="btn primary big gl-cta" data-hub="${live ? (shiftOver() ? 'finish' : 'tasks') : 'start'}">${esc(t(live ? (shiftOver() ? 'hbSend' : 'hbResume') : 'glStartThis'))}</button>` : bossActs;
   $('#glanceBody').innerHTML = `<div class="gl-wrap${reducedMotion() ? '' : ' cascade'}">
     <div class="gl-facts">${F.facts.map(factHTML).join('')}</div>
     <div class="gl-sum">${shiftBar(F.items)}<p class="num">${esc(t('glCount', F.tasks.length, hours(F.work)))}</p></div>
@@ -5087,7 +5156,7 @@ $('#planBody').addEventListener('click', (ev) => {
   const up = ev.target.closest('[data-up]');
   if (!up) return;
   const d = up.dataset.up;
-  const p = specialFor(d) || presetOf(mySchedule()?.[dowOf(d)]);
+  const p = mySched(d);
   if (p) openGlance({ mine: true, live: Boolean(state && state.date === d), date: d, start: p.start, end: p.end, special: p.special || '' });
 });
 
@@ -5143,6 +5212,7 @@ async function openTeamWeek({ keep = false } = {}) {
   renderTeamWeek({ animate: !keep });
   show('teamweek');
   try { boss.team = await listTeam(); boss.teamLoaded = true; } catch { boss.teamLoaded = true; }
+  await refreshTeamPlan(mondayOf(todayISO()), addDays(mondayOf(todayISO()), 13));
   if (current === 'teamweek') renderTeamWeek({ animate: false });
 }
 function renderTeamWeek({ animate = true } = {}) {
@@ -5155,7 +5225,9 @@ function renderTeamWeek({ animate = true } = {}) {
     const past = d < todayISO();
     return `<section class="tw-dayc${d === todayISO() ? ' today' : ''}${past ? ' past' : ''}" style="--k:${i}">
       <h3><span>${esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long' })))}</span><small class="num">${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
-      ${people.length ? `<div class="tw-people">${people.map(personRow).join('')}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}</section>`;
+      ${people.length ? `<div class="tw-people">${people.map(personRow).join('')}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
+      ${allTasks(d)}
+      ${past ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
   }).join('');
   $('#teamBody').innerHTML = `<p class="page-lede">${esc(t('twLede'))}</p>
     <div class="segmented tw-tabs" role="tablist">
@@ -5164,6 +5236,112 @@ function renderTeamWeek({ animate = true } = {}) {
     </div>
     ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>' : any ? `<div class="tw-days${animate && !reducedMotion() ? ' cascade' : ''}">${days}</div><p class="section-note">${esc(t('twHint'))}</p>` : `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('twEmpty'))}</p></div>`}`;
 }
+// Les tâches « tout le monde ce jour-là » d'une journée (les tâches d'une personne sont sur sa ligne).
+function allTasks(d) {
+  const list = (teamPlan.tasks || []).filter((x) => x.date === d && x.who === '*');
+  return list.length ? `<div class="tw-alltasks">${list.map((x) => `<span class="tw-task">${hubIco('star')}<span><b>${esc(x.title)}</b><small>${esc([x.time && hm(x.time), t('twEveryone'), x.by].filter(Boolean).join(' · '))}</small></span><button type="button" class="link danger" data-deltask="${esc(x.id)}" data-date="${d}" aria-label="${esc(t('remove'))}">✕</button></span>`).join('')}</div>` : '';
+}
+const teamUser = (email) => (boss.team || []).find((u) => u.email === email);
+const shiftOpts = (cur) => `<div class="qs-opts">${[['off', t('qsOff'), ''], ...PRESETS.map((p) => [p.id, presetName(p.id), `${nb(f(toMin(p.start)))}–${nb(f(toMin(p.end)))}`]), ['custom', t('qsOther'), '']].map(([id, l, sub]) => `<button type="button" class="qs-opt${id === 'off' ? ' off' : ''}" data-dm="${id}" aria-pressed="${cur === id}"><b>${esc(l)}</b>${sub ? `<small class="num">${sub}</small>` : ''}</button>`).join('')}</div>`;
+// Changer un seul jour pour un employé (heures ou congé). Il est averti.
+function openDayEdit(email, date) {
+  const u = teamUser(email); if (!u) return;
+  const cur = teamTarget(u, date);
+  const ov = teamPlan.overrides?.[email]?.[date];
+  let mode = ov?.off ? 'off' : cur ? (PRESETS.find((p) => p.start === cur.start && p.end === cur.end)?.id || 'custom') : 'off';
+  let hrs = cur ? { start: cur.start, end: cur.end } : { start: '16:30', end: '23:00' };
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${ICON.clock}${esc(t('dayEditEyebrow'))}</p><h2>${esc(`${u.name.split(' ')[0]} · ${cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }))}`)}</h2><p class="lede">${esc(t('dayEditLede'))}</p></div>
+    ${shiftOpts(mode)}
+    <div class="qs-times" id="deTimes"${mode === 'custom' ? '' : ' hidden'}><span>${esc(t('qsFromShort'))}</span><input type="time" step="900" id="deStart" value="${hrs.start}"><span>${esc(t('qsToShort'))}</span><input type="time" step="900" id="deEnd" value="${hrs.end}"></div>
+    ${ov ? `<button type="button" class="btn ghost" id="deClear">${esc(t('dayEditClear'))}</button>` : ''}`, (root) => {
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-dm]'); if (!b) return;
+      mode = b.dataset.dm;
+      if (mode !== 'off' && mode !== 'custom') { const p = presetOf(mode); hrs = { start: p.start, end: p.end }; }
+      for (const o of root.querySelectorAll('[data-dm]')) o.setAttribute('aria-pressed', String(o === b));
+      root.querySelector('#deTimes').hidden = mode !== 'custom'; sfx('tap');
+    });
+    root.querySelector('#deClear')?.addEventListener('click', () => saveDay({ clear: true }));
+    $('#deSave').onclick = () => {
+      if (mode === 'custom') hrs = { start: root.querySelector('#deStart').value, end: root.querySelector('#deEnd').value };
+      saveDay(mode === 'off' ? { off: true } : hrs);
+    };
+  }, `<button type="button" class="btn primary" id="deSave">${esc(t('dayEditSave'))}</button>`);
+  async function saveDay(body) {
+    try { await request('plan', { method: 'POST', body: { action: 'override', email, date, ...body } }); }
+    catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+    closeSheet(); toast(t('dayEditDone', u.name.split(' ')[0])); sfx('save');
+    await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
+    rerenderBossViews();
+  }
+}
+// Ajouter une tâche spéciale, à une heure : une personne, ou tout le monde ce jour-là.
+function openTaskSheet(date, preWho = '') {
+  const people = (boss.team || []).filter((u) => !u.removed && (u.role === 'employee' || (u.schedule && Object.keys(u.schedule).length)));
+  let who = preWho || '*';
+  let mins = 15;
+  const working = (boss.team || []).map((u) => teamTarget(u, date) ? u.email : '').filter(Boolean);
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${hubIco('star')}${esc(t('taskEyebrow'))}</p><h2>${esc(cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</h2><p class="lede">${esc(t('taskLede'))}</p></div>
+    <label class="field"><span>${esc(t('taskWhat'))}</span><input id="tkTitle" type="text" maxlength="80" placeholder="${esc(t('taskWhatPh'))}"></label>
+    <div class="field"><span>${esc(t('taskWhen'))}</span><div class="tk-when"><input id="tkTime" type="time" step="300"><small>${esc(t('taskWhenHint'))}</small></div></div>
+    <div class="field"><span>${esc(t('taskHowLong'))}</span><div class="segmented tiny" role="radiogroup">${[10, 15, 30, 45, 60].map((m) => `<button type="button" role="radio" data-tkm="${m}" aria-checked="${m === mins}">${m} min</button>`).join('')}</div></div>
+    <div class="field"><span>${esc(t('taskWho'))}</span>
+      <div class="tk-who">
+        <button type="button" class="tk-person" data-tkw="*" aria-pressed="${who === '*'}"><span class="tw-av">★</span><b>${esc(t('twEveryone'))}</b><small>${esc(t('taskEveryoneSub', working.length))}</small></button>
+        ${people.map((u) => `<button type="button" class="tk-person" data-tkw="${esc(u.email)}" aria-pressed="${who === u.email}"><span class="tw-av">${esc((u.name[0] || '?').toUpperCase())}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(working.includes(u.email) ? (() => { const tg = teamTarget(u, date); return `${f(toMin(tg.start))} – ${f(toMin(tg.end))}`; })() : t('twOffThatDay'))}</small></button>`).join('')}
+      </div></div>`, (root) => {
+    root.addEventListener('click', (e) => {
+      const m = e.target.closest('[data-tkm]');
+      if (m) { mins = Number(m.dataset.tkm); for (const o of root.querySelectorAll('[data-tkm]')) o.setAttribute('aria-checked', String(o === m)); sfx('tap'); return; }
+      const w = e.target.closest('[data-tkw]');
+      if (w) { who = w.dataset.tkw; for (const o of root.querySelectorAll('[data-tkw]')) o.setAttribute('aria-pressed', String(o === w)); sfx('tap'); }
+    });
+    setTimeout(() => root.querySelector('#tkTitle')?.focus({ preventScroll: true }), 350);
+    $('#tkSave').onclick = async () => {
+      const title = root.querySelector('#tkTitle').value.trim();
+      if (!title) { root.querySelector('#tkTitle').focus(); toast(t('taskNeedTitle'), 'muted'); return; }
+      try { await request('plan', { method: 'POST', body: { action: 'task', date, title, time: root.querySelector('#tkTime').value || '', minutes: mins, who } }); }
+      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      closeSheet(); toast(t('taskAdded')); sfx('save');
+      await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
+      rerenderBossViews();
+    };
+  }, `<button type="button" class="btn primary" id="tkSave">${esc(t('taskSave'))}</button>`);
+}
+// Ajouter quelqu'un un jour où il ne travaille pas : choisir la personne, puis ses heures.
+function openAddPerson(date) {
+  const off = (boss.team || []).filter((u) => !u.removed && !teamTarget(u, date));
+  openSheet(`<div class="sheet-head"><h2>${esc(t('addPersonTitle'))}</h2><p class="lede">${esc(cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</p></div>
+    <div class="tk-who">${off.map((u) => `<button type="button" class="tk-person" data-ap="${esc(u.email)}"><span class="tw-av">${esc((u.name[0] || '?').toUpperCase())}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(roleName(u.role))}</small></button>`).join('') || `<p class="hb-quiet">${esc(t('addPersonNone'))}</p>`}</div>`, (root) => {
+    root.addEventListener('click', (e) => { const b = e.target.closest('[data-ap]'); if (b) { closeSheet(); setTimeout(() => openDayEdit(b.dataset.ap, date), 340); } });
+  });
+}
+// Changer l'horaire de la semaine d'un employé (même écran que « Mon horaire »).
+function openTeamSchedule(email) {
+  const u = teamUser(email); if (!u) return;
+  openQuickSchedule({ target: u });
+}
+function rerenderBossViews() {
+  if (current === 'teamweek') renderTeamWeek({ animate: false });
+  if (current === 'hub') renderHub({ animate: false });
+  if (current === 'glance' && glanceTarget?.email) { const u = teamUser(glanceTarget.email); const tg = u && teamTarget(u, glanceTarget.date); glanceTarget = tg; if (!tg) { openTeamWeek({ keep: true }); return; } renderGlance(); }
+}
+document.addEventListener('click', async (ev) => {
+  const a = ev.target.closest('[data-addtask], [data-addperson], [data-deltask], [data-gl-act]');
+  if (!a || !isBoss()) return;
+  if (a.dataset.addtask) { openTaskSheet(a.dataset.addtask); return; }
+  if (a.dataset.addperson) { openAddPerson(a.dataset.addperson); return; }
+  if (a.dataset.deltask) {
+    try { await request('plan', { method: 'POST', body: { action: 'deltask', date: a.dataset.date, id: a.dataset.deltask } }); } catch { toast(t('editServer'), 'muted'); return; }
+    await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
+    toast(t('taskRemoved')); rerenderBossViews(); return;
+  }
+  const g = glanceTarget;
+  if (!g?.email) return;
+  if (a.dataset.glAct === 'day') openDayEdit(g.email, g.date);
+  if (a.dataset.glAct === 'week') openTeamSchedule(g.email);
+  if (a.dataset.glAct === 'task') openTaskSheet(g.date, g.email);
+});
 $('#teamBody').addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-tw]');
   if (!b) return;

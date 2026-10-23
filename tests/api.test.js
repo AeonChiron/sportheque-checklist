@@ -19,7 +19,7 @@ test('Inscription : il faut le bon code pour chaque rôle', async () => {
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'marie@x.ca', password: 'secret1', role: 'boss', code: 'equipe' } })).status, 403);
   const ok = await call('auth', { method: 'POST', body: { action: 'signup', name: 'Marie', email: 'Marie@X.ca', password: 'secret1', role: 'employee', code: ' equipe ' } });
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false, schedule: {}, avatar: '' });
+  assert.deepEqual(ok.data.user, { name: 'Marie', email: 'marie@x.ca', role: 'employee', alerts: false, schedule: {}, scheduleBy: '', scheduleAt: '', avatar: '' });
   assert.equal((await call('auth', { method: 'POST', body: { action: 'signup', name: 'M', email: 'marie@x.ca', password: 'secret1', code: 'equipe' } })).status, 409);
   const me = await call('auth', { token: ok.data.token });
   assert.equal(me.data.user.name, 'Marie');
@@ -350,4 +350,36 @@ test('Admin : ses quarts et signalements sont des fantômes (invisibles pour les
   assert.equal((await go('feedback', { update: 'u1', mood: 'bad', good: 'a', bad: 'b' }, boss)).status, 403);
   await go('feedback', { update: 'u1', mood: 'good', good: 'Le bouton', bad: 'Le lapin' }, admin);
   assert.equal((await go('feedback', null, admin)).data.feedback[0].bad, 'Le lapin');
+});
+
+test('Superviseur : change l’horaire d’un employé, un seul jour, et ajoute des tâches; l’employé est averti', async () => {
+  const stores = memoryStores();
+  const sent = [];
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }), push: { async keys() { return { publicKey: 'P', privateKey: 'Q' }; }, async send(sub, payload) { sent.push({ to: sub.endpoint, ...payload }); } } });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const sign = async (name, role, code) => (await go('auth', { action: 'signup', name, email: `${name.toLowerCase()}@x.ca`, password: 'secret1', role, code })).data.token;
+  const boss = await sign('Daniel', 'boss', 'p'), noah = await sign('Noah', 'employee', 'e'), lea = await sign('Lea', 'employee', 'e');
+  await go('push', { action: 'subscribe', sub: { endpoint: 'https://p/noah', keys: { p256dh: 'k', auth: 'a' } } }, noah);
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '16:30', end: '23:00' } } }, lea);
+  // horaire de la semaine
+  assert.equal((await go('users', { action: 'schedule', email: 'noah@x.ca', schedule: { 1: { start: '07:30', end: '15:30' } } }, noah)).status, 403);
+  await go('users', { action: 'schedule', email: 'noah@x.ca', schedule: { 1: { start: '07:30', end: '15:30' } } }, boss);
+  const me = (await go('auth', null, noah)).data.user;
+  assert.equal(me.schedule['1'].start, '07:30');
+  assert.equal(me.scheduleBy, 'Daniel');
+  assert.match(sent.at(-1).title, /horaire/);
+  // un seul jour
+  await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-10-29', start: '18:00', end: '23:00' }, boss);
+  await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-10-30', off: true }, boss);
+  const mine = (await go('plan?from=2026-10-28&to=2026-10-31', null, noah)).data;
+  assert.equal(mine.overrides['noah@x.ca']['2026-10-29'].start, '18:00');
+  assert.equal(mine.overrides['noah@x.ca']['2026-10-30'].off, true);
+  // tâches : une personne, puis tout le monde ce jour-là (jeudi = Léa à l'horaire)
+  await go('plan', { action: 'task', date: '2026-10-29', title: 'Laver la vitrine', time: '19:30', minutes: 20, who: 'noah@x.ca' }, boss);
+  await go('plan', { action: 'task', date: '2026-10-29', title: 'Inventaire', time: '', minutes: 15, who: '*' }, boss);
+  assert.equal((await go('plan?from=2026-10-29&to=2026-10-29', null, noah)).data.tasks.length, 2);
+  assert.equal((await go('plan?from=2026-10-29&to=2026-10-29', null, lea)).data.tasks.length, 1);
+  assert.equal((await go('plan?from=2026-10-29&to=2026-10-29&team=1', null, boss)).data.tasks.length, 2);
+  assert.ok(sent.some((x) => /Laver la vitrine/.test(x.title)));
+  assert.equal((await go('plan', { action: 'task', date: '2026-10-29', title: 'x', who: '*' }, noah)).status, 403);
 });
