@@ -71,7 +71,8 @@ const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-const dayMonth = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
+// « 21 oct. » (pas « 21/10 » : à côté de « 11/11 tâches », ça ressemblait à un score — propriétaire).
+const dayMonth = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(prefs?.lang === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'short' });
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const dateOf = (iso) => new Date(`${iso}T12:00:00`);
 
