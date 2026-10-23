@@ -3175,3 +3175,25 @@ details.mt-card > summary:active { background: var(--sunk); }
 @media (min-width: 1300px) and (min-height: 850px) {
   #auth .pool-top { position: fixed; top: calc(var(--safe-t) + 14px); right: 24px; left: auto; pointer-events: auto; }
 }
+/* Mon horaire : un toucher par jour (propriétaire). */
+.qs-list2 { display: grid; gap: 10px; }
+.qs-row2 { padding: 12px; border-radius: 18px; border: 2px solid var(--line); background: var(--surface); transition: border-color .2s, box-shadow .2s; }
+.qs-row2.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.qs-dayname { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 2px 10px; }
+.qs-dayname b { font: 750 18px/1.1 var(--font); }
+.qs-sum { font: 650 14px/1 var(--display); color: var(--muted); }
+.qs-row2.on .qs-sum { color: var(--accent); }
+.qs-opts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.qs-opt { display: grid; align-content: center; justify-items: center; gap: 3px; min-height: 58px; padding: 6px 4px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--sunk); color: var(--ink); text-align: center; cursor: pointer; transition: transform .15s cubic-bezier(.3, 1.6, .5, 1), background .15s, border-color .15s; }
+.qs-opt b { font: 700 14px/1.1 var(--font); }
+.qs-opt small { font: 600 11.5px/1.15 var(--display); color: var(--muted); }
+.qs-opt:active { transform: scale(.95); }
+.qs-opt[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 8px 16px -10px var(--accent); }
+.qs-opt[aria-pressed="true"] small { color: rgba(255, 255, 255, .88); }
+.qs-opt.off[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); box-shadow: none; }
+.qs-row2 .qs-times { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; animation: mt-open .3s var(--ease) both; }
+.qs-row2 .qs-times[hidden] { display: none; }
+.qs-row2 .qs-times input { flex: 1 1 110px; min-height: 46px; }
+:root[data-theme="dark"] .qs-opt[aria-pressed="true"] { color: #062322; }
+:root[data-theme="dark"] .qs-opt[aria-pressed="true"] small { color: rgba(6, 35, 34, .8); }
+@media (max-width: 380px) { .qs-opt b { font-size: 12.5px; } .qs-opt small { font-size: 10.5px; } .qs-opt { min-height: 54px; } }

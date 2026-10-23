@@ -585,60 +585,76 @@ function schedEditor(sc) {
 // Pas encore d'horaire : un choix rapide (le quart habituel + les jours, lundi à vendredi déjà cochés).
 // L'horaire jour par jour reste à un toucher, mais ce n'est pas le chemin par défaut.
 function openQuickSchedule({ first = false } = {}) {
-  // Les jours d'abord : touche un jour, il demande « de quelle heure à quelle heure ».
-  // Les quarts habituels (Jour, Soir…) servent juste à remplir les heures d'un toucher.
+  // Propriétaire : un toucher par jour. Chaque jour a ses choix : Congé, les quarts habituels
+  // (Jour, Soir, Soir court) ou « Autre » pour des heures à soi. Chaque jour peut être différent.
   const days = WEEKDAYS[lang()];
   const old = mySchedule() || {};
-  const p0 = PRESETS[0];
+  const modeOf = (v) => (v?.start ? (PRESETS.find((p) => p.start === v.start && p.end === v.end)?.id || 'custom') : 'off');
+  let lastCustom = { start: '15:00', end: '21:00' };
   const pick = Object.fromEntries(days.map((_, i) => {
     const v = presetOf(old[i]);
-    return [i, v?.start ? { on: true, start: v.start, end: v.end } : { on: false, start: p0.start, end: p0.end }];
+    const m = modeOf(v);
+    if (m === 'custom') lastCustom = { start: v.start, end: v.end };
+    return [i, { mode: m, start: v?.start || '', end: v?.end || '' }];
   }));
-  const ok = (d) => d.start && d.end && d.start !== d.end;
-  const row = (d, i) => `<div class="qs-row${pick[i].on ? ' on' : ''}" data-row="${i}">
-      <button type="button" class="qs-day" data-qd="${i}" aria-pressed="${pick[i].on}"><span class="qs-box" aria-hidden="true"></span><b>${esc(cap(d))}</b></button>
-      <div class="qs-times"${pick[i].on ? '' : ' hidden'}><span>${esc(t('qsFromShort'))}</span><input type="time" step="900" data-qt="start" data-i="${i}" value="${pick[i].start}" aria-label="${esc(`${cap(d)} · ${t('qsFrom')}`)}"><span>${esc(t('qsToShort'))}</span><input type="time" step="900" data-qt="end" data-i="${i}" value="${pick[i].end}" aria-label="${esc(`${cap(d)} · ${t('qsTo')}`)}"></div>
+  const ok = (d) => d.mode === 'off' || (d.start && d.end && d.start !== d.end);
+  const hm2 = (x) => nb(f(toMin(x)));
+  const opt = (i, id, label, sub) => `<button type="button" class="qs-opt${id === 'off' ? ' off' : ''}" data-qi="${i}" data-qm="${id}" aria-pressed="false"><b>${esc(label)}</b>${sub ? `<small class="num">${sub}</small>` : ''}</button>`;
+  const row = (d, i) => `<div class="qs-row2" data-row="${i}">
+      <div class="qs-dayname"><b>${esc(cap(d))}</b><span class="qs-sum num"></span></div>
+      <div class="qs-opts">
+        ${opt(i, 'off', t('qsOff'), '')}
+        ${PRESETS.map((p) => opt(i, p.id, presetName(p.id), `${hm2(p.start)}–${hm2(p.end)}`)).join('')}
+        ${opt(i, 'custom', t('qsOther'), '')}
+      </div>
+      <div class="qs-times" hidden><span>${esc(t('qsFromShort'))}</span><input type="time" step="900" data-qt="start" data-i="${i}" aria-label="${esc(`${cap(d)} · ${t('qsFrom')}`)}"><span>${esc(t('qsToShort'))}</span><input type="time" step="900" data-qt="end" data-i="${i}" aria-label="${esc(`${cap(d)} · ${t('qsTo')}`)}"></div>
     </div>`;
   const paint = (root) => {
     for (const [i, d] of Object.entries(pick)) {
       const r = root.querySelector(`[data-row="${i}"]`);
-      r.classList.toggle('on', d.on);
-      r.querySelector('[data-qd]').setAttribute('aria-pressed', String(d.on));
-      r.querySelector('.qs-times').hidden = !d.on;
-      for (const inp of r.querySelectorAll('[data-qt]')) if (inp.value !== d[inp.dataset.qt]) inp.value = d[inp.dataset.qt];
+      r.classList.toggle('on', d.mode !== 'off');
+      for (const b of r.querySelectorAll('[data-qm]')) b.setAttribute('aria-pressed', String(b.dataset.qm === d.mode));
+      const tm = r.querySelector('.qs-times');
+      tm.hidden = d.mode !== 'custom';
+      for (const inp of r.querySelectorAll('[data-qt]')) if (inp.value !== d[inp.dataset.qt]) inp.value = d[inp.dataset.qt] || '';
+      r.querySelector('.qs-sum').textContent = d.mode === 'off' ? t('schedOff') : d.start && d.end ? `${f(toMin(d.start))} – ${f(toMin(d.end))}` : '';
     }
-    const on = Object.values(pick).filter((d) => d.on);
-    $('#qsSave').disabled = !on.length || !on.every(ok);
+    const on = Object.values(pick).filter((d) => d.mode !== 'off');
+    $('#qsSave').disabled = !on.length || !Object.values(pick).every(ok);
+    const n = on.length;
+    $('#qsSave').textContent = n ? t('qsSaveN', n) : t('qsSave');
   };
-  openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${esc(t('qsTitle'))}</h2><p class="lede">${esc(t('qsLede'))}</p></div>
-    <div class="qs-list">${days.map(row).join('')}</div>
-    <p class="block-label">${esc(t('qsFill'))}</p>
-    <div class="qs-fill">${PRESETS.map((p) => `<button type="button" class="chip" data-qs="${p.id}"><b>${esc(presetName(p.id))}</b> ${nb(f(toMin(p.start)))}–${nb(f(toMin(p.end)))}</button>`).join('')}</div>`, (root) => {
+  openSheet(`<div class="sheet-head sched-head">${first ? '<img class="sched-mascot" src="icons/rabbit-hello.svg" alt="" draggable="false">' : ''}<p class="eyebrow">${ICON.clock}${t('schedEyebrow')}</p><h2>${esc(t('qsTitle'))}</h2><p class="lede">${esc(t('qsLede2'))}</p></div>
+    <div class="qs-list2">${days.map(row).join('')}</div>`, (root) => {
     paint(root);
     root.addEventListener('click', (e) => {
-      const d1 = e.target.closest('[data-qd]'), s1 = e.target.closest('[data-qs]');
-      if (d1) {
-        const i = Number(d1.dataset.qd);
-        pick[i].on = !pick[i].on; sfx('toggle'); paint(root);
-        if (pick[i].on) root.querySelector(`[data-row="${i}"] [data-qt="start"]`).focus({ preventScroll: true });
-      }
-      if (s1) { // remplit les jours cochés avec ce quart
-        const p = presetOf(s1.dataset.qs);
-        for (const d of Object.values(pick)) if (d.on) { d.start = p.start; d.end = p.end; }
-        clank('step'); paint(root);
-      }
+      const b = e.target.closest('[data-qm]');
+      if (!b) return;
+      const d = pick[b.dataset.qi], m = b.dataset.qm;
+      if (m === 'off') { d.mode = 'off'; sfx('toggle'); }
+      else if (m === 'custom') {
+        d.mode = 'custom';
+        if (!d.start || PRESETS.some((p) => p.start === d.start && p.end === d.end)) { d.start = lastCustom.start; d.end = lastCustom.end; }
+        sfx('tap');
+        paint(root);
+        root.querySelector(`[data-row="${b.dataset.qi}"] [data-qt="start"]`).focus({ preventScroll: true });
+        return;
+      } else { const p = presetOf(m); d.mode = m; d.start = p.start; d.end = p.end; clank('step'); }
+      paint(root);
     });
     root.addEventListener('input', (e) => {
       const inp = e.target.closest('[data-qt]');
       if (!inp) return;
-      pick[inp.dataset.i][inp.dataset.qt] = inp.value;
+      const d = pick[inp.dataset.i];
+      d[inp.dataset.qt] = inp.value;
+      if (d.start && d.end) lastCustom = { start: d.start, end: d.end };
       paint(root);
     });
     $('#qsSave').onclick = () => {
-      saveSchedule(Object.fromEntries(Object.entries(pick).filter(([, d]) => d.on).map(([i, d]) => [i, { start: d.start, end: d.end }])));
+      saveSchedule(Object.fromEntries(Object.entries(pick).filter(([, d]) => d.mode !== 'off').map(([i, d]) => [i, { start: d.start, end: d.end }])));
       // Un quart en cours aujourd'hui prend les nouvelles heures du jour (les tâches cochées restent).
       const td = pick[dowOf(todayISO())];
-      if (state && state.date === todayISO() && td.on && (td.start !== state.start || td.end !== state.end)) {
+      if (state && state.date === todayISO() && td.mode !== 'off' && (td.start !== state.start || td.end !== state.end)) {
         state.start = td.start; state.end = td.end; state.shift = detectShift(td.start, td.end);
         save(); plan = shiftPlan(state);
         if (current === 'checklist') renderChecklist();
@@ -646,6 +662,8 @@ function openQuickSchedule({ first = false } = {}) {
       closeSheet(); toast(t('qsSaved')); setTimeout(() => sfx('save'), 120);
       if (current === 'auth') paintFront();
       if (current === 'history') renderHistory({ animate: false });
+      if (current === 'hub') renderHub({ animate: false });
+      if (current === 'plan') renderPlan({ animate: false });
     };
   }, `<button type="button" class="btn primary" id="qsSave">${esc(t('qsSave'))}</button>`);
 }
