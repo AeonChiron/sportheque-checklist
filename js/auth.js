@@ -5,6 +5,10 @@
 //   'demo'     : démo publique → comptes simulés sur ce téléphone, rien n'est envoyé.
 
 import { CONFIG } from './config.js';
+import { fictiveOn, fictiveUser, fakeRequest, exitFictive } from './fictive.js';
+
+// Équipe fictive (bêta) : un espace à part (clés « fict: ») et un faux serveur dans le navigateur.
+export const FICTIVE = fictiveOn();
 
 const KEY = 'gym-auth';
 const MODE = 'gym-auth-mode';
@@ -18,13 +22,13 @@ export const authEvents = { user: null };
 // espace à part (clés « visit: »), et s'efface quand il quitte.
 const VISITOR = (() => { try { return Boolean(JSON.parse(localStorage.getItem('gym-auth'))?.visitor); } catch { return false; } })();
 const SHARED_KEYS = new Set(['gym-auth', 'gym-auth-mode', 'gym-shift-prefs']);
-export const ns = (k) => (VISITOR && !SHARED_KEYS.has(k) ? `visit:${k}` : k);
+export const ns = (k) => (FICTIVE ? `fict:${k}` : VISITOR && !SHARED_KEYS.has(k) ? `visit:${k}` : k);
 export const isVisitor = () => Boolean(session.user?.visitor);
 export const accounts = () => session.mode !== 'none';
 // L'admin peut « voir comme » un employé ou un superviseur (aperçu sur ce téléphone seulement;
 // le serveur, lui, garde son vrai rôle).
 const VIEW = 'gym-view-as';
-export const isRealAdmin = () => session.user?.role === 'admin';
+export const isRealAdmin = () => !FICTIVE && session.user?.role === 'admin';
 export const viewAs = () => {
   if (!isRealAdmin()) return '';
   try { const v = localStorage.getItem(VIEW); return ['employee', 'boss'].includes(v) ? v : ''; } catch { return ''; }
@@ -48,6 +52,7 @@ function keep(value, remember = true) {
 
 // Appel au serveur du site, avec le jeton. Erreur : err.status (0 = pas de réseau).
 export async function request(path, { method = 'GET', body, timeout = 8000, raw = false } = {}) {
+  if (FICTIVE) { if (raw) throw Object.assign(new Error('fictive'), { status: 404 }); return fakeRequest(path, { method, body }); }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
@@ -76,6 +81,12 @@ export async function request(path, { method = 'GET', body, timeout = 8000, raw 
 // Démarrage : on part tout de suite avec ce que le téléphone sait, puis on
 // vérifie auprès du serveur; onChange() si la réponse change quelque chose.
 export function initAuth(onChange) {
+  if (FICTIVE) {
+    session.mode = 'accounts'; session.token = 'fictive'; session.user = fictiveUser();
+    if (!session.user) { exitFictive(); return; }
+    setTimeout(() => authEvents.user?.(session.user), 0);
+    return;
+  }
   const saved = load();
   if (saved?.visitor) {
     session.mode = 'demo';
@@ -151,6 +162,7 @@ function clearVisitor() {
 }
 
 export async function signOut() {
+  if (FICTIVE) { exitFictive(); return; }
   if (session.user?.visitor) clearVisitor();
   if (session.mode === 'accounts' && session.token) {
     try { await request('auth', { method: 'POST', body: { action: 'logout' }, timeout: 4000 }); } catch { /* le jeton s'oublie quand même */ }

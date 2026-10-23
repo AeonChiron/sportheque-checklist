@@ -12,7 +12,8 @@ import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } fro
 import { mountGlass, playFinish, fxSound, clickTap } from './fx.js';
 import { hapticTrigger } from '../vendor/ios-haptics/index.js';
 import autoAnimate from '../vendor/auto-animate/index.js';
-import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs } from './auth.js';
+import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs, FICTIVE } from './auth.js';
+import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
@@ -3704,6 +3705,41 @@ $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
 // Visiteur : essaie l'app sans compte; rien ne part vers l'équipe.
 function enterVisitor() { startVisitor(t('visitorName')); location.reload(); }
 $('#poolVisit').addEventListener('click', enterVisitor);
+
+// ---------- « Essayer avec une équipe fictive » (bêta) ----------
+// Propriétaire : un bouton sur la page bleue pour tout le monde → on choisit employé ou superviseur,
+// puis la personne; un gym inventé déjà plein s'ouvre. Un gros bouton en haut à gauche pour quitter.
+function fictDays(sc) {
+  const ks = Object.keys(sc || {}).map(Number).sort((a, b) => a - b);
+  if (!ks.length) return '';
+  const dn = (i) => new Date(2026, 9, 19 + i).toLocaleDateString(lang() === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'short' }).replace('.', '');
+  const hrs = [...new Set(ks.map((k) => `${hhmm(sc[k].start)}–${hhmm(sc[k].end)}`))];
+  return `${ks.map(dn).join(', ')} · ${hrs.length === 1 ? hrs[0] : hrs.slice(0, 2).join(' / ')}`;
+}
+function openFictive(role = '') {
+  const tile = (r, ico) => `<button type="button" class="fp-role${role === r ? ' on' : ''}" data-fprole="${r}" aria-pressed="${role === r}"><span class="fp-ico" aria-hidden="true">${ico}</span><b>${esc(t(r === 'boss' ? 'fictAsBoss' : 'fictAsEmp'))}</b><small>${esc(t(r === 'boss' ? 'fictAsBossSub' : 'fictAsEmpSub'))}</small><em>${FICTIVE_PEOPLE.filter((p) => p.role === r).length}</em></button>`;
+  const people = role ? FICTIVE_PEOPLE.filter((p) => p.role === role) : [];
+  openSheet(`<div class="sheet-head fp-head"><span class="pf-beta">${esc(t('fictBeta'))}</span><h2>${esc(t('fictTitle'))}</h2><p class="lede">${esc(t('fictLede'))}</p></div>
+    <div class="fp-roles">${tile('employee', '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zM9 7v14M15 7v14M9 13h6"/></svg>')}${tile('boss', '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>')}</div>
+    ${role ? `<p class="block-label fp-label">${esc(t(role === 'boss' ? 'fictPickBoss' : 'fictPickEmp'))}</p>
+    <div class="fp-grid${role === 'boss' ? ' gold' : ''}">${people.map((p, i) => `<button type="button" class="fp-person" data-fpwho="${esc(p.email)}" style="--i:${i}"><span class="fp-av">${avatarOf(p, esc(p.name[0]))}</span><span class="fp-txt"><b>${esc(p.name)}</b><small>${esc(role === 'boss' ? t('fictBossSched') : fictDays(p.schedule))}</small></span>${CHEV_R}</button>`).join('')}</div>` : ''}
+    <p class="section-note fp-note">${esc(t('fictNote'))}</p>`, (root) => {
+    root.querySelector('.fp-roles').addEventListener('click', (e) => { const b = e.target.closest('[data-fprole]'); if (b) { sfx('tap'); openFictive(b.dataset.fprole); requestAnimationFrame(() => root.querySelector('.fp-label')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); } });
+    root.querySelector('.fp-grid')?.addEventListener('click', (e) => { const b = e.target.closest('[data-fpwho]'); if (!b) return; b.classList.add('going'); sfx('tap'); setTimeout(() => enterFictive(b.dataset.fpwho), 260); });
+  });
+}
+$('#poolFict').addEventListener('click', () => openFictive());
+$('#poolFict').hidden = FICTIVE;
+if (FICTIVE) {
+  document.body.classList.add('fictive');
+  $('#fictExit').hidden = false;
+  $('#fictExit').addEventListener('click', () => {
+    openSheet(`<div class="sheet-head"><h2>${esc(t('fictExitTitle'))}</h2></div><p class="lede">${esc(t('fictExitBody'))}</p>`, () => {
+      $('#fxYes').onclick = () => exitFictive();
+      $('#fxNo').onclick = closeSheet;
+    }, `<button type="button" class="btn ghost" id="fxNo">${t('cancel2')}</button><button type="button" class="btn primary" id="fxYes">${t('fictExitYes')}</button>`);
+  });
+}
 $('#authVisit').addEventListener('click', enterVisitor);
 $('#qbVisit').addEventListener('click', () => {
   openSheet(`<div class="sheet-head"><h2>${t('visitorLeave')}</h2></div><p class="lede">${t('visitorLeaveBody')}</p>`, () => {
@@ -4782,7 +4818,7 @@ function teamTarget(u, date) {
   const p = ov ? { start: ov.start, end: ov.end } : presetOf(v);
   if (!p?.start) return null;
   const sp = SPECIALS.find((x) => x.names?.includes(firstName(u.name)) && x.weekday === dowOf(date));
-  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, changed: Boolean(ov), by: ov?.by || '' };
+  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, avatar: u.avatar || '', changed: Boolean(ov), by: ov?.by || '' };
 }
 async function refreshTeamPlan(from, to) {
   try { const r = await request(`plan?team=1&from=${from}&to=${to}`); teamPlan = { overrides: r.overrides || {}, tasks: r.tasks || [], from, to }; return true; } catch { return false; }
@@ -5046,8 +5082,9 @@ function personRow(tg) {
   const chips = F.facts.filter((x) => ['star', 'zone', 'mirror', 'week'].includes(x.k)).map((x) => `<span class="tw-chip k-${x.k}">${esc(x.k === 'zone' ? x.value : x.k === 'week' ? x.value.split(/[.;]/)[0] : x.value)}</span>`).join('');
   const nTask = assignedFor(tg.date, tg.email).length;
   const extra = `${tg.changed ? `<span class="tw-chip k-changed">${esc(t('twChanged'))}</span>` : ''}${nTask ? `<span class="tw-chip k-task">${esc(t('twTasks', nTask))}</span>` : ''}`;
-  return `<button type="button" class="tw-person" data-glance="${esc(JSON.stringify(tg))}">
-    <span class="tw-av" aria-hidden="true">${esc((tg.name[0] || '?').toUpperCase())}</span>
+  const { avatar, ...plain } = tg; // la photo reste hors de l'attribut (une photo peut peser 10 ko)
+  return `<button type="button" class="tw-person" data-glance="${esc(JSON.stringify(plain))}">
+    <span class="tw-av${avatar ? ' has-pic' : ''}" aria-hidden="true">${avatarOf({ avatar }, esc((tg.name[0] || '?').toUpperCase()))}</span>
     <span class="tw-who"><b>${esc(tg.name)}</b><small class="num">${hm(tg.start)} – ${hm(tg.end)} · ${esc(SHIFTS[F.shift][lang()].short)}</small><span class="tw-chips">${extra}${chips}</span></span>${CHEV_R}</button>`;
 }
 
@@ -5288,7 +5325,7 @@ function openTaskSheet(date, preWho = '') {
     <div class="field"><span>${esc(t('taskWho'))}</span>
       <div class="tk-who">
         <button type="button" class="tk-person" data-tkw="*" aria-pressed="${who === '*'}"><span class="tw-av">★</span><b>${esc(t('twEveryone'))}</b><small>${esc(t('taskEveryoneSub', working.length))}</small></button>
-        ${people.map((u) => `<button type="button" class="tk-person" data-tkw="${esc(u.email)}" aria-pressed="${who === u.email}"><span class="tw-av">${esc((u.name[0] || '?').toUpperCase())}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(working.includes(u.email) ? (() => { const tg = teamTarget(u, date); return `${f(toMin(tg.start))} – ${f(toMin(tg.end))}`; })() : t('twOffThatDay'))}</small></button>`).join('')}
+        ${people.map((u) => `<button type="button" class="tk-person" data-tkw="${esc(u.email)}" aria-pressed="${who === u.email}"><span class="tw-av${u.avatar ? ' has-pic' : ''}">${avatarOf(u, esc((u.name[0] || '?').toUpperCase()))}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(working.includes(u.email) ? (() => { const tg = teamTarget(u, date); return `${f(toMin(tg.start))} – ${f(toMin(tg.end))}`; })() : t('twOffThatDay'))}</small></button>`).join('')}
       </div></div>`, (root) => {
     root.addEventListener('click', (e) => {
       const m = e.target.closest('[data-tkm]');
@@ -5312,7 +5349,7 @@ function openTaskSheet(date, preWho = '') {
 function openAddPerson(date) {
   const off = (boss.team || []).filter((u) => !u.removed && !teamTarget(u, date));
   openSheet(`<div class="sheet-head"><h2>${esc(t('addPersonTitle'))}</h2><p class="lede">${esc(cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</p></div>
-    <div class="tk-who">${off.map((u) => `<button type="button" class="tk-person" data-ap="${esc(u.email)}"><span class="tw-av">${esc((u.name[0] || '?').toUpperCase())}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(roleName(u.role))}</small></button>`).join('') || `<p class="hb-quiet">${esc(t('addPersonNone'))}</p>`}</div>`, (root) => {
+    <div class="tk-who">${off.map((u) => `<button type="button" class="tk-person" data-ap="${esc(u.email)}"><span class="tw-av${u.avatar ? ' has-pic' : ''}">${avatarOf(u, esc((u.name[0] || '?').toUpperCase()))}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(roleName(u.role))}</small></button>`).join('') || `<p class="hb-quiet">${esc(t('addPersonNone'))}</p>`}</div>`, (root) => {
     root.addEventListener('click', (e) => { const b = e.target.closest('[data-ap]'); if (b) { closeSheet(); setTimeout(() => openDayEdit(b.dataset.ap, date), 340); } });
   });
 }

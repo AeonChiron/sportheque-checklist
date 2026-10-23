@@ -3,6 +3,32 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-22-fictive',
+    date: '2026-10-22',
+    fr: {
+      title: 'Bêta : une équipe fictive',
+      items: [
+        'Sur la page bleue : « Essayer avec une équipe fictive » (pour tout le monde, même sans compte).',
+        'On choisit d’être un des 10 employés ou un des 6 superviseurs inventés.',
+        'Un gym déjà plein : 3 mois de quarts, des rapports, des signalements, des tâches.',
+        'Tout marche et on peut tout essayer; rien n’est envoyé et tout s’efface en quittant.',
+        'Le gros bouton rouge en haut à gauche arrête la simulation.',
+        'Les superviseurs peuvent changer l’horaire d’un employé et donner des tâches à une heure précise.',
+      ],
+    },
+    en: {
+      title: 'Beta: a pretend team',
+      items: [
+        'On the blue page: “Try with a pretend team” (for everyone, even without an account).',
+        'Pick one of 10 made-up employees or 6 made-up supervisors.',
+        'A gym already full: 3 months of shifts, reports, problems, tasks.',
+        'Everything works and you can try anything; nothing is sent and it all gets erased when you leave.',
+        'The big red button in the top-left corner stops the simulation.',
+        'Supervisors can change an employee’s schedule and give tasks at a set time.',
+      ],
+    },
+  },
+  {
     id: '2026-10-22-admin',
     date: '2026-10-22',
     fr: {
