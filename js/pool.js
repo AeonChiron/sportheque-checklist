@@ -8,6 +8,7 @@ const TILE = 58;
 const FOOT_X = 0.52; // ses pieds (fraction de l'image) : le pivot quand il penche
 const FOOT_Y = 0.95;
 const RATIO = 659 / 491;
+const LOOK_X = 0.56; // le milieu « visuel » du lapin (sa tête penche à droite) : c'est lui qu'on centre
 
 export function mountPool(root) {
   const canvas = root.querySelector('canvas');
@@ -38,22 +39,35 @@ export function mountPool(root) {
   }
   // Sa « boîte » : un peu plus petite que l'image (les oreilles et le balai ont du vide autour).
   const body = () => { const h = s.size * RATIO; return { l: s.x - s.size * 0.38, r: s.x + s.size * 0.38, t: s.y - h * 0.97, b: s.y }; };
-  function collide(bounce) {
+  // Pendant qu'on le traîne, il passe partout (sinon il « colle » aux boutons puis saute à travers).
+  // Lâché par-dessus un bouton, il en glisse doucement; en glissant tout seul, il rebondit dessus.
+  function collide(dt) {
+    const b = bounds();
     for (const o of obstacles) {
       const m = body();
       if (m.r <= o.l || m.l >= o.r || m.b <= o.t || m.t >= o.b) continue;
       const ox = Math.min(m.r - o.l, o.r - m.l), oy = Math.min(m.b - o.t, o.b - m.t);
+      // Par où sortir : le côté le plus proche qui reste dans l'écran.
+      const left = (m.l + m.r) / 2 < (o.l + o.r) / 2, above = (m.t + m.b) / 2 < (o.t + o.b) / 2;
+      let horiz = ox < oy;
+      if (horiz && (left ? s.x - ox < b.minX : s.x + ox > b.maxX)) horiz = false;
+      else if (!horiz && (above ? s.y - oy < b.minY : s.y + oy > b.maxY)) horiz = true;
+      const depth = horiz ? ox : oy;
       const sp = Math.hypot(s.vx, s.vy);
-      if (ox < oy) {
-        const left = (m.l + m.r) / 2 < (o.l + o.r) / 2;
-        s.x += left ? -ox : ox;
-        if (bounce) { s.vx = (left ? -1 : 1) * Math.max(Math.abs(s.vx) * 0.6, 60); s.sqAxis = 0; }
-      } else {
-        const above = (m.t + m.b) / 2 < (o.t + o.b) / 2;
-        s.y += above ? -oy : oy;
-        if (bounce) { s.vy = (above ? -1 : 1) * Math.max(Math.abs(s.vy) * 0.6, 60); s.sqAxis = 1; }
+      if (depth > 14 && sp < 260) {
+        // Bien enfoncé (on vient de le lâcher dessus) : il en sort en glissant, sans saut.
+        const k = Math.min(1, dt * 7), push = Math.max(depth * k, 1.5);
+        if (horiz) { s.x += left ? -push : push; s.vx = 0; } else { s.y += above ? -push : push; s.vy = 0; }
+        continue;
       }
-      if (bounce && sp > 120) s.sqv = -Math.min(1, sp / 900) * 0.6;
+      if (horiz) {
+        s.x += left ? -ox : ox;
+        s.vx = (left ? -1 : 1) * Math.max(Math.abs(s.vx) * 0.6, 40); s.sqAxis = 0;
+      } else {
+        s.y += above ? -oy : oy;
+        s.vy = (above ? -1 : 1) * Math.max(Math.abs(s.vy) * 0.6, 40); s.sqAxis = 1;
+      }
+      if (sp > 120) s.sqv = -Math.min(1, sp / 900) * 0.6;
     }
   }
   function resize() {
@@ -73,7 +87,7 @@ export function mountPool(root) {
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
     readObstacles();
     // Au repos : pile au milieu de l'espace libre entre le titre et le bouton.
-    if (!s.touched && W > 200) { const h = s.size * RATIO; s.x = W * 0.5; s.y = (edges.top + edges.bottom) / 2 + h * 0.45; }
+    if (!s.touched && W > 200) { const h = s.size * RATIO; s.x = W * 0.5 + (FOOT_X - LOOK_X) * s.size; s.y = (edges.top + edges.bottom) / 2 + h * 0.45; }
     if (still) draw();
   }
 
@@ -83,16 +97,97 @@ export function mountPool(root) {
     2.2 * Math.sin(x * 0.022 - t * 0.9 + y * 0.012) + 1.2 * Math.sin(x * 0.05 + t * 0.6),
   ];
 
-  // Les rayons : position (part de l'écran), largeur, force, vitesse, phase.
-  const RAYS = [
-    { x: -0.34, w: 0.07, a: 0.24, sp: 0.06, ph: 0 }, { x: -0.18, w: 0.03, a: 0.34, sp: 0.09, ph: 1.7 },
-    { x: -0.04, w: 0.10, a: 0.2, sp: 0.05, ph: 3.1 }, { x: 0.1, w: 0.025, a: 0.36, sp: 0.08, ph: 4.4 },
-    { x: 0.22, w: 0.06, a: 0.22, sp: 0.07, ph: 2.2 }, { x: 0.38, w: 0.035, a: 0.3, sp: 0.1, ph: 5.3 },
+  // ---- La lumière (propriétaire, 23 oct. : « plus beau, pas trop pâle ») ----
+  // Des faisceaux qui viennent d'en haut à gauche, comme le soleil par une grande fenêtre.
+  // Chaque faisceau est une texture faite une seule fois (bords très doux, fines stries de
+  // lumière, fondu sur la longueur), puis dessinée en éventail. Deux couches se balancent
+  // lentement, chacune à son rythme; la lumière scintille à peine, comme à travers l'eau.
+  function rnd(seed) { let x = seed >>> 0; return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296); }
+  function makeBeam(seed, streaks, soft) {
+    const w = 128, h = 720, r = rnd(seed);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    for (let y = 0; y < h; y++) {
+      const f = y / h;
+      const half = (0.16 + 0.84 * f) * w / 2;
+      const a = Math.min(1, f / 0.05) * Math.pow(1 - f, 1.35);
+      const lg = g.createLinearGradient(w / 2 - half, 0, w / 2 + half, 0);
+      lg.addColorStop(0, 'rgba(255,255,255,0)');
+      lg.addColorStop(soft ? 0.22 : 0.3, `rgba(255,255,255,${a * 0.28})`);
+      lg.addColorStop(0.5, `rgba(255,255,255,${a})`);
+      lg.addColorStop(soft ? 0.78 : 0.7, `rgba(255,255,255,${a * 0.28})`);
+      lg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = lg; g.fillRect(0, y, w, 1);
+    }
+    // Les stries : de fins filets plus clairs dans le faisceau (la poussière qui attrape la lumière).
+    g.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < streaks; k++) {
+      const u = (r() * 2 - 1) * 0.7, lw = 0.6 + r() * 2.2, al = 0.08 + r() * 0.16;
+      const sg = g.createLinearGradient(0, 0, 0, h);
+      sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.12 + r() * 0.2, `rgba(255,255,255,${al})`);
+      sg.addColorStop(0.55 + r() * 0.3, `rgba(255,255,255,${al * 0.4})`); sg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.strokeStyle = sg; g.lineWidth = lw;
+      g.beginPath(); g.moveTo(w / 2 + u * 0.16 * w / 2, 0); g.lineTo(w / 2 + u * w / 2, h); g.stroke();
+    }
+    return c;
+  }
+  // tx : où le faisceau tombe (part de la largeur), bw : sa largeur, a : sa force, layer 0 = large et doux.
+  const BEAMS = [
+    { tx: -0.1, bw: 0.22, a: 0.3, sp: 0.05, ph: 0.4, layer: 0 },
+    { tx: 0.22, bw: 0.26, a: 0.24, sp: 0.04, ph: 2.6, layer: 0 },
+    { tx: 0.58, bw: 0.22, a: 0.26, sp: 0.045, ph: 4.1, layer: 0 },
+    { tx: 0.98, bw: 0.28, a: 0.2, sp: 0.035, ph: 5.6, layer: 0 },
+    { tx: 0.04, bw: 0.05, a: 0.5, sp: 0.09, ph: 1.1, layer: 1 },
+    { tx: 0.3, bw: 0.035, a: 0.55, sp: 0.11, ph: 3.3, layer: 1 },
+    { tx: 0.44, bw: 0.075, a: 0.4, sp: 0.08, ph: 5.0, layer: 1 },
+    { tx: 0.7, bw: 0.04, a: 0.5, sp: 0.1, ph: 0.2, layer: 1 },
+    { tx: 0.85, bw: 0.06, a: 0.42, sp: 0.07, ph: 2.0, layer: 1 },
   ];
+  let sprites = null;
+  // Des grains de poussière qui flottent dans la lumière.
+  const MOTES = Array.from({ length: 34 }, (_, i) => { const r = rnd(900 + i); return { x: r(), y: r(), z: 0.4 + r() * 0.6, ph: r() * 6.28, sp: 0.4 + r() * 0.8 }; });
+  function light(D) {
+    if (W < 2 || H < 2) return; // pas encore mesuré
+    if (!sprites) sprites = BEAMS.map((b, i) => makeBeam(77 + i * 13, b.layer ? 9 : 5, !b.layer));
+    const R = Math.max(W, H);
+    const Sx = -R * 0.06, Sy = -R * 0.42; // la fenêtre, loin au-dessus à gauche
+    const ty = H * 0.62;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    BEAMS.forEach((b, i) => {
+      const sway = Math.sin(t * b.sp + b.ph) * 0.045 + Math.sin(t * b.sp * 2.3 + b.ph * 1.7) * 0.015;
+      const tx = W * (b.tx + sway) + (R - W) * 0.25 * b.tx;
+      const dx = tx - Sx, dy = ty - Sy, d = Math.hypot(dx, dy);
+      const breathe = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(t * (0.21 + b.sp) + b.ph * 2));
+      const shimmer = 1 + 0.07 * Math.sin(t * 1.9 + b.ph * 3) * Math.sin(t * 1.3 + b.ph);
+      ctx.globalAlpha = Math.min(1, b.a * breathe * shimmer * (D ? 0.6 : 1));
+      const L = d * 1.75, wb = R * b.bw * (1 + 0.12 * Math.sin(t * 0.17 + b.ph)) * 1.75;
+      ctx.save();
+      ctx.translate(Sx, Sy); ctx.rotate(Math.atan2(-dx, dy));
+      ctx.drawImage(sprites[i], -wb / 2, 0, wb, L);
+      ctx.restore();
+    });
+    ctx.restore();
+    // Les grains : plus visibles là où la lumière passe (en haut à gauche), ils montent doucement.
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (const m of MOTES) {
+      const y = ((m.y - t * 0.006 * m.sp) % 1 + 1) % 1, x = m.x + Math.sin(t * 0.25 * m.sp + m.ph) * 0.015;
+      const px = x * W, py = y * H;
+      const near = Math.max(0, 1 - Math.hypot(px / W - 0.25, py / H - 0.3) * 1.3);
+      const a = (0.1 + 0.5 * near) * (0.55 + 0.45 * Math.sin(t * m.sp * 1.7 + m.ph)) * (D ? 0.7 : 1);
+      if (!(a >= 0.03)) continue;
+      const rr = 0.6 + 1.5 * m.z;
+      const mg = ctx.createRadialGradient(px, py, 0, px, py, rr * 2.4);
+      mg.addColorStop(0, `rgba(255,255,255,${a})`); mg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = mg; ctx.fillRect(px - rr * 2.4, py - rr * 2.4, rr * 4.8, rr * 4.8);
+    }
+    ctx.restore();
+  }
   function draw() {
     const D = dark();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Plancher de sport bleu vif, un peu plus foncé vers le bas.
+    // Plancher de sport bleu vif (les couleurs d'origine), un peu plus foncé vers le bas.
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, D ? '#1d5f9e' : '#47a8ea');
     g.addColorStop(1, D ? '#0e365f' : '#2a80c8');
@@ -107,48 +202,16 @@ export function mountPool(root) {
       for (let y0 = 0; y0 <= H; y0 += TILE) for (let x = -10; x <= W + 10; x += 26) { const [, oy] = wobble(x, y0); x === -10 ? ctx.moveTo(x, y0 + oy) : ctx.lineTo(x, y0 + oy); }
       ctx.stroke();
     }
-    // Lumière (propriétaire : « de vrais rayons », plus de profondeur, un reflet 3D).
-    // 1. La source : une grande lueur douce en haut, et les bords plus sombres (profondeur).
+    // Les bords un peu plus profonds (garde le bleu riche, pas délavé).
     const R = Math.max(W, H);
-    const glow = ctx.createRadialGradient(W * 0.5, -H * 0.08, 0, W * 0.5, -H * 0.08, R * 0.95);
-    glow.addColorStop(0, D ? 'rgba(140,210,255,.22)' : 'rgba(200,245,255,.42)');
-    glow.addColorStop(0.45, D ? 'rgba(80,160,255,.06)' : 'rgba(150,215,255,.12)');
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
-    const vig = ctx.createRadialGradient(W * 0.5, H * 0.42, R * 0.25, W * 0.5, H * 0.5, R * 0.85);
-    vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, D ? 'rgba(0,8,25,.55)' : 'rgba(5,35,90,.32)');
+    const vig = ctx.createRadialGradient(W * 0.5, H * 0.42, R * 0.3, W * 0.5, H * 0.5, R * 0.9);
+    vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, D ? 'rgba(0,8,25,.5)' : 'rgba(4,40,110,.26)');
     ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
-    // 2. Les rayons : des cônes de lumière aux bords doux, qui respirent et glissent lentement.
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    ctx.translate(W * 0.5, -H * 0.12);
-    ctx.rotate(-22 * Math.PI / 180);
-    const L = R * 1.9;
-    for (const b of RAYS) {
-      const cx = R * b.x + Math.sin(t * b.sp + b.ph) * R * 0.05;
-      const w0 = R * b.w * 0.35, w1 = R * b.w * (1.6 + 0.2 * Math.sin(t * 0.3 + b.ph));
-      const a = b.a * (D ? 0.55 : 1) * (0.7 + 0.3 * Math.sin(t * 0.45 + b.ph * 2));
-      const lg = ctx.createLinearGradient(cx - w1, 0, cx + w1, 0);
-      lg.addColorStop(0, 'rgba(210,248,255,0)');
-      lg.addColorStop(0.42, `rgba(200,246,255,${a * 0.55})`);
-      lg.addColorStop(0.5, `rgba(235,253,255,${a})`);
-      lg.addColorStop(0.58, `rgba(200,246,255,${a * 0.55})`);
-      lg.addColorStop(1, 'rgba(210,248,255,0)');
-      ctx.fillStyle = lg;
-      ctx.beginPath(); ctx.moveTo(cx - w0, 0); ctx.lineTo(cx + w0, 0); ctx.lineTo(cx + w1, L); ctx.lineTo(cx - w1, L); ctx.closePath(); ctx.fill();
-    }
-    ctx.restore();
-    // 3. Un reflet spéculaire passe de temps en temps sur le plancher mouillé.
-    const sweep = (t * 0.06) % 1.6 - 0.3;
-    if (sweep > -0.2 && sweep < 1.2) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      ctx.translate(W * sweep, H * 0.5); ctx.rotate(-28 * Math.PI / 180);
-      const sg = ctx.createLinearGradient(-R * 0.12, 0, R * 0.12, 0);
-      sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, `rgba(255,255,255,${D ? 0.07 : 0.13})`); sg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = sg; ctx.fillRect(-R * 0.12, -R, R * 0.24, R * 2);
-      ctx.restore();
-    }
+    // Un peu de chaleur près de la fenêtre (une lueur colorée, pas un voile blanc).
+    const glow = ctx.createRadialGradient(W * 0.08, -H * 0.05, 0, W * 0.08, -H * 0.05, R * 0.6);
+    glow.addColorStop(0, D ? 'rgba(120,200,255,.14)' : 'rgba(150,230,255,.2)'); glow.addColorStop(1, 'rgba(120,200,255,0)');
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H); ctx.restore();
+    if (!still) light(D); else { t = 3; light(D); }
     // Les ronds dans l'eau : bord fin et clair, bande plus sombre juste en dedans.
     for (const rp of ripples) {
       const life = 1.5;
@@ -195,7 +258,6 @@ export function mountPool(root) {
       const nx = s.x + (s.drag.tx - s.x) * a, ny = s.y + (s.drag.ty - s.y) * a;
       s.vx = (nx - s.x) / Math.max(dt, 1e-3); s.vy = (ny - s.y) / Math.max(dt, 1e-3);
       s.x = nx; s.y = ny;
-      collide(false);
     }
     if (!s.drag) {
       // Glisse sur l'eau : accélère doucement, puis s'arrête tout seul. Aucun déplacement sans geste.
@@ -215,7 +277,7 @@ export function mountPool(root) {
       if (s.x > b.maxX) { hit(Math.abs(s.vx), 0); s.x = b.maxX; s.vx = -Math.abs(s.vx) * 0.42; }
       if (s.y < b.minY) { hit(Math.abs(s.vy), 1); s.y = b.minY; s.vy = Math.abs(s.vy) * 0.42; }
       if (s.y > b.maxY) { hit(Math.abs(s.vy), 1); s.y = b.maxY; s.vy = -Math.abs(s.vy) * 0.42; }
-      collide(true);
+      collide(dt);
     }
     s.sqv += (-170 * s.sq - 9 * s.sqv) * dt; s.sq += s.sqv * dt;
     const target = Math.max(-30, Math.min(30, s.vx * 0.06));

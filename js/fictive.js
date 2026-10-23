@@ -15,7 +15,7 @@ const MASC = ['lapin', 'ours', 'renard', 'chat', 'faon', 'souris', 'salut', 'cou
 export const fictiveOn = () => { try { return Boolean(JSON.parse(sessionStorage.getItem(FLAG))); } catch { return false; } };
 export const fictiveWho = () => { try { return JSON.parse(sessionStorage.getItem(FLAG))?.who || ''; } catch { return ''; } };
 
-const H = { jour: ['07:30', '15:30'], soir: ['16:30', '23:00'], court: ['18:00', '23:00'], mid: ['15:00', '21:00'], tot: ['06:00', '11:00'], bam: ['08:00', '16:00'], bpm: ['14:00', '22:00'] };
+const H = { jour: ['07:30', '15:30'], soir: ['16:30', '23:00'], court: ['18:00', '23:00'], mid: ['15:00', '21:00'], tot: ['06:00', '11:00'], bam: ['08:00', '16:00'], bpm: ['12:00', '19:00'] /* propriétaire : les superviseurs ne finissent pas tard */ };
 const day = (k) => ({ start: H[k][0], end: H[k][1] });
 // Lundi = 0. Chaque jour a 2 à 4 personnes; quelques horaires « Autre » pour faire vrai.
 const EMPLOYEES = [

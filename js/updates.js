@@ -3,6 +3,32 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-23-polish',
+    date: '2026-10-23',
+    fr: {
+      title: 'Lumière, lapin, verre plein',
+      items: [
+        'Page bleue : le bleu d’origine revient (plus pâle), de vrais faisceaux de lumière doux qui se balancent.',
+        '« Sporthèque » et le lapin parfaitement centrés.',
+        'Le lapin suit le doigt sans coller aux boutons; lâché dessus, il glisse doucement à côté.',
+        'Cocher vite fait une seule mélodie, jamais trop aiguë.',
+        'La dernière tâche remplit le verre à ras bord : gouttes qui débordent, reflet, étincelles et son à part.',
+        'La semaine : « Jours qui restent » en haut, « Jours terminés » pliés en bas (plus de jours pâles).',
+      ],
+    },
+    en: {
+      title: 'Light, bunny, full glass',
+      items: [
+        'Blue page: the original blue is back (no more pale), real soft light beams that sway.',
+        '“Sporthèque” and the bunny perfectly centered.',
+        'The bunny follows your finger without sticking to buttons; dropped on one, it slides gently aside.',
+        'Checking fast makes one melody, never too high.',
+        'The last task fills the glass to the brim: overflowing drops, a shine, sparkles and its own sound.',
+        'The week: “Days left” on top, “Days done” folded below (no more pale days).',
+      ],
+    },
+  },
+  {
     id: '2026-10-23-roster',
     date: '2026-10-23',
     fr: {

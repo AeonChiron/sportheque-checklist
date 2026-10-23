@@ -193,12 +193,14 @@ const PROG = [
 const song = { step: 0, at: 0 };
 function nextNote() {
   const now = performance.now();
-  if (now - song.at > 4000) song.step = 0;
+  const gap = now - song.at;
+  if (gap > 4000) song.step = 0;
   song.at = now;
+  const fast = gap < 380;
   const i = song.step++;
   const chord = PROG[Math.floor(i / 4) % PROG.length];
   const k = i % 4; // 4 notes qui montent dans l'accord
-  return { chord, f: chord[1 + k], bass: chord[0] };
+  return { chord, f: chord[1 + k], bass: chord[0], fast };
 }
 
 // ---- Trois niveaux (propriétaire : « pas du xylophone à chaque toucher ») ----
@@ -296,14 +298,37 @@ const SOUNDS = {
   },
   // ---------- Niveau 3 : la mélodie ----------
   check(t, { level = 0.5 } = {}) {
-    // Le maillet de bois, la note de l'accord, sa quinte, puis une cloche qui scintille.
-    // Chaque tâche prend la note suivante de la suite d'accords; plus le quart avance, plus ça monte.
-    const { f, bass } = nextNote();
-    const up = level > 0.66 ? 4 : level > 0.33 ? 3 : 2;
-    thump(bass, t, 0.26, 0.2);
-    marimba(f * up, t, { gain: 0.28, dur: 1.4, pan: -0.12, verb: 0.45 });
-    marimba(f * up * 1.5, t + 0.08, { gain: 0.22, dur: 1.6, pan: 0.14, verb: 0.5 });
-    bell(f * up * 3, t + 0.17, { gain: 0.035, dur: 1.8, ratio: 3.5, index: 1.2, pan: 0.3, verb: 0.8 });
+    // Propriétaire (23 oct.) : quand on coche vite, les notes doivent couler l'une dans l'autre,
+    // comme une seule mélodie — et jamais trop aiguës. Chaque tâche prend la note suivante de la
+    // suite d'accords, toujours dans le registre doux (entre ~250 et ~900 Hz). Le progrès rend
+    // le son un peu plus brillant, pas plus aigu. Coché vite : notes plus courtes, sans grosse basse.
+    const { f, bass, fast } = nextNote();
+    const n = f * 2; // une octave au-dessus de l'accord : chantant, jamais perçant
+    const bright = 0.55 + 0.45 * Math.min(1, level);
+    if (!fast) thump(bass, t, 0.16, 0.18);
+    marimba(n, t, { gain: fast ? 0.22 : 0.26, dur: fast ? 0.9 : 1.3, pan: (song.step % 2 ? -0.12 : 0.12), verb: 0.5, bright });
+    partial(n / 2, t, fast ? 0.5 : 0.8, 0.06, { verb: 0.3 }); // un peu de chaleur dessous
+    kalimba(n * 2, t + 0.05, { gain: 0.025 + 0.02 * level, dur: 0.6, pan: 0.3, verb: 0.7 }); // un reflet léger
+  },
+  // Le verre est plein (propriétaire : « un moment plus satisfaisant ») : une goutte qui tombe,
+  // l'eau qui monte en glissando, puis l'accord qui s'ouvre en arpège jusqu'à une note claire.
+  brim(t) {
+    const c = A(), g = voice(t, { verb: 0.4 });
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.09, t + 0.05);
+    g.gain.setTargetAtTime(0.0001, t + 0.18, 0.08);
+    const o = c.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(320, t); o.frequency.exponentialRampToValueAtTime(760, t + 0.22); // « bloup » qui monte
+    o.connect(g); o.start(t); o.stop(t + 0.6);
+    const s0 = t + 0.18;
+    const sw = voice(s0, { verb: 0.35 });
+    sw.gain.setValueAtTime(0.0001, s0); sw.gain.linearRampToValueAtTime(0.08, s0 + 0.25); sw.gain.setTargetAtTime(0.0001, s0 + 0.4, 0.5);
+    sine(82.41, s0, 2.2, sw); sine(123.47, s0, 2.2, sw);
+    [329.63, 415.3, 493.88, 622.25, 739.99, 987.77].forEach((f, i) => marimba(f, s0 + i * 0.075, { gain: 0.16 - i * 0.012, dur: 1.6 + i * 0.15, pan: -0.35 + i * 0.14, verb: 0.55, bright: 0.7 }));
+    epiano(493.88, s0 + 0.5, { gain: 0.07, dur: 2.4, verb: 0.6 });
+    epiano(622.25, s0 + 0.5, { gain: 0.06, dur: 2.4, verb: 0.6 });
+    kalimba(1318.51, s0 + 0.55, { gain: 0.04, dur: 1.2, pan: 0.4, verb: 0.85 });
+    song.step = 0;
   },
   flag(t) {
     whoosh(t, { up: true, gain: 0.09, dur: 0.28 });
@@ -442,31 +467,37 @@ export function clickTap(ok = () => true) {
 // montent. Au repos, l'eau bouge doucement. Rien ne tourne quand c'est caché.
 const NS = 'http://www.w3.org/2000/svg';
 const GLASS = 'M8 6H92L83.5 107Q82.6 114 76 114H24Q17.4 114 16.5 107Z';
-const TOP = 14, BOTTOM = 113; // niveau plein / vide (unités du dessin)
+const TOP = 14, BOTTOM = 113; // niveau presque plein / vide (unités du dessin)
+const BRIM = 7.2; // plein pour vrai : à ras bord (le dessus du verre est à 6)
 
 export function mountGlass(host) {
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const uid = `g${Math.random().toString(36).slice(2, 7)}`;
   host.innerHTML = `<div class="glass"><svg viewBox="0 -14 100 130" aria-hidden="true">
-      <defs><clipPath id="${uid}"><path d="${GLASS}"/></clipPath></defs>
+      <defs><clipPath id="${uid}"><path d="M8 -8H92V6L83.5 107Q82.6 114 76 114H24Q17.4 114 16.5 107L8 6Z"/></clipPath>
+        <linearGradient id="${uid}w" x1="0" x2="0" y1="0" y2="1"><stop class="w-top" offset="0"/><stop class="w-bot" offset="1"/></linearGradient></defs>
       <path class="glass-in" d="${GLASS}"/>
-      <g clip-path="url(#${uid})"><path class="water-back"/><path class="water"/><g class="bubbles"></g></g>
-      <g class="drops"></g>
+      <defs><linearGradient id="${uid}s" x1="0" x2="1" y1="0" y2="0.35"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+      <g clip-path="url(#${uid})"><path class="water-back"/><path class="water" fill="url(#${uid}w)"/><path class="water-top"/><g class="bubbles"></g><rect class="glass-sweep" x="-60" y="-10" width="40" height="140" fill="url(#${uid}s)"/></g>
+      <g class="drops"></g><g class="sparks"></g>
       <path class="glass-shine" d="M15 14L20 100" />
       <path class="glass-rim" d="${GLASS}"/>
     </svg></div>`;
   const svg = host.querySelector('svg');
-  const front = svg.querySelector('.water'), back = svg.querySelector('.water-back');
-  const bubbleG = svg.querySelector('.bubbles'), dropG = svg.querySelector('.drops');
-  const s = { y: BOTTOM, v: 0, target: BOTTOM, slosh: 0, t: 0, last: 0, bubbles: [], drops: [], raf: 0 };
+  const front = svg.querySelector('.water'), back = svg.querySelector('.water-back'), topLine = svg.querySelector('.water-top');
+  front.style.fill = `url(#${uid}w)`; // le dégradé (le style CSS des thèmes donne ses couleurs)
+  const bubbleG = svg.querySelector('.bubbles'), dropG = svg.querySelector('.drops'), sparkG = svg.querySelector('.sparks');
+  const s = { y: BOTTOM, v: 0, target: BOTTOM, slosh: 0, t: 0, last: 0, bubbles: [], drops: [], drips: [], raf: 0, full: false, dome: 0, lastPour: 0 };
 
-  const wave = (amp, ph, k1, k2) => {
+  const wave = (amp, ph, k1, k2, open = false) => {
     let d = '';
     for (let x = -4; x <= 104; x += 4) {
-      const y = s.y + amp * Math.sin(x * k1 + ph) + amp * 0.45 * Math.sin(x * k2 - ph * 1.3);
+      // Plein à ras bord : l'eau fait un petit dôme (le ménisque) au-dessus du bord.
+      const dome = s.dome * Math.pow(Math.sin(Math.PI * Math.max(0, Math.min(1, (x - 8) / 84))), 0.6);
+      const y = s.y - dome + amp * Math.sin(x * k1 + ph) + amp * 0.45 * Math.sin(x * k2 - ph * 1.3);
       d += `${x === -4 ? 'M' : 'L'}${x} ${y.toFixed(2)}`;
     }
-    return `${d}L104 130L-4 130Z`;
+    return open ? d : `${d}L104 130L-4 130Z`;
   };
   const circle = (cls) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('class', cls); return c; };
   function bubble(big = false) {
@@ -481,10 +512,27 @@ export function mountGlass(host) {
       s.drops.push({ el, x: 30 + Math.random() * 40, y: s.y, vx: (Math.random() - 0.5) * 40, vy: -(40 + Math.random() * 45), r: 1.2 + Math.random() * 1.4, life: 1 });
     }
   }
+  // Le trop-plein : des gouttes qui glissent le long des parois, dehors.
+  function drip(side, delay = 0) {
+    const el = document.createElementNS(NS, 'ellipse'); el.setAttribute('class', 'drip');
+    dropG.append(el);
+    s.drips.push({ el, side, y: 6.5, v: 6 + Math.random() * 8, wait: delay, life: 1, r: 1.5 + Math.random() * 0.7 });
+  }
+  function sparks() {
+    const pts = [[4, 2, 0.9], [96, 0, 1.1], [50, -9, 1.25], [22, -6, 0.7], [79, -7, 0.8]];
+    pts.forEach(([x, y, k], i) => {
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('transform', `translate(${x} ${y}) scale(${k})`);
+      g.innerHTML = `<path class="brim-spark" style="--d:${0.12 + i * 0.09}s" d="M0-6L1.5-1.5 6 0 1.5 1.5 0 6-1.5 1.5-6 0-1.5-1.5z"/>`;
+      sparkG.append(g);
+      setTimeout(() => g.remove(), 1700);
+    });
+  }
   function draw() {
-    const amp = 1.3 + s.slosh;
+    const amp = (s.full ? 0.5 : 1.3) + s.slosh;
     back.setAttribute('d', wave(amp * 0.9, s.t * 2.1 + 1.7, 0.075, 0.16));
     front.setAttribute('d', wave(amp, s.t * 2.8, 0.09, 0.19));
+    topLine.setAttribute('d', wave(amp, s.t * 2.8, 0.09, 0.19, true)); // la surface qui brille
     for (const b of s.bubbles) {
       b.el.setAttribute('cx', (b.x + Math.sin(s.t * 3 + b.wob) * 1.2).toFixed(2));
       b.el.setAttribute('cy', b.y.toFixed(2));
@@ -495,6 +543,15 @@ export function mountGlass(host) {
       d.el.setAttribute('cx', d.x.toFixed(2)); d.el.setAttribute('cy', d.y.toFixed(2));
       d.el.setAttribute('r', d.r); d.el.setAttribute('opacity', d.life.toFixed(2));
     }
+    for (const d of s.drips) {
+      // Le long de la paroi extérieure : de (8,6) à (16.5,107) à gauche, de (92,6) à (83.5,107) à droite.
+      const k = (d.y - 6) / 101, x = d.side < 0 ? 8 + 8.5 * k - 1.6 : 92 - 8.5 * k + 1.6;
+      const stretch = 1 + Math.min(1.4, d.v / 40);
+      d.el.setAttribute('cx', x.toFixed(2)); d.el.setAttribute('cy', d.y.toFixed(2));
+      d.el.setAttribute('rx', (d.r / Math.sqrt(stretch)).toFixed(2)); d.el.setAttribute('ry', (d.r * stretch).toFixed(2));
+      d.el.setAttribute('transform', `rotate(${(d.side < 0 ? -4.8 : 4.8)} ${x.toFixed(2)} ${d.y.toFixed(2)})`);
+      d.el.setAttribute('opacity', (d.wait > 0 ? 0 : d.life).toFixed(2));
+    }
   }
   function step(now) {
     s.raf = 0;
@@ -502,10 +559,14 @@ export function mountGlass(host) {
     if (!svg.getClientRects().length || document.hidden) { s.last = 0; setTimeout(() => { if (!s.raf) s.raf = requestAnimationFrame(step); }, 400); return; }
     const dt = Math.min(0.05, (now - (s.last || now)) / 1000);
     s.last = now; s.t += dt;
-    // Ressort : le niveau dépasse un peu sa marque, puis se pose.
-    const acc = 70 * (s.target - s.y) - 7.5 * s.v;
+    // Ressort : le niveau dépasse à peine sa marque, puis se pose (assez amorti pour que des
+    // coches rapides fassent une montée continue, pas des sauts).
+    const acc = 64 * (s.target - s.y) - 10 * s.v;
     s.v += acc * dt; s.y += s.v * dt;
     s.slosh *= Math.exp(-1.6 * dt);
+    s.dome += ((s.full ? 4.2 : 0) - s.dome) * Math.min(1, dt * 4);
+    for (const d of s.drips) { if (d.wait > 0) { d.wait -= dt; continue; } d.v += 55 * dt; d.y += d.v * dt; if (d.y > 55) d.life -= dt * 1.6; }
+    s.drips = s.drips.filter((d) => (d.life > 0 && d.y < 110 ? true : (d.el.remove(), false)));
     if (s.y < BOTTOM - 3 && Math.random() < dt * 0.9) bubble();
     for (const b of s.bubbles) b.y -= b.sp * dt;
     s.bubbles = s.bubbles.filter((b) => (b.y > s.y - 1 ? true : (b.el.remove(), false)));
@@ -517,14 +578,31 @@ export function mountGlass(host) {
   return {
     set(frac, { pour = false } = {}) {
       const f = Math.max(0, Math.min(1, frac));
-      s.target = BOTTOM - (BOTTOM - TOP) * f;
-      if (still) { s.y = s.target; s.v = 0; draw(); return; }
+      const wasFull = s.full;
+      s.full = f >= 1;
+      // Plein pour vrai : jusqu'au bord (avant, le verre restait à ~95 %).
+      s.target = s.full ? BRIM : BOTTOM - (BOTTOM - TOP) * f;
+      svg.classList.toggle('is-full', s.full);
+      if (still) { s.y = s.target; s.v = 0; s.dome = s.full ? 4.2 : 0; draw(); return; }
       if (pour && f > 0) {
-        s.slosh += 3.2;
-        s.v -= 18;
-        splash(4);
-        for (let i = 0; i < 6; i++) setTimeout(() => bubble(true), i * 70);
+        // Chaque coche verse un peu d'eau; cochées vite, les vagues s'additionnent sans déborder
+        // ni éclabousser partout : la montée reste une seule belle ligne.
+        const now = performance.now(), quick = now - s.lastPour < 450;
+        s.lastPour = now;
+        s.slosh = Math.min(3.4, s.slosh + (quick ? 1.1 : 2.4));
+        s.v -= quick ? 7 : 13;
+        if (!quick) splash(3);
+        for (let i = 0; i < (quick ? 2 : 5); i++) setTimeout(() => bubble(true), i * 70);
       } else if (!s.raf && s.y === BOTTOM) { s.y = s.target; }
+      if (s.full && !wasFull && pour) {
+        // Le moment « plein » : l'eau monte à ras bord, fait un petit dôme, déborde en quelques
+        // gouttes qui glissent dehors, un reflet traverse le verre et des étincelles s'allument.
+        s.v -= 10; s.slosh = Math.min(3.4, s.slosh + 1.5);
+        setTimeout(() => { splash(5); drip(-1, 0); drip(1, 0.12); drip(-1, 0.5); drip(1, 0.7); }, 260);
+        svg.classList.remove('brim'); void svg.getBoundingClientRect(); svg.classList.add('brim');
+        setTimeout(sparks, 200);
+        setTimeout(() => svg.classList.remove('brim'), 1800);
+      }
       if (!s.raf) s.raf = requestAnimationFrame(step);
     },
   };

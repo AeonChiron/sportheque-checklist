@@ -1448,7 +1448,9 @@ function toggleDone(id) {
   if (!wasAll && allDone()) liftNext = true;
   renderChecklist();
   // Propriétaire : la grande fête (lapin, confettis, musique) seulement à « Fin du quart ».
-  if (e.done) { const ts = planTasks(); sfx('check', { level: ts.filter((x) => state.tasks[x.id]?.done).length / (ts.length || 1) }); buzz('plate'); } else sfx('uncheck');
+  // La dernière tâche : le verre se remplit à ras bord, avec son propre son (pas une note de plus).
+  if (e.done && !wasAll && allDone()) { sfx('brim'); buzz('plate'); }
+  else if (e.done) { const ts = planTasks(); sfx('check', { level: ts.filter((x) => state.tasks[x.id]?.done).length / (ts.length || 1) }); buzz('plate'); } else sfx('uncheck');
   if (!wasAll && allDone()) setTimeout(() => buzz('lift'), reducedMotion() ? 0 : 650);
   if (e.done) document.querySelector(`#taskList [data-id="${CSS.escape(id)}"], #overflowBlock [data-id="${CSS.escape(id)}"]`)?.classList.add('just');
   const tasks = planTasks();
@@ -5356,7 +5358,7 @@ $('#methodBody').addEventListener('click', (ev) => {
 });
 
 // ---------- L'équipe cette semaine (superviseur) ----------
-const tw = { week: '' };
+const tw = { week: '', doneOpen: false };
 async function openTeamWeek({ keep = false } = {}) {
   paintStatic();
   if (!keep || !tw.week) tw.week = mondayOf(todayISO());
@@ -5370,23 +5372,37 @@ function renderTeamWeek({ animate = true } = {}) {
   $('#teamweekEyebrow').textContent = [CONFIG.gymName, weekRange(tw.week)].filter(Boolean).join(' · ');
   const team = (boss.team || []).filter((u) => !u.removed);
   const any = team.some((u) => u.schedule && Object.keys(u.schedule).length);
-  const days = weekDates(tw.week).map((d, i) => {
+  // Propriétaire (23 oct.) : pas de jours pâles. En haut, les jours qui restent; les jours déjà
+  // passés sont pliés ensemble en bas (« Jours terminés »), chacun en une petite ligne qu'on ouvre.
+  const grp = (k, l, row) => `<div class="tw-grp g-${k}"><p class="tw-grp-h">${hubIco(k === 'lead' ? 'shield' : 'team')}<b>${esc(t(k === 'lead' ? 'grpLead' : 'grpEmp'))}</b><em class="num">${l.length}</em></p>${l.length ? halves(l, row) : `<p class="hb-quiet small">${esc(t(k === 'lead' ? 'grpNoLead' : 'grpNoEmp'))}</p>`}</div>`;
+  const dayName = (d) => esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long' })));
+  const dayDate = (d) => esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }));
+  const dayBody = (d, on) => `${on.lead.length || on.emp.length ? `${grp('lead', on.lead, leadRow)}${grp('emp', on.emp, personRow)}` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}${allTasks(d)}`;
+  const dates = weekDates(tw.week);
+  const ahead = dates.filter((d) => d >= todayISO()), gone = dates.filter((d) => d < todayISO());
+  const days = ahead.map((d, i) => {
     const on = peopleOn(d);
-    const past = d < todayISO();
-    const grp = (k, l, row) => `<div class="tw-grp g-${k}"><p class="tw-grp-h">${hubIco(k === 'lead' ? 'shield' : 'team')}<b>${esc(t(k === 'lead' ? 'grpLead' : 'grpEmp'))}</b><em class="num">${l.length}</em></p>${l.length ? halves(l, row) : `<p class="hb-quiet small">${esc(t(k === 'lead' ? 'grpNoLead' : 'grpNoEmp'))}</p>`}</div>`;
-    return `<section class="tw-dayc${d === todayISO() ? ' today' : ''}${past ? ' past' : ''}" style="--k:${i}">
-      <h3><span>${esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long' })))}</span><small class="num">${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
-      ${on.lead.length || on.emp.length ? `${grp('lead', on.lead, leadRow)}${grp('emp', on.emp, personRow)}` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
-      ${allTasks(d)}
-      ${past || !isBoss() ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
+    return `<section class="tw-dayc${d === todayISO() ? ' today' : ''}" style="--k:${i}">
+      <h3><span>${dayName(d)}</span><small class="num">${dayDate(d)}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
+      ${dayBody(d, on)}
+      ${!isBoss() ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
   }).join('');
+  const doneDays = gone.map((d) => {
+    const on = peopleOn(d), all = [...on.lead, ...on.emp];
+    return `<details class="tw-pastday"><summary><span class="tw-pd-check" aria-hidden="true">${HUB_ICO.check}</span><span class="tw-pd-name"><b>${dayName(d)}</b><small class="num">${dayDate(d)}</small></span>
+      <span class="tw-pd-avs" aria-hidden="true">${all.slice(0, 4).map(miniAv).join('')}</span><span class="tw-pd-n num">${esc(t('twPeople', all.length))}</span>${CHEV_R}</summary>
+      <div class="tw-pd-body">${dayBody(d, on)}</div></details>`;
+  }).join('');
+  const sections = `${ahead.length ? `<p class="block-label tw-sec">${esc(t('twDaysLeft'))} <span class="num">${ahead.length}</span></p><div class="tw-days${animate && !reducedMotion() ? ' cascade' : ''}">${days}</div>` : ''}
+    ${gone.length ? `<details class="tw-done"${tw.doneOpen ? ' open' : ''}><summary><span class="tw-done-ico" aria-hidden="true">${HUB_ICO.check}</span><b>${esc(t('twDaysDone'))}</b><span class="tw-done-n num">${gone.length}</span><span class="tw-done-chips">${gone.map((d) => `<i>${esc(dateOf(d).toLocaleDateString(locale(), { weekday: 'short' }).replace('.', ''))}</i>`).join('')}</span>${CHEV_R}</summary><div class="tw-done-list">${doneDays}</div></details>` : ''}`;
   $('#teamBody').innerHTML = `<p class="page-lede">${esc(t(isBoss() ? 'twLede' : 'twLedeAll'))}</p>
     <div class="segmented tw-tabs" role="tablist">
       <button type="button" role="tab" data-tw="0" aria-selected="${tw.week === thisWeek}">${esc(t('twThis'))}</button>
       <button type="button" role="tab" data-tw="1" aria-selected="${tw.week === addDays(thisWeek, 7)}">${esc(t('twNext'))}</button>
     </div>
-    ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>' : any ? `<div class="tw-days${animate && !reducedMotion() ? ' cascade' : ''}">${days}</div><p class="section-note">${esc(t('twHint'))}</p>` : `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('twEmpty'))}</p></div>`}`;
+    ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>' : any ? `${sections}<p class="section-note">${esc(t('twHint'))}</p>` : `<div class="folder-empty alive"><span aria-hidden="true">${illustration('dossier')}</span><p>${esc(t('twEmpty'))}</p></div>`}`;
 }
+document.addEventListener('toggle', (e) => { if (e.target.classList?.contains('tw-done')) tw.doneOpen = e.target.open; }, true);
 // Les tâches « tout le monde ce jour-là » d'une journée (les tâches d'une personne sont sur sa ligne).
 function allTasks(d) {
   const list = (teamPlan.tasks || []).filter((x) => x.date === d && x.who === '*');

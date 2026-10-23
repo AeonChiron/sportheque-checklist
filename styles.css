@@ -1993,7 +1993,7 @@ h1, h2 { font-family: var(--serif); font-weight: 750; font-variation-settings: '
 .glass-count { display: grid; line-height: 1; }
 .glass-count b { font: 700 30px/1 var(--display); color: var(--ink); }
 .glass-count span { margin-top: 4px; font: 600 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-#timeline.full .glass svg { filter: drop-shadow(0 0 8px rgba(24, 185, 214, .55)); }
+#timeline.full .glass svg { filter: drop-shadow(0 0 6px rgba(24, 185, 214, .4)); }
 #timeline.lift .glass { transform-origin: 50% 100%; animation: glass-cheers 1.1s cubic-bezier(.3, 1.4, .5, 1) .25s; }
 @keyframes glass-cheers { 25% { transform: rotate(-10deg) translateY(-6px); } 55% { transform: rotate(7deg) translateY(-2px); } 80% { transform: rotate(-2deg); } }
 .sheet-hero:not(:has(.visual)) { display: flex; }
@@ -3397,3 +3397,69 @@ body.fictive .screen:not(.pool-screen) { padding-top: var(--fict-pad) !important
 .hb-crew small { font: 700 11px/1 var(--font); letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
 .hb-crew b { font: 650 14.5px/1.3 var(--font); }
 .t-teamweek .hb-ico { background: linear-gradient(145deg, #ff86b0, #d6407c); --tc: rgba(214, 64, 124, .8); }
+
+/* Titre bien centré (propriétaire) : l'espacement des lettres ajoute un vide après la dernière
+   lettre du sous-titre; on le rend à gauche. Le « que » final pèse un peu à droite. */
+.pool-head .pool-app { padding-left: .18em; }
+.pool-head .pool-gym { position: relative; left: -.02em; }
+
+/* ---------- Le verre plein (propriétaire, 23 oct.) ---------- */
+.glass-sweep { opacity: 0; transform: translateX(0) skewX(-18deg); }
+.glass svg.brim .glass-sweep { animation: glass-sweep 1.1s cubic-bezier(.4, 0, .2, 1) .35s; }
+@keyframes glass-sweep { 0% { opacity: 0; transform: translateX(0) skewX(-18deg); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateX(190px) skewX(-18deg); } }
+.drip { fill: #18b9d6; }
+:root[data-theme="dark"] .drip { fill: #3fd6f0; }
+.brim-spark { fill: #ffd447; transform-box: fill-box; transform-origin: center; opacity: 0; animation: brim-spark 1.2s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0s) both; }
+@keyframes brim-spark { 0% { opacity: 0; transform: scale(0) rotate(0deg); } 35% { opacity: 1; transform: scale(1.15) rotate(45deg); } 100% { opacity: 0; transform: scale(.4) rotate(120deg); } }
+/* L'eau a de la profondeur (plus claire en haut) et une surface qui brille. */
+.w-top { stop-color: #4fd3ec; }
+.w-bot { stop-color: #0fa6c7; }
+:root[data-theme="dark"] .w-top { stop-color: #6fe4f7; }
+:root[data-theme="dark"] .w-bot { stop-color: #1aa9c6; }
+.water-top { fill: none; stroke: rgba(255, 255, 255, .75); stroke-width: 1.4; stroke-linecap: round; }
+.glass svg.is-full .glass-rim { stroke: color-mix(in srgb, #0b6f86 60%, transparent); stroke-width: 2.2; }
+.glass svg.is-full .water-top { stroke: rgba(255, 255, 255, .95); stroke-width: 1.8; }
+#timeline .glass { position: relative; }
+#timeline .glass::after { content: ''; position: absolute; left: 50%; top: 52%; width: 100%; aspect-ratio: 1; border-radius: 50%; border: 3px solid rgba(24, 185, 214, .55); transform: translate(-50%, -50%) scale(.4); opacity: 0; pointer-events: none; }
+#timeline.full.lift .glass::after { animation: glass-ring 1s cubic-bezier(.2, .8, .3, 1) .45s; }
+@keyframes glass-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.5); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); } }
+#timeline.full .glass-count b { color: #0d9bb8; }
+#timeline.full.lift .glass-count b { animation: count-pop .6s cubic-bezier(.3, 1.8, .5, 1) .4s; }
+@keyframes count-pop { 40% { transform: scale(1.25); } }
+.glass-count b { display: inline-block; transform-origin: left center; }
+:root[data-theme="dark"] #timeline.full .glass-count b { color: #5fe0f5; }
+@media (prefers-reduced-motion: reduce) { .glass svg.brim .glass-sweep, .brim-spark, #timeline.full.lift .glass::after, #timeline.full.lift .glass-count b { animation: none !important; } }
+
+/* ---------- La semaine : jours qui restent / jours terminés (propriétaire, 23 oct.) ---------- */
+.tw-sec { display: flex; align-items: center; gap: 8px; margin: 18px 0 10px; }
+.tw-sec .num { padding: 3px 8px; border-radius: 99px; background: var(--sunk); color: var(--ink); letter-spacing: 0; }
+.tw-done { margin-top: 18px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+.tw-done > summary { display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; list-style: none; min-height: 56px; }
+.tw-done > summary::-webkit-details-marker { display: none; }
+.tw-done > summary > b { font: 750 16px/1.2 var(--font); }
+.tw-done-ico, .tw-pd-check { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #34c77b, #1f9d5c); box-shadow: 0 4px 10px rgba(31, 157, 92, .3); }
+.tw-done-ico svg, .tw-pd-check svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.tw-done-n { font: 750 13px/1 var(--font); padding: 4px 8px; border-radius: 99px; background: color-mix(in srgb, #1f9d5c 14%, var(--surface)); color: #17804a; }
+.tw-done-chips { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.tw-done-chips i { font: 650 11.5px/1 var(--font); font-style: normal; padding: 4px 7px; border-radius: 8px; background: var(--sunk); color: var(--muted); text-transform: capitalize; }
+.tw-done > summary > .ico, .tw-pastday > summary > .ico { width: 18px; height: 18px; flex: none; opacity: .5; transition: transform .25s cubic-bezier(.3, 1.4, .5, 1); }
+.tw-done[open] > summary > .ico, .tw-pastday[open] > summary > .ico { transform: rotate(90deg); }
+.tw-done-list { display: grid; gap: 8px; padding: 0 12px 12px; }
+.tw-done[open] .tw-done-list { animation: fp-in .35s cubic-bezier(.2, .9, .3, 1.1) both; }
+.tw-pastday { border-radius: 18px; border: 1px solid var(--line); background: var(--sunk); }
+.tw-pastday > summary { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; list-style: none; min-height: 52px; }
+.tw-pastday > summary::-webkit-details-marker { display: none; }
+.tw-pastday .tw-pd-check { width: 24px; height: 24px; box-shadow: none; }
+.tw-pastday .tw-pd-check svg { width: 14px; height: 14px; }
+.tw-pd-name { display: grid; gap: 2px; min-width: 0; }
+.tw-pd-name b { font: 700 15px/1.1 var(--font); }
+.tw-pd-name small { font: 600 12.5px/1 var(--font); color: var(--muted); }
+.tw-pd-avs { display: flex; padding-left: 6px; margin-left: auto; }
+.tw-pd-avs .tw-av.mini { width: 26px; height: 26px; }
+.tw-pd-n { font: 650 12.5px/1 var(--font); color: var(--muted); white-space: nowrap; }
+.tw-pd-body { padding: 4px 12px 12px; }
+:root[data-theme="dark"] .tw-done-n { color: #5fdc9a; }
+.tw-done > summary > b { white-space: nowrap; }
+.tw-done-chips { flex-wrap: nowrap; }
+@media (max-width: 440px) { .tw-done-chips { display: none; } .tw-done-n { margin-right: auto; } }
+@media (max-width: 360px) { .tw-pd-avs { display: none; } }

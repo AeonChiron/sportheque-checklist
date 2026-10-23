@@ -169,3 +169,10 @@ Plain static site + one serverless function. No build step.
 - Server route `roster?from&to` (any signed-in user): `{people:[{id, name, role employee|boss, avatar, schedule, overrides, me?}]}`. No emails (id = sha256 slice), admin hidden (ghost) except to himself. Needs a Netlify deploy.
 - Client `loadTeamView(from,to)`: boss → `listTeam` + plan; employee → `listRoster`, mapped into `boss.team` / `teamPlan.overrides` (keys `id:<id>`, own = my email).
 - Employee hub tile « L'horaire de l'équipe » → `#equipe` (read-only: no + buttons, no tasks of others). « Avec toi » line on the main card (`crewWith`: overlapping hours that day; supervisors flagged).
+
+## Polish (owner 23 oct.)
+- Front page: keep the original floor blue (#47a8ea → #2a80c8); never a big white glow (looked pale). Light = pre-rendered beam sprites fanned from a source above-left (pool.js `makeBeam`, `BEAMS`, `light()`), two layers that sway, plus faint dust motes.
+- Bunny: no collision while dragging (it used to stick then jump through buttons); after a drop it eases out of a button; bounces only when sliding. Rest x uses its visual center (`LOOK_X` 0.56). Title optically centered (subtitle padding-left .18em, title left -.02em) — measured within ±1 px.
+- Check sound: one flowing melody in a soft register (~250–900 Hz), shorter and no bass when tapped fast; never octave jumps with progress. Last task plays `brim` instead.
+- Glass: full = to the brim (BRIM 7.2, meniscus dome), water gradient + lit surface line, overflow drips, sweep shine, sparkles, ring. Pours tapped quickly add less slosh/splash.
+- Week page: "Jours qui restent" (today + future) then a folded "Jours terminés" with each past day as a one-line `<details>`. No pale/opacity days. Pretend supervisors' PM hours end at 19 h.
