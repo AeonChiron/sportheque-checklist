@@ -716,6 +716,8 @@ function openQuickSchedule({ first = false, target = null } = {}) {
       if (current === 'history') renderHistory({ animate: false });
       if (current === 'hub') renderHub({ animate: false });
       if (current === 'plan') renderPlan({ animate: false });
+      if (current === 'todaygym') renderToday({ animate: false });
+      if (current === 'teamweek') renderTeamWeek({ animate: false });
     };
   }, `<button type="button" class="btn primary" id="qsSave">${esc(t('qsSave'))}</button>`);
 }
@@ -3722,7 +3724,7 @@ function openFictive(role = '') {
   openSheet(`<div class="sheet-head fp-head"><span class="pf-beta">${esc(t('fictBeta'))}</span><h2>${esc(t('fictTitle'))}</h2><p class="lede">${esc(t('fictLede'))}</p></div>
     <div class="fp-roles">${tile('employee', '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zM9 7v14M15 7v14M9 13h6"/></svg>')}${tile('boss', '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>')}</div>
     ${role ? `<p class="block-label fp-label">${esc(t(role === 'boss' ? 'fictPickBoss' : 'fictPickEmp'))}</p>
-    <div class="fp-grid${role === 'boss' ? ' gold' : ''}">${people.map((p, i) => `<button type="button" class="fp-person" data-fpwho="${esc(p.email)}" style="--i:${i}"><span class="fp-av">${avatarOf(p, esc(p.name[0]))}</span><span class="fp-txt"><b>${esc(p.name)}</b><small>${esc(role === 'boss' ? t('fictBossSched') : fictDays(p.schedule))}</small></span>${CHEV_R}</button>`).join('')}</div>` : ''}
+    <div class="fp-grid${role === 'boss' ? ' gold' : ''}">${people.map((p, i) => `<button type="button" class="fp-person" data-fpwho="${esc(p.email)}" style="--i:${i}"><span class="fp-av">${avatarOf(p, esc(p.name[0]))}</span><span class="fp-txt"><b>${esc(p.name)}</b><small>${esc(fictDays(p.schedule))}</small></span>${CHEV_R}</button>`).join('')}</div>` : ''}
     <p class="section-note fp-note">${esc(t('fictNote'))}</p>`, (root) => {
     root.querySelector('.fp-roles').addEventListener('click', (e) => { const b = e.target.closest('[data-fprole]'); if (b) { sfx('tap'); openFictive(b.dataset.fprole); requestAnimationFrame(() => root.querySelector('.fp-label')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); } });
     root.querySelector('.fp-grid')?.addEventListener('click', (e) => { const b = e.target.closest('[data-fpwho]'); if (!b) return; b.classList.add('going'); sfx('tap'); setTimeout(() => enterFictive(b.dataset.fpwho), 260); });
@@ -4777,8 +4779,8 @@ function goProtocol() {
 //  2. il ouvre le tableau de bord : tout ce qu'on peut faire, du plus utile au moins utile.
 // Mots simples, gros boutons, une chose par carte.
 // ======================================================================
-Object.assign(NAV_HASH, { hub: '#accueil', mine: '#mes-quarts', plan: '#horaire', glance: '#quart', method: '#methode', teamweek: '#equipe' });
-Object.assign(RANK, { hub: 0.5, mine: 5, plan: 5, glance: 5.5, method: 5, teamweek: 5 });
+Object.assign(NAV_HASH, { hub: '#accueil', mine: '#mes-quarts', plan: '#horaire', glance: '#quart', method: '#methode', teamweek: '#equipe', todaygym: '#aujourdhui' });
+Object.assign(RANK, { hub: 0.5, mine: 5, plan: 5, glance: 5.5, method: 5, teamweek: 5, todaygym: 5 });
 REVIEW_BACK.mine = ['mine', 'tMine'];
 
 const HUB_ICO = {
@@ -4798,6 +4800,7 @@ const HUB_ICO = {
   star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
   go: '<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
   send: '<svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/></svg>',
 };
@@ -4818,7 +4821,7 @@ function teamTarget(u, date) {
   const p = ov ? { start: ov.start, end: ov.end } : presetOf(v);
   if (!p?.start) return null;
   const sp = SPECIALS.find((x) => x.names?.includes(firstName(u.name)) && x.weekday === dowOf(date));
-  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, avatar: u.avatar || '', changed: Boolean(ov), by: ov?.by || '' };
+  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, avatar: u.avatar || '', lead: isLeadUser(u), changed: Boolean(ov), by: ov?.by || '' };
 }
 async function refreshTeamPlan(from, to) {
   try { const r = await request(`plan?team=1&from=${from}&to=${to}`); teamPlan = { overrides: r.overrides || {}, tasks: r.tasks || [], from, to }; return true; } catch { return false; }
@@ -5063,19 +5066,93 @@ function hubBoss() {
       <span class="pb-minis">${open.slice(0, 2).map(row).join('')}</span>
       <button type="button" class="hb-cta" data-hub="problems"><span>${esc(t('bhSee'))}</span>${HUB_ICO.go}</button></section>`;
   }
-  const people = (boss.team || []).filter((u) => !u.removed).map((u) => teamTarget(u, today)).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start));
+  // Propriétaire : deux tuiles, les superviseurs d'abord, puis les employés (combien, qui).
+  const on = peopleOn(today);
   const todayCard = `<section class="hb-today"><h2>${hubIco('team')}${esc(t('todayGym'))}</h2>
     ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i></div>'
-      : people.length ? `<div class="tw-people">${people.map(personRow).join('')}</div>` : `<p class="hb-quiet">${esc(t('nobodyToday'))}</p>`}
+      : `<div class="hb-grps">${groupTile('lead', on.lead)}${groupTile('emp', on.emp)}</div>`}
   </section>`;
   return `${main}${todayCard}
     <nav class="hb-tiles">
       ${tile('reports', 'reports', t('tReports'), t('tReportsSub'))}
       ${tile('teamweek', 'team', t('tTeamWeek'), t('tTeamWeekSub'))}
+      ${tile('myhours', 'plan', t('tMyHours'), t('tMyHoursSub'))}
       ${tile('method', 'method', t('tMethod'), t('tMethodSub'))}
       ${tile('access', 'access', t('tAccess'), t('tAccessSub'))}
     </nav>`;
 }
+// ---------- Superviseurs et employés, AM et PM (propriétaire, 22 oct.) ----------
+// AM : on commence avant midi. PM : tout le reste.
+const isLeadUser = (u) => ['boss', 'admin'].includes(u?.role);
+const isAM = (tg) => toMin(tg.start) < 12 * 60;
+function peopleOn(date) {
+  const me = session.user?.email;
+  const lead = [], emp = [];
+  for (const raw of (boss.team || []).filter((u) => !u.removed)) {
+    const u = raw.email === me ? { ...raw, schedule: mySchedule() } : raw; // mes heures : celles du téléphone, tout de suite
+    const tg = teamTarget(u, date);
+    if (tg) (isLeadUser(u) ? lead : emp).push(tg);
+  }
+  const by = (a, b) => toMin(a.start) - toMin(b.start) || a.name.localeCompare(b.name);
+  return { lead: lead.sort(by), emp: emp.sort(by) };
+}
+const miniAv = (tg) => `<span class="tw-av mini${tg.avatar ? ' has-pic' : ''}">${avatarOf({ avatar: tg.avatar }, esc((tg.name[0] || '?').toUpperCase()))}</span>`;
+function groupTile(kind, list) {
+  const am = list.filter(isAM).length;
+  const lead = kind === 'lead';
+  return `<button type="button" class="hb-grp g-${kind}" data-today="${kind}">
+    <span class="hb-grp-top">${hubIco(lead ? 'shield' : 'team')}<b>${esc(t(lead ? 'grpLead' : 'grpEmp'))}</b>${CHEV_R}</span>
+    <span class="hb-grp-n"><b class="num">${list.length}</b><small>${esc(t('grpToday'))}</small></span>
+    ${list.length ? `<span class="hb-grp-avs" aria-hidden="true">${list.slice(0, 5).map(miniAv).join('')}${list.length > 5 ? `<span class="tw-av mini more">+${list.length - 5}</span>` : ''}</span>
+    <span class="hb-grp-names">${esc(list.map((x) => x.name).join(', '))}</span>
+    <span class="hb-grp-split"><span>AM <b class="num">${am}</b></span><span>PM <b class="num">${list.length - am}</b></span></span>`
+      : `<span class="hb-grp-names quiet">${esc(t(lead ? 'grpNoLead' : 'grpNoEmp'))}</span>`}
+  </button>`;
+}
+// Un superviseur : son nom et ses heures (pas de zone ni de tâche : il ne fait pas le ménage).
+function leadRow(tg) {
+  return `<div class="tw-person tw-lead">${miniAv(tg).replace(' mini', '')}<span class="tw-who"><b>${esc(tg.name)}</b><small class="num">${hm(tg.start)} – ${hm(tg.end)}</small></span></div>`;
+}
+// Une liste coupée en AM / PM (une moitié vide ne s'affiche pas).
+function halves(list, row) {
+  const am = list.filter(isAM), pm = list.filter((x) => !isAM(x));
+  const part = (k, l) => (l.length ? `<div class="tw-half"><p class="tw-half-h"><span class="half-tag h-${k}">${k.toUpperCase()}</span><small>${esc(t(k === 'am' ? 'halfAm' : 'halfPm'))}</small><em class="num">${l.length}</em></p><div class="tw-people">${l.map(row).join('')}</div></div>` : '');
+  return part('am', am) + part('pm', pm);
+}
+
+// ---------- Aujourd'hui dans le gym : la page ----------
+const td = { kind: 'lead' };
+async function openToday(kind) {
+  if (kind) td.kind = kind;
+  paintStatic();
+  renderToday();
+  show('todaygym');
+  try { boss.team = await listTeam(); boss.teamLoaded = true; } catch { boss.teamLoaded = true; }
+  await refreshTeamPlan(todayISO(), todayISO());
+  if (current === 'todaygym') renderToday({ animate: false });
+}
+function renderToday({ animate = true } = {}) {
+  const d = todayISO();
+  const on = peopleOn(d);
+  const lead = td.kind === 'lead';
+  const list = lead ? on.lead : on.emp;
+  $('#todayEyebrow').textContent = [CONFIG.gymName, cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }))].filter(Boolean).join(' · ');
+  $('#todayBody').innerHTML = `<div class="segmented tw-tabs td-tabs" role="tablist">
+      <button type="button" role="tab" data-tdk="lead" aria-selected="${lead}">${esc(t('grpLead'))} <span class="num">${on.lead.length}</span></button>
+      <button type="button" role="tab" data-tdk="emp" aria-selected="${!lead}">${esc(t('grpEmp'))} <span class="num">${on.emp.length}</span></button>
+    </div>
+    ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
+      : `<div class="td-list${animate && !reducedMotion() ? ' cascade' : ''}">${list.length ? halves(list, lead ? leadRow : personRow) : `<p class="hb-quiet">${esc(t(lead ? 'grpNoLead' : 'grpNoEmp'))}</p>`}
+      ${lead ? '' : `${allTasks(d)}<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</div>`}
+    ${lead && !on.lead.some((x) => x.email === session.user?.email) ? `<button type="button" class="btn ghost td-mine" data-hub="myhours">${HUB_ICO.plan}<span>${esc(t('grpSetMine'))}</span></button>` : ''}`;
+}
+document.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-today]');
+  if (g) { sfx('tap'); td.kind = g.dataset.today; if (location.hash === '#aujourdhui') openToday(); else location.hash = 'aujourdhui'; return; }
+  const k = e.target.closest('[data-tdk]');
+  if (k && k.dataset.tdk !== td.kind) { sfx('tap'); td.kind = k.dataset.tdk; renderToday(); }
+});
+
 // Une personne à l'horaire : son nom, ses heures, et ce qu'elle fera (zone, miroirs, tâche de la semaine).
 function personRow(tg) {
   const F = shiftFacts(tg);
@@ -5258,11 +5335,12 @@ function renderTeamWeek({ animate = true } = {}) {
   const team = (boss.team || []).filter((u) => !u.removed);
   const any = team.some((u) => u.schedule && Object.keys(u.schedule).length);
   const days = weekDates(tw.week).map((d, i) => {
-    const people = team.map((u) => teamTarget(u, d)).filter(Boolean).sort((a, b) => toMin(a.start) - toMin(b.start));
+    const on = peopleOn(d);
     const past = d < todayISO();
+    const grp = (k, l, row) => `<div class="tw-grp g-${k}"><p class="tw-grp-h">${hubIco(k === 'lead' ? 'shield' : 'team')}<b>${esc(t(k === 'lead' ? 'grpLead' : 'grpEmp'))}</b><em class="num">${l.length}</em></p>${l.length ? halves(l, row) : `<p class="hb-quiet small">${esc(t(k === 'lead' ? 'grpNoLead' : 'grpNoEmp'))}</p>`}</div>`;
     return `<section class="tw-dayc${d === todayISO() ? ' today' : ''}${past ? ' past' : ''}" style="--k:${i}">
       <h3><span>${esc(cap(dateOf(d).toLocaleDateString(locale(), { weekday: 'long' })))}</span><small class="num">${esc(dateOf(d).toLocaleDateString(locale(), { day: 'numeric', month: 'short' }))}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
-      ${people.length ? `<div class="tw-people">${people.map(personRow).join('')}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
+      ${on.lead.length || on.emp.length ? `${grp('lead', on.lead, leadRow)}${grp('emp', on.emp, personRow)}` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
       ${allTasks(d)}
       ${past ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
   }).join('');
@@ -5314,7 +5392,7 @@ function openDayEdit(email, date) {
 }
 // Ajouter une tâche spéciale, à une heure : une personne, ou tout le monde ce jour-là.
 function openTaskSheet(date, preWho = '') {
-  const people = (boss.team || []).filter((u) => !u.removed && (u.role === 'employee' || (u.schedule && Object.keys(u.schedule).length)));
+  const people = (boss.team || []).filter((u) => !u.removed && !isLeadUser(u)); // les tâches vont aux employés
   let who = preWho || '*';
   let mins = 15;
   const working = (boss.team || []).map((u) => teamTarget(u, date) ? u.email : '').filter(Boolean);
@@ -5347,7 +5425,7 @@ function openTaskSheet(date, preWho = '') {
 }
 // Ajouter quelqu'un un jour où il ne travaille pas : choisir la personne, puis ses heures.
 function openAddPerson(date) {
-  const off = (boss.team || []).filter((u) => !u.removed && !teamTarget(u, date));
+  const off = (boss.team || []).filter((u) => !u.removed && !isLeadUser(u) && !teamTarget(u, date));
   openSheet(`<div class="sheet-head"><h2>${esc(t('addPersonTitle'))}</h2><p class="lede">${esc(cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</p></div>
     <div class="tk-who">${off.map((u) => `<button type="button" class="tk-person" data-ap="${esc(u.email)}"><span class="tw-av${u.avatar ? ' has-pic' : ''}">${avatarOf(u, esc((u.name[0] || '?').toUpperCase()))}</span><b>${esc(u.name.split(' ')[0])}</b><small>${esc(roleName(u.role))}</small></button>`).join('') || `<p class="hb-quiet">${esc(t('addPersonNone'))}</p>`}</div>`, (root) => {
     root.addEventListener('click', (e) => { const b = e.target.closest('[data-ap]'); if (b) { closeSheet(); setTimeout(() => openDayEdit(b.dataset.ap, date), 340); } });
@@ -5360,6 +5438,7 @@ function openTeamSchedule(email) {
 }
 function rerenderBossViews() {
   if (current === 'teamweek') renderTeamWeek({ animate: false });
+  if (current === 'todaygym') renderToday({ animate: false });
   if (current === 'hub') renderHub({ animate: false });
   if (current === 'glance' && glanceTarget?.email) { const u = teamUser(glanceTarget.email); const tg = u && teamTarget(u, glanceTarget.date); glanceTarget = tg; if (!tg) { openTeamWeek({ keep: true }); return; } renderGlance(); }
 }
@@ -5409,6 +5488,7 @@ document.addEventListener('click', (ev) => {
   if (k === 'flag') { openFlag(); return; }
   if (k === 'method') { openMethod(); return; }
   if (k === 'teamweek') { openTeamWeek(); return; }
+  if (k === 'myhours') { openQuickSchedule(); return; }
   if (k === 'reports') { if (location.hash === '#historique') openHistory({ team: true }); else location.hash = 'historique'; return; }
   if (k === 'problems' || k === 'access') {
     boss.tab = k === 'access' ? 'team' : 'problems';
@@ -5471,6 +5551,7 @@ function route() {
   if (h === '#quart') return openGlance();
   if (h === '#methode') return openMethod();
   if (h === '#equipe') return isBoss() ? openTeamWeek() : openHub();
+  if (h === '#aujourdhui') return isBoss() ? openToday() : openHub();
   if (h === '#affiche') return openPoster();
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();

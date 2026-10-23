@@ -15,7 +15,7 @@ const MASC = ['lapin', 'ours', 'renard', 'chat', 'faon', 'souris', 'salut', 'cou
 export const fictiveOn = () => { try { return Boolean(JSON.parse(sessionStorage.getItem(FLAG))); } catch { return false; } };
 export const fictiveWho = () => { try { return JSON.parse(sessionStorage.getItem(FLAG))?.who || ''; } catch { return ''; } };
 
-const H = { jour: ['07:30', '15:30'], soir: ['16:30', '23:00'], court: ['18:00', '23:00'], mid: ['15:00', '21:00'], tot: ['06:00', '11:00'] };
+const H = { jour: ['07:30', '15:30'], soir: ['16:30', '23:00'], court: ['18:00', '23:00'], mid: ['15:00', '21:00'], tot: ['06:00', '11:00'], bam: ['08:00', '16:00'], bpm: ['14:00', '22:00'] };
 const day = (k) => ({ start: H[k][0], end: H[k][1] });
 // Lundi = 0. Chaque jour a 2 à 4 personnes; quelques horaires « Autre » pour faire vrai.
 const EMPLOYEES = [
@@ -30,13 +30,21 @@ const EMPLOYEES = [
   ['Rosalie', { 3: 'mid', 5: 'mid', 6: 'mid' }],
   ['Thomas', { 1: 'jour', 2: 'tot', 4: 'jour' }],
 ];
-const BOSSES = ['Martine', 'Patrick', 'Isabelle', 'Marc-André', 'Nathalie', 'Sylvain'];
+// Les superviseurs ont leurs heures aussi (propriétaire : AM / PM), un ou deux le matin, un le soir.
+const BOSSES = [
+  ['Martine', { 0: 'bam', 1: 'bam', 2: 'bam', 3: 'bam' }],
+  ['Patrick', { 0: 'bpm', 1: 'bpm', 2: 'bpm' }],
+  ['Isabelle', { 3: 'bam', 4: 'bam', 5: 'bam', 6: 'bam' }],
+  ['Marc-André', { 3: 'bpm', 4: 'bpm', 5: 'bpm' }],
+  ['Nathalie', { 4: 'bam', 6: 'bpm', 0: 'bam' }],
+  ['Sylvain', { 6: 'bam', 5: 'bpm', 1: 'bam' }],
+];
 const slug = (n) => n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]+/g, '-');
 const mailOf = (n) => `${slug(n)}@equipe-fictive.ca`;
 
 export const FICTIVE_PEOPLE = [
   ...EMPLOYEES.map(([name, sc], i) => ({ name, email: mailOf(name), role: 'employee', avatar: `m:${MASC[i % 8]}`, schedule: Object.fromEntries(Object.entries(sc).map(([k, v]) => [k, day(v)])) })),
-  ...BOSSES.map((name, i) => ({ name, email: mailOf(name), role: 'boss', avatar: `m:${MASC[(i + 10) % 8]}`, schedule: {} })),
+  ...BOSSES.map(([name, sc], i) => ({ name, email: mailOf(name), role: 'boss', avatar: `m:${MASC[(i + 10) % 8]}`, schedule: Object.fromEntries(Object.entries(sc).map(([k, v]) => [k, day(v)])) })),
 ];
 
 // Hasard « fixe » : le même gym chaque fois.
@@ -90,7 +98,7 @@ function generate(today) {
         const id = `${(new Date(at).getTime()).toString(36).padStart(9, '0')}${Math.floor(r() * 1e5).toString(36)}`;
         flags.push({ id, category, location, text, urgent: urgent && r() < 0.7, at });
         const old = back > 3 || (back > 0 && r() < 0.5);
-        problems.push({ id, category, location, text, urgent: flags[0].urgent, at, by: p.name, byEmail: p.email, photos: 0, status: old && r() < 0.92 ? 'resolved' : 'open', resolvedBy: BOSSES[Math.floor(r() * 6)], resolvedAt: old ? atISO(addDays(date, 1), '10:00') : '' });
+        problems.push({ id, category, location, text, urgent: flags[0].urgent, at, by: p.name, byEmail: p.email, photos: 0, status: old && r() < 0.92 ? 'resolved' : 'open', resolvedBy: BOSSES[Math.floor(r() * 6)][0], resolvedAt: old ? atISO(addDays(date, 1), '10:00') : '' });
       }
       const sent = atISO(date, h.end === '23:00' ? '22:58' : h.end);
       const rec = sanitizeShift({ date, shift, name: p.name, start: h.start, end: h.end, submittedAt: sent, savedAt: sent, items, flags, notes: r() < 0.12 ? NOTES[Math.floor(r() * NOTES.length)] : '', supervisor: '' });

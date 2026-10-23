@@ -158,3 +158,9 @@ Plain static site + one serverless function. No build step.
 - Front-page button « Essayer avec une équipe fictive » (BÊTA, « 10 employés et 6 superviseurs inventés ») for everyone, signed in or out. Picker = two tiles (Employé / Superviseur) then the people. No "New" variants.
 - `js/fictive.js`: seeded generator (92 days of shifts, problems, tasks, an override) + `fakeRequest` mirroring the real API routes. sessionStorage flag `gym-fictive`, DB `gym-fictive-db`; all localStorage via `ns()` gets `fict:` prefix. Nothing hits the network (push/feedback → 404). `isRealAdmin()` is false inside.
 - Red exit pill fixed top-left on every screen (`#fictExit`, body.fictive pads screens). Exit erases everything and reloads. Avatars: the 8 mascots, each used twice.
+
+## Superviseurs / employés, AM / PM (owner 22 oct.)
+- Supervisor hub « Aujourd'hui dans le gym » = two tiles (Superviseurs first, then Employés): count, avatars, names, AM/PM counts. Tap → page `#aujourdhui` (screen `todaygym`) with tabs, split AM/PM.
+- AM = start before 12:00; everything else PM. `isLeadUser` = role boss or admin. Helpers `peopleOn(date)`, `halves`, `leadRow`.
+- Week page `#equipe`: each day Superviseurs then Employés, each AM/PM. Supervisors show name + hours only (no zones/weekly tasks); employees keep their chips. Tasks and « + Quelqu'un » are employees only.
+- Supervisors set their own hours via the « Mon horaire » tile (same one-tap picker). Pretend supervisors have made-up schedules.

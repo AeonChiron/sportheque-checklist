@@ -3,6 +3,28 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-22-ampm',
+    date: '2026-10-22',
+    fr: {
+      title: 'Superviseurs et employés, AM et PM',
+      items: [
+        '« Aujourd’hui dans le gym » : deux tuiles, Superviseurs puis Employés (combien, qui, AM / PM).',
+        'Une page pour chacun, coupée en AM (commence avant midi) et PM.',
+        '« L’équipe cette semaine » : chaque jour, superviseurs puis employés, en AM et PM; les tâches de la semaine seulement pour les employés.',
+        'Les superviseurs mettent leurs propres heures (tuile « Mon horaire »).',
+      ],
+    },
+    en: {
+      title: 'Supervisors and employees, AM and PM',
+      items: [
+        '“Today in the gym”: two tiles, Supervisors then Employees (how many, who, AM / PM).',
+        'A page for each, split into AM (starts before noon) and PM.',
+        '“The team this week”: each day, supervisors then employees, in AM and PM; weekly tasks only for employees.',
+        'Supervisors set their own hours (“My schedule” tile).',
+      ],
+    },
+  },
+  {
     id: '2026-10-22-fictive',
     date: '2026-10-22',
     fr: {
