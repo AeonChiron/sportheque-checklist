@@ -78,12 +78,21 @@ export async function loadWeek(dates) {
     const res = await request(`board?dates=${dates.join(',')}`);
     for (const d of dates) {
       const remote = (Array.isArray(res?.days?.[d]) ? res.days[d] : []).map(sanitizeShift).filter(Boolean);
-      days[d] = combineDay(remote, all[d] || []);
+      days[d] = combineDay(remote, pendingLocal()[d] || []);
     }
     return { live: true, days };
   } catch {
     return { live: false, days };
   }
+}
+
+// Propriétaire : les mêmes chiffres dans toutes les vues. Quand le serveur répond, c'est lui
+// qui a raison; ce téléphone n'ajoute que les quarts pas encore envoyés (en file).
+// Avant, une vieille copie locale (quart effacé, essais) gonflait certaines vues.
+function pendingLocal() {
+  const out = {};
+  for (const s of readJSON(QUEUE, [])) { const c = sanitizeShift(s); if (c) (out[c.date] ||= []).push(c); }
+  return out;
 }
 
 // Les derniers quarts enregistrés, du plus récent au plus ancien : { live, shifts }.
@@ -93,7 +102,7 @@ export async function loadRecent(n = 40) {
   try {
     const res = await request(`board?recent=${n}`);
     const remote = Object.fromEntries(Object.entries(res?.days || {}).map(([d, list]) => [d, (Array.isArray(list) ? list : []).map(sanitizeShift).filter(Boolean)]));
-    return { live: true, shifts: recentShifts(remote, local, n) };
+    return { live: true, shifts: recentShifts(remote, pendingLocal(), n) };
   } catch {
     return { live: false, shifts: recentShifts({}, local, n) };
   }

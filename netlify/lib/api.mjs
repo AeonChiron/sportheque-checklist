@@ -257,7 +257,9 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     // Propriétaire : pas de surveillance. Un quart encore en cours n'est visible que par la personne
     // qui le fait (sa sauvegarde), et l'heure où chaque case a été cochée n'est jamais renvoyée.
     const mine = (s) => String(s?.name || '').trim().toLowerCase() === String(me?.name || '').trim().toLowerCase();
-    const shown = (list) => (list || []).filter((s) => !s.open || mine(s)).map((s) => ({ ...s, items: (s.items || []).map(({ doneAt, ...i }) => i) }));
+    const admin = me?.role === 'admin';
+    // Les quarts « fantômes » de l'admin (tests) : seul un admin les voit.
+    const shown = (list) => (list || []).filter((s) => (!s.open || mine(s)) && (!s.ghost || admin)).map((s) => ({ ...s, items: (s.items || []).map(({ doneAt, ...i }) => i) }));
     if (req.method === 'GET') {
       const params = new URL(req.url).searchParams;
       if (params.has('recent')) {
@@ -353,7 +355,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const sameCustom = old && JSON.stringify(old.custom || []) === JSON.stringify(shift.custom);
     shift.customStatus = shift.custom.length ? (sameCustom && old.customStatus) || 'pending' : '';
     shift.customBy = shift.custom.length && sameCustom ? old.customBy || '' : '';
-    await store.setJSON(shift.date, mergeShift(list, { ...shift, savedOn: today, savedAt }));
+    await store.setJSON(shift.date, mergeShift(list, { ...shift, savedOn: today, savedAt, ghost: me?.role === 'admin' }));
     return json({ ok: true });
   }
 
@@ -396,9 +398,9 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const id = problemId();
       await Promise.all(files.map((buf, i) => photos().set(`${id}-${i}`, buf)));
       await cleanPhotos();
-      const p = { ...clean, id, by: me.name, byEmail: me.email, photos: files.length, status: 'open', resolvedBy: '', resolvedAt: '' };
+      const p = { ...clean, id, by: me.name, byEmail: me.email, photos: files.length, status: 'open', resolvedBy: '', resolvedAt: '', ghost: me.role === 'admin' };
       await problems().setJSON(id, p);
-      if (p.urgent) { try { await notifyUrgent(p); } catch { /* l'envoi ne bloque jamais le signalement */ } }
+      if (p.urgent && !p.ghost) { try { await notifyUrgent(p); } catch { /* l'envoi ne bloque jamais le signalement */ } }
       return json({ id });
     }
     if (!lead(me)) return json({ error: 'boss' }, 403);
@@ -412,12 +414,12 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (params.has('id')) {
       const id = params.get('id') || '';
       const p = PROBLEM_ID.test(id) ? await problems().get(id, { type: 'json' }) : null;
-      return p ? json({ problem: p }) : json({ error: 'missing' }, 404);
+      return p && (!p.ghost || me.role === 'admin') ? json({ problem: p }) : json({ error: 'missing' }, 404);
     }
     const { blobs } = await problems().list();
     const keys = blobs.map((x) => x.key).filter((k) => PROBLEM_ID.test(k)).sort().reverse().slice(0, 150);
     const list = await Promise.all(keys.map((k) => problems().get(k, { type: 'json' })));
-    return json({ problems: list.filter(Boolean) });
+    return json({ problems: list.filter(Boolean).filter((p) => !p.ghost || me.role === 'admin') });
   }
 
   // ---------- Notifications ----------
@@ -522,13 +524,28 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     return json({ error: 'action' }, 400);
   }
 
+  // ---------- Avis de l'admin sur les mises à jour (lus par Claude pour la suite) ----------
+  async function feedbackApi(req, me) {
+    if (me?.role !== 'admin') return json({ error: 'admin' }, 403);
+    const fb = getStore('feedback');
+    if (req.method === 'POST') {
+      const b = await body(req, 20_000);
+      const clean = { update: String(b.update || '').slice(0, 60), mood: ['good', 'ok', 'bad'].includes(b.mood) ? b.mood : 'ok', good: String(b.good || '').slice(0, 3000), bad: String(b.bad || '').slice(0, 3000), by: me.name, at: new Date().toISOString() };
+      await fb.setJSON(`${Date.now()}`, clean);
+      return json({ ok: true });
+    }
+    const { blobs } = await fb.list();
+    const keys = blobs.map((x) => x.key).sort().reverse().slice(0, 30);
+    return json({ feedback: (await Promise.all(keys.map((k) => fb.get(k, { type: 'json' })))).filter(Boolean) });
+  }
+
   async function handle(req) {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     if (!['GET', 'POST'].includes(req.method)) return json({ error: 'method' }, 405);
     const route = new URL(req.url).pathname.replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'auth') return await auth(req);
-      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi };
+      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi };
       if (!routes[route]) return json({ error: 'route' }, 404);
       const me = await currentUser(req);
       if (!me) return json({ error: 'auth' }, 401);

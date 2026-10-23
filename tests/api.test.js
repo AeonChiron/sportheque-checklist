@@ -331,3 +331,23 @@ test('Chacun efface son propre quart pendant 36 h, pas celui des autres', async 
   assert.equal(await go(del, lea), 200);
   assert.equal((await stores('board').get('2026-10-21', { type: 'json' })).length, 0);
 });
+
+test('Admin : ses quarts et signalements sont des fantômes (invisibles pour les autres), et ses avis sont gardés', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p', ADMIN_CODE: 'z' }), push: { async keys() { return { publicKey: 'P', privateKey: 'Q' }; }, async send() { throw new Error('should not notify'); } } });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const sign = async (name, role, code) => (await go('auth', { action: 'signup', name, email: `${name}@x.ca`, password: 'secret1', role, code })).data.token;
+  const admin = await sign('Seed', 'admin', 'z'), boss = await sign('Daniel', 'boss', 'p'), emp = await sign('Noah', 'employee', 'e');
+  await go('board', { date: '2026-10-22', shift: 2, name: 'Seed', items: [], flags: [] }, admin);
+  await go('board', { date: '2026-10-22', shift: 1, name: 'Noah', items: [], flags: [] }, emp);
+  const seen = async (tok) => (await go('board?dates=2026-10-22', null, tok)).data.days['2026-10-22'].map((s) => s.name).sort().join();
+  assert.equal(await seen(admin), 'Noah,Seed');
+  assert.equal(await seen(boss), 'Noah');
+  assert.equal(await seen(emp), 'Noah');
+  await go('problems', { category: 'blessure', urgent: true, text: 'test', photos: [] }, admin); // aucun envoi (le faux push lancerait une erreur)
+  assert.equal((await go('problems', null, boss)).data.problems.length, 0);
+  assert.equal((await go('problems', null, admin)).data.problems.length, 1);
+  assert.equal((await go('feedback', { update: 'u1', mood: 'bad', good: 'a', bad: 'b' }, boss)).status, 403);
+  await go('feedback', { update: 'u1', mood: 'good', good: 'Le bouton', bad: 'Le lapin' }, admin);
+  assert.equal((await go('feedback', null, admin)).data.feedback[0].bad, 'Le lapin');
+});

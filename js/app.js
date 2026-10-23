@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS, ZONES } from './manual.js';
 import { METHOD } from './method.js';
+import { UPDATES } from './updates.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
@@ -3241,6 +3242,7 @@ function histCard(s, i) {
   const all = m.total && m.done === m.total;
   const tags = [
     s.open ? `<span class="tag now">${esc(t('inProgress'))}</span>` : '',
+    s.ghost ? `<span class="tag ghost">${esc(t('ghostTag'))}</span>` : '',
     s.custom?.length ? `<span class="tag ${s.customStatus === 'approved' ? 'ok' : s.customStatus === 'rejected' ? 'bad' : 'time'}">${esc(t(s.customStatus === 'approved' ? 'customTagOk' : s.customStatus === 'rejected' ? 'customTagNo' : 'customTagPending'))}</span>` : '',
     m.flags ? `<span class="tag bad">⚑ ${esc(t('nFlags', m.flags))}${urgent ? ` · ${esc(t('nUrgent', urgent))}` : ''}</span>` : '',
     m.notdone ? `<span class="tag bad">${esc(t('nNotDone', m.notdone))}</span>` : '',
@@ -4015,7 +4017,7 @@ function paintAdminTools() {
   $('#adminSimulator')?.remove(); // ancienne version (bouton violet flottant)
   const admin = isRealAdmin();
   const html = `${EYE}<span>${esc(t('viewShort'))} : ${esc(adminViewLabel())}</span>`;
-  for (const [id, host, cls] of [['qbView', '#quickBar .qb-left', 'quick-btn qb-view'], ['poolView', '#auth .pool-top .setup-tools', 'quick-btn qb-view pool-view']]) {
+  for (const [id, host, cls] of [['qbView', '#quickBar .qb-left', 'quick-btn qb-view'], ['poolView', '#auth .pool-top .setup-tools', 'quick-btn qb-view pool-view'], ['hubView', '#hub .hub-tools', 'quick-btn qb-view hub-view']]) {
     let b = document.getElementById(id);
     if (!admin) { b?.remove(); continue; }
     if (!b) {
@@ -4767,7 +4769,9 @@ const hours = (min) => (min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ` ${S
 const whenText = (tg) => t('glWhen', cap(dayWord(tg.date)), hm(tg.start), hm(tg.end));
 
 // ---------- Page d'entrée : un seul bouton ----------
+const adminHome = () => isRealAdmin() && curView() === 'admin' && !prefs.simShift && !prefs.simNew;
 function frontStatus() {
+  if (adminHome()) return { line: t('frontAdmin') };
   if (bossWatching()) {
     const u = urgentOpen().length;
     return { line: u ? t('frontBossUrgent', u) : t('frontBossOk'), alert: u > 0 };
@@ -4790,6 +4794,11 @@ function openHub({ keep = false } = {}) {
   refreshHub();
 }
 async function refreshHub() {
+  if (adminHome()) {
+    try { adminFb.list = (await request('feedback')).feedback || []; adminFb.loaded = true; } catch { adminFb.loaded = true; }
+    if (current === 'hub' && adminHome() && !adminFb.typing) renderHub({ animate: false });
+    return;
+  }
   if (bossWatching()) {
     const [pr, tm] = await Promise.allSettled([listProblems(), listTeam()]);
     if (pr.status === 'fulfilled') { boss.problems = pr.value; boss.loaded = true; boss.error = ''; } else if (!boss.loaded) boss.error = pr.reason?.status === 0 ? 'errNetwork' : 'errServer';
@@ -4805,13 +4814,14 @@ function renderHub({ animate = true } = {}) {
   const first = (shiftName() || session.user?.name || '').split(' ')[0];
   $('#hubDate').textContent = cap(new Date().toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }));
   $('#hubTitle').textContent = t('hubHello', first);
-  $('#hubAsk').textContent = t(bossWatching() ? 'hubAskBoss' : 'hubAsk');
+  $('#hubAsk').textContent = t(adminHome() ? 'hubAskAdmin' : bossWatching() ? 'hubAskBoss' : 'hubAsk');
   $('#hubAccount').innerHTML = avatarHTML(session.user, esc((first[0] || '?').toUpperCase()));
   $('#hubAccount').setAttribute('aria-label', t('account'));
   $('#hubDoor').setAttribute('aria-label', t('frontDoor'));
   const body = $('#hubBody');
-  body.className = `hub-body${bossWatching() ? ' is-boss' : ''}${animate && !reducedMotion() ? ' cascade' : ''}`;
-  body.innerHTML = bossWatching() ? hubBoss() : hubEmployee();
+  body.className = `hub-body${adminHome() ? ' is-admin' : bossWatching() ? ' is-boss' : ''}${animate && !reducedMotion() ? ' cascade' : ''}`;
+  body.innerHTML = adminHome() ? hubAdmin() : bossWatching() ? hubBoss() : hubEmployee();
+  paintAdminTools();
   if (animate) countUp(body);
 }
 const tile = (k, ico, title, sub, extra = '') => `<button type="button" class="hb-tile t-${k}" data-hub="${k}">${hubIco(ico)}<span class="hb-tt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>${extra}</button>`;
@@ -4866,6 +4876,74 @@ function glanceCard(tg) {
     ${shiftBar(F.items)}
     <span class="hg-foot"><span class="num">${esc(t('glCount', F.tasks.length, hours(F.work)))}</span><span class="hg-more">${esc(t('glSeeAll'))}${CHEV_R}</span></span>
   </button>`;
+}
+
+// ---------- Admin (propriétaire) : seulement les simulations, la dernière mise à jour, ton avis ----------
+const adminFb = { list: [], loaded: false, mood: '', typing: false };
+function hubAdmin() {
+  const L = lang();
+  const up = UPDATES[0];
+  const U = up[L] || up.fr;
+  const sim = (v, title, sub) => `<button type="button" class="adm-sim" data-sim="${v}"><b>${esc(title)}</b><small>${esc(sub)}</small></button>`;
+  const role = (k, ico, title, a, b) => `<div class="adm-role r-${k}"><p class="adm-rt">${hubIco(ico)}<b>${esc(title)}</b></p><div class="adm-sims">${a}${b}</div></div>`;
+  const mine = adminFb.list.filter((x) => x.update === up.id);
+  const moods = ['good', 'ok', 'bad'];
+  return `<section class="hb-main hb-admin" id="hbMain">
+      <p class="hb-label">${esc(t('admSimTitle'))}</p>
+      <p class="hb-text">${esc(t('admSimText'))}</p>
+      <div class="adm-roles">
+        ${role('emp', 'mine', t('admEmp'), sim('employee', t('admCurrent'), t('admCurEmpSub')), sim('newEmployee', t('admNew'), t('admNewSub')))}
+        ${role('boss', 'team', t('admBoss'), sim('boss', t('admCurrent'), t('admCurBossSub')), sim('newBoss', t('admNew'), t('admNewSub')))}
+      </div>
+    </section>
+    <section class="hb-glance adm-update">
+      <span class="hg-head"><span class="hg-title">${hubIco('star')}<b>${esc(t('admLastUpdate'))}</b></span><span class="hg-when num">${esc(cap(dateOf(up.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</span></span>
+      <h3 class="adm-uptitle">${esc(U.title)}</h3>
+      <ul class="adm-items">${U.items.map((x) => `<li>${HUB_ICO.check}<span>${md(x)}</span></li>`).join('')}</ul>
+    </section>
+    <section class="hb-glance adm-fb">
+      <span class="hg-title">${hubIco('flag')}<b>${esc(t('admFbTitle'))}</b></span>
+      <p class="adm-fbsub">${esc(t('admFbSub'))}</p>
+      <div class="segmented adm-moods" role="radiogroup">${moods.map((m) => `<button type="button" role="radio" data-mood="${m}" aria-checked="${adminFb.mood === m}">${esc(t(`admMood_${m}`))}</button>`).join('')}</div>
+      <label class="field"><span>${esc(t('admGood'))}</span><textarea id="admGood" rows="3" placeholder="${esc(t('admGoodPh'))}"></textarea></label>
+      <label class="field"><span>${esc(t('admBad'))}</span><textarea id="admBad" rows="3" placeholder="${esc(t('admBadPh'))}"></textarea></label>
+      <button type="button" class="btn primary big" id="admSend">${esc(t('admSend'))}</button>
+      ${mine.length ? `<div class="adm-past"><p class="block-label">${esc(t('admPast', mine.length))}</p>${mine.slice(0, 3).map((x) => `<div class="adm-pastrow"><span class="pill">${esc(t(`admMood_${x.mood}`))}</span><span>${esc([x.good && `+ ${x.good}`, x.bad && `− ${x.bad}`].filter(Boolean).join('  ·  ').slice(0, 160))}</span></div>`).join('')}</div>` : ''}
+    </section>`;
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-sim]');
+  if (b) { applyAdminView(b.dataset.sim); return; } // vers la page d'entrée, vue comme cette personne
+  const m = ev.target.closest('[data-mood]');
+  if (m) { adminFb.mood = m.dataset.mood; for (const o of document.querySelectorAll('[data-mood]')) o.setAttribute('aria-checked', String(o === m)); sfx('tap'); return; }
+  if (ev.target.closest('#admSend')) sendAdminFeedback();
+});
+document.addEventListener('focusin', (ev) => { if (ev.target.closest('.adm-fb')) adminFb.typing = true; });
+async function sendAdminFeedback() {
+  const up = UPDATES[0];
+  const good = $('#admGood')?.value.trim() || '', bad = $('#admBad')?.value.trim() || '';
+  if (!good && !bad && !adminFb.mood) { toast(t('admEmpty'), 'muted'); return; }
+  const fb = { update: up.id, mood: adminFb.mood || 'ok', good, bad };
+  const btn = $('#admSend'); btn.disabled = true;
+  let ok = false;
+  try { await request('feedback', { method: 'POST', body: fb }); ok = true; } catch { /* le courriel suffit */ }
+  try { // aussi par courriel (Claude le lit dans ta boîte), même sans serveur à jour
+    const fd = new FormData();
+    fd.append('_subject', `[Sporthèque] Avis admin — ${up.fr.title}`);
+    fd.append('_template', 'table'); fd.append('_captcha', 'false');
+    fd.append('Mise à jour', `${up.id} · ${up.fr.title}`);
+    fd.append('Humeur', t(`admMood_${fb.mood}`));
+    fd.append('Ce qui marche', good || '—');
+    fd.append('Ce qui ne marche pas', bad || '—');
+    const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(CONFIG.reportTo)}`, { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
+    if (r.ok) ok = true;
+  } catch { /* hors ligne */ }
+  btn.disabled = false;
+  if (!ok) { toast(t('admSendFail'), 'muted'); sfx('error'); return; }
+  adminFb.list = [{ ...fb, at: new Date().toISOString() }, ...adminFb.list];
+  adminFb.mood = ''; adminFb.typing = false;
+  toast(t('admSent')); sfx('save');
+  renderHub({ animate: false });
 }
 
 // ---------- Superviseur ----------
@@ -4971,7 +5049,7 @@ function renderMine({ animate = true } = {}) {
     const m = metrics(x); const all = m.total && m.done === m.total;
     const at = new Date(x.savedAt || x.submittedAt || 0).getTime();
     const left = ownFixable(x) ? Math.max(1, Math.ceil((EDIT_HOURS * 3600e3 - (Date.now() - at)) / 3600e3)) : 0;
-    return `<button type="button" class="d-shift mine-row" data-mine="${i}" style="--k:${Math.min(i, 10)}">${dDate(x.date)}<span class="d-st"><b class="num">${x.start ? `${nb(hhmm(x.start))} – ${nb(hhmm(x.end))}` : esc(SHIFTS[x.shift][lang()].short)}</b><small>${esc(cap(dateOf(x.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</small>${left ? `<span class="fix-left">${esc(t('fixLeft', left))}</span>` : ''}</span><span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>${CHEV_R}</button>`;
+    return `<button type="button" class="d-shift mine-row" data-mine="${i}" style="--k:${Math.min(i, 10)}">${dDate(x.date)}<span class="d-st"><b class="num">${x.start ? `${nb(hhmm(x.start))} – ${nb(hhmm(x.end))}` : esc(SHIFTS[x.shift][lang()].short)}</b><small>${esc(cap(dateOf(x.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</small>${left ? `<span class="fix-left">${esc(t('fixLeft', left))}</span>` : ''}${x.ghost ? `<span class="fix-left ghost">${esc(t('ghostTag'))}</span>` : ''}</span><span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>${CHEV_R}</button>`;
   };
   $('#mineBody').innerHTML = `<p class="page-lede">${esc(t('mineLede'))}</p>
     <div class="d-stats">
