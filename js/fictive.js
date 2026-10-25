@@ -113,8 +113,20 @@ function generate(today) {
     { id: 'f2', date: today, title: 'Vérifier les extincteurs', time: '', minutes: 15, who: mailOf('Noah'), by: 'Patrick', at: new Date().toISOString() },
     { id: 'f3', date: addDays(today, 2), title: 'Ranger le local d’entretien', time: '20:30', minutes: 30, who: mailOf('Félix'), by: 'Isabelle', at: new Date().toISOString() },
   ];
-  const overrides = { [mailOf('Maya')]: { [addDays(today, 3)]: { start: '18:00', end: '23:00', by: 'Martine' } } };
-  return { today, users: Object.fromEntries(FICTIVE_PEOPLE.map((p) => [p.email, { ...p }])), board, problems: problems.reverse(), tasks, overrides };
+  const overrides = { [mailOf('Maya')]: { [addDays(today, 3)]: { start: '18:00', end: '23:00', by: 'Martine' } }, [mailOf('Zoé')]: { [addDays(today, 8)]: { off: true, conge: true, by: 'Patrick' }, [addDays(today, 9)]: { off: true, conge: true, by: 'Patrick' } } };
+  // Une tâche qui revient chaque semaine (le jour de la semaine d'aujourd'hui), pour tout le monde.
+  const repeat = [{ id: 'fr1', title: 'Désinfecter les poignées de porte', time: '', minutes: 10, who: '*', wd: dow(today), from: addDays(today, -14), until: '', skip: [], by: 'Martine', at: new Date().toISOString() }];
+  const ago = (n, h = '10:00') => atISO(addDays(today, -n), h);
+  // Le coin des superviseurs (inventé) : quelques messages entre eux et des idées d'employés.
+  const ideas = [
+    { id: 'fi1', kind: 'post', text: 'La sécheuse prend deux cycles pour les guenilles. J’ai appelé le technicien, il passe jeudi.', about: { kind: 'gym', label: 'Buanderie' }, by: 'Martine', byEmail: mailOf('Martine'), at: ago(5), status: 'open', statusBy: '' },
+    { id: 'fi2', kind: 'idea', text: 'Un deuxième seau dans le vestiaire des femmes, ça éviterait des allers-retours.', about: null, by: 'Léa', byEmail: mailOf('Léa'), at: ago(4, '14:20'), status: 'worked', statusBy: 'Isabelle', statusAt: ago(1) },
+    { id: 'fi3', kind: 'post', text: 'Les plateformes de la zone C sont souvent oubliées le soir. On pourrait les mettre plus tôt dans la liste?', about: { kind: 'task', label: 'Zone C à fond' }, by: 'Patrick', byEmail: mailOf('Patrick'), at: ago(3, '19:05'), status: 'open', statusBy: '' },
+    { id: 'fi4', kind: 'idea', text: 'Mettre la liste des canaux de télé directement à côté des écrans.', about: null, by: 'Samuel', byEmail: mailOf('Samuel'), at: ago(2, '21:40'), status: 'try', statusBy: 'Marc-André', statusAt: ago(1, '09:00') },
+    { id: 'fi5', kind: 'idea', text: 'Des gants plus petits dans le local d’entretien.', about: null, by: 'Félix', byEmail: mailOf('Félix'), at: ago(1, '22:10'), status: 'open', statusBy: '' },
+  ];
+  const notes = { [mailOf('Samuel')]: [{ id: 'fn1', kind: 'note', cat: '', text: 'Préfère les quarts courts. Très bon avec la buanderie.', by: 'Martine', at: ago(12) }], [mailOf('Thomas')]: [{ id: 'fn2', kind: 'report', cat: 'retard', text: 'Arrivé 20 min en retard, sans prévenir.', by: 'Patrick', at: ago(6, '08:20') }] };
+  return { today, users: Object.fromEntries(FICTIVE_PEOPLE.map((p) => [p.email, { ...p }])), board, problems: problems.reverse(), tasks, overrides, repeat, ideas, notes, former: [] };
 }
 
 let db = null;
@@ -123,6 +135,7 @@ function load() {
   const today = iso(new Date());
   try { db = JSON.parse(sessionStorage.getItem(DB)); } catch { db = null; }
   if (!db || db.today !== today) { db = generate(today); persist(); }
+  db.repeat ||= []; db.ideas ||= []; db.notes ||= {}; db.former ||= [];
   return db;
 }
 function persist() { try { sessionStorage.setItem(DB, JSON.stringify(db)); } catch { /* trop gros : on garde en mémoire */ } }
@@ -155,8 +168,13 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
   }
   if (route === 'users') {
     if (!lead) throw err(403, 'boss');
+    if (method === 'GET' && P.has('former')) return { former: d.former.map((u) => ({ name: u.name, email: u.email, role: u.role, avatar: u.avatar || '', removedAt: u.removedAt, removedBy: u.removedBy })).reverse() };
     if (method === 'GET') return { users: Object.values(d.users).map(pub).sort((a, b) => a.name.localeCompare(b.name)) };
-    const u = d.users[String(body?.email || '').toLowerCase()];
+    const key = String(body?.email || '').toLowerCase();
+    // Les départs : comme le vrai serveur, l'accès est coupé et on peut le redonner.
+    if (body?.action === 'restore') { const i = d.former.findIndex((x) => x.email === key); if (i < 0) throw err(404, 'user'); const [{ removedAt, removedBy, ...u }] = d.former.splice(i, 1); d.users[key] = u; persist(); return { user: pub(u) }; }
+    if (body?.action === 'remove') { const u = d.users[key]; if (!u) throw err(404, 'user'); if (key === me.email) throw err(400, 'self'); delete d.users[key]; d.former.push({ ...u, removedAt: new Date().toISOString(), removedBy: me.name }); persist(); return { ok: true }; }
+    const u = d.users[key];
     if (!u) throw err(404, 'user');
     if (body.action === 'schedule') { u.schedule = body.schedule || {}; u.scheduleBy = me.name; u.scheduleAt = new Date().toISOString(); persist(); return { user: pub(u) }; }
     return { ok: true };
@@ -218,7 +236,7 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
   }
   if (route === 'roster') { // l'horaire de toute l'équipe, pour tout le monde
     const from = P.get('from') || d.today, to = P.get('to') || from;
-    const people = Object.values(d.users).map((u) => ({ id: u.email.split('@')[0], name: u.name, role: u.role, avatar: u.avatar || '', schedule: u.schedule || {}, overrides: Object.fromEntries(Object.entries(d.overrides[u.email] || {}).filter(([k]) => k >= from && k <= to).map(([k, v]) => [k, v.off ? { off: true } : { start: v.start, end: v.end }])), ...(u.email === me.email ? { me: true } : {}) }));
+    const people = Object.values(d.users).map((u) => ({ id: u.email.split('@')[0], name: u.name, role: u.role, avatar: u.avatar || '', ...(lead ? { email: u.email } : {}), schedule: u.schedule || {}, overrides: Object.fromEntries(Object.entries(d.overrides[u.email] || {}).filter(([k]) => k >= from && k <= to).map(([k, v]) => [k, v.off ? { off: true, ...(v.conge ? { conge: true } : {}) } : { start: v.start, end: v.end }])), ...(u.email === me.email ? { me: true } : {}) }));
     return { people: people.sort((a, b) => a.name.localeCompare(b.name)) };
   }
   if (route === 'alerts') return { to: Object.values(d.users).filter((u) => u.role === 'boss').slice(0, 1).map((u) => ({ name: u.name, email: '' })) };
@@ -226,7 +244,9 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
     if (method === 'GET') {
       const from = P.get('from') || d.today, to = P.get('to') || from;
       const team = P.has('team') && lead;
-      const tasks = d.tasks.filter((x) => x.date >= from && x.date <= to && (team || x.who === '*' || x.who === me.email));
+      const dates = []; for (let x = from; x <= to && dates.length < 62; x = addDays(x, 1)) dates.push(x);
+      const rep = dates.flatMap((x) => d.repeat.filter((r) => r.wd === dow(x) && x >= r.from && (!r.until || x <= r.until) && !(r.skip || []).includes(x)).map((r) => ({ id: r.id, date: x, title: r.title, time: r.time, minutes: r.minutes, who: r.who, by: r.by, at: r.at, repeat: 'weekly', until: r.until || '' })));
+      const tasks = [...d.tasks.filter((x) => x.date >= from && x.date <= to), ...rep].filter((x) => team || x.who === '*' || x.who === me.email);
       const pick = (all) => Object.fromEntries(Object.entries(all || {}).filter(([k]) => k >= from && k <= to));
       const overrides = team ? Object.fromEntries(Object.entries(d.overrides).map(([e, all]) => [e, pick(all)])) : { [me.email]: pick(d.overrides[me.email]) };
       return { overrides, tasks };
@@ -234,14 +254,45 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
     if (!lead) throw err(403, 'boss');
     if (body.action === 'override') {
       const all = (d.overrides[body.email] ||= {});
-      if (body.clear) delete all[body.date]; else if (body.off) all[body.date] = { off: true, by: me.name }; else all[body.date] = { start: body.start, end: body.end, by: me.name };
+      const span = []; for (let x = body.date; x <= (body.to && body.to >= body.date ? body.to : body.date) && span.length < 62; x = addDays(x, 1)) span.push(x);
+      if (body.clear) for (const x of span) delete all[x]; else if (body.off || body.conge) for (const x of span) all[x] = { off: true, ...(body.conge ? { conge: true } : {}), by: me.name }; else all[body.date] = { start: body.start, end: body.end, by: me.name };
       persist(); return { ok: true };
     }
     if (body.action === 'task') {
-      const task = { id: Math.random().toString(36).slice(2, 10), date: body.date, title: String(body.title || '').slice(0, 80), time: body.time || '', minutes: Number(body.minutes) || 15, who: body.who, by: me.name, at: new Date().toISOString() };
-      d.tasks.push(task); persist(); return { task };
+      const task = { id: Math.random().toString(16).slice(2, 12), date: body.date, title: String(body.title || '').slice(0, 80), time: body.time || '', minutes: Number(body.minutes) || 15, who: body.who, by: me.name, at: new Date().toISOString() };
+      if (body.repeat === 'weekly') { Object.assign(task, { repeat: 'weekly', until: body.until || '' }); d.repeat.push({ id: task.id, title: task.title, time: task.time, minutes: task.minutes, who: task.who, wd: dow(body.date), from: body.date, until: body.until || '', skip: [], by: me.name, at: task.at }); }
+      else d.tasks.push(task);
+      persist(); return { task };
     }
-    if (body.action === 'deltask') { d.tasks = d.tasks.filter((x) => x.id !== body.id); persist(); return { ok: true }; }
+    if (body.action === 'deltask') {
+      const r = d.repeat.find((x) => x.id === body.id);
+      if (r) { if (body.all) d.repeat = d.repeat.filter((x) => x !== r); else r.skip = [...new Set([...(r.skip || []), body.date])]; }
+      else d.tasks = d.tasks.filter((x) => x.id !== body.id);
+      persist(); return { ok: true };
+    }
+    if (body.action === 'unskip') { const r = d.repeat.find((x) => x.id === body.id); if (r) r.skip = (r.skip || []).filter((x) => x !== body.date); persist(); return { ok: true }; }
+    if (body.action === 'restoretask') { const x = body.task; if (!d.repeat.some((r) => r.id === x.id)) d.repeat.push({ id: x.id, title: x.title, time: x.time || '', minutes: x.minutes || 15, who: x.who, wd: dow(body.date), from: x.from || body.date, until: x.until || '', skip: x.skip || [], by: me.name, at: new Date().toISOString() }); persist(); return { ok: true }; }
+  }
+  if (route === 'people') { // la fiche d'un employé : superviseurs seulement
+    if (!lead) throw err(403, 'boss');
+    if (method === 'GET' && P.has('reports')) return { reports: Object.entries(d.notes).flatMap(([email, list]) => list.filter((n) => n.kind === 'report').map((n) => ({ ...n, email, name: d.users[email]?.name || '' }))).sort((a, b) => b.at.localeCompare(a.at)) };
+    if (method === 'GET') return { notes: (d.notes[String(P.get('email') || '').toLowerCase()] || []).slice().reverse() };
+    const email = String(body?.email || '').toLowerCase();
+    const list = (d.notes[email] ||= []);
+    if (body.action === 'add') { const note = { id: Math.random().toString(16).slice(2, 12), kind: body.kind === 'report' ? 'report' : 'note', cat: body.cat || (body.kind === 'report' ? 'autre' : ''), text: String(body.text || '').slice(0, 1000), by: me.name, at: new Date().toISOString() }; list.push(note); persist(); return { note }; }
+    if (body.action === 'del') { d.notes[email] = list.filter((n) => n.id !== body.id); persist(); return { ok: true }; }
+  }
+  if (route === 'ideas') { // le coin des superviseurs + les idées des employés
+    const strip = ({ byEmail, ...x }) => x;
+    if (method === 'GET') return { ideas: (lead ? d.ideas : d.ideas.filter((x) => x.kind === 'idea' && x.byEmail === me.email)).slice().reverse().map(strip) };
+    if (body.action === 'post' || body.action === 'suggest') {
+      if (body.action === 'post' && !lead) throw err(403, 'boss');
+      const item = { id: Math.random().toString(16).slice(2, 12), kind: body.action === 'post' ? 'post' : 'idea', text: String(body.text || '').slice(0, 1500), about: body.about || null, by: me.name, byEmail: me.email, at: new Date().toISOString(), status: 'open', statusBy: '' };
+      d.ideas.push(item); persist(); return { idea: strip(item) };
+    }
+    const it = d.ideas.find((x) => x.id === body.id); if (!it) throw err(404, 'missing');
+    if (body.action === 'status') { if (!lead) throw err(403, 'boss'); Object.assign(it, { status: body.status, statusBy: body.status === 'open' ? '' : me.name, statusAt: new Date().toISOString() }); persist(); return { idea: strip(it) }; }
+    if (body.action === 'del') { d.ideas = d.ideas.filter((x) => x !== it); persist(); return { ok: true }; }
   }
   throw err(404, 'route'); // notifications, avis… : pas dans l'équipe fictive
 }

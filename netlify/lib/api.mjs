@@ -8,6 +8,8 @@
 //   /api/problems  connecté : POST un signalement (+ photos)
 //                  superviseur : GET la liste · GET ?id= · GET ?photo= · POST { action: status }
 //   /api/push      connecté : GET l'état · POST { action: subscribe | unsubscribe | prefs | ntfy | test }
+//   /api/people    superviseur : notes privées et signalements d'un employé (l'employé ne les voit jamais)
+//   /api/ideas     le coin des superviseurs (leurs messages) + les idées des employés
 //                  Notifications (web-push) : rappel 10 min avant son quart, problème urgent
 //                  pour les superviseurs. ntfy : une chaîne privée pour l'app gratuite ntfy.
 //
@@ -75,11 +77,11 @@ const webPush = {
   },
 };
 const PUSH_TEXT = {
-  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' } },
-  en: { sched: (by) => ({ title: 'Your schedule changed', body: `${by} changed your schedule. Tap to see it.` }), day: (by, d) => ({ title: 'Your shift changed', body: `${by} changed your shift on ${d}.` }), task: (by, title, h) => ({ title: `New task: ${title}`, body: `Added by ${by}${h ? `, at ${h}` : ''}.` }), remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' } },
+  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' }, weekly: (pct, urgent) => ({ title: 'Ta semaine au gym', body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`}${urgent ? ` · ${urgent} urgent${urgent > 1 ? 's' : ''} à régler` : ' · rien d’urgent'}.` }) },
+  en: { sched: (by) => ({ title: 'Your schedule changed', body: `${by} changed your schedule. Tap to see it.` }), day: (by, d) => ({ title: 'Your shift changed', body: `${by} changed your shift on ${d}.` }), task: (by, title, h) => ({ title: `New task: ${title}`, body: `Added by ${by}${h ? `, at ${h}` : ''}.` }), remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' }, weekly: (pct, urgent) => ({ title: 'Your week at the gym', body: `${pct === null ? 'No shift sent' : `The gym: ${pct}% of tasks done`}${urgent ? ` · ${urgent} urgent to fix` : ' · nothing urgent'}.` }) },
 };
 
-export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => fetch(...a) }) {
+export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => fetch(...a), clock = () => new Date() }) {
   const users = () => getStore('users');
   const sessions = () => getStore('sessions');
   const board = () => getStore('board');
@@ -257,12 +259,21 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const { blobs } = await users().list();
       const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
       // L'admin n'apparaît jamais comme admin : en mode employé, c'est un employé ordinaire; sinon, il n'y est pas.
+      // Les départs (propriétaire) : la liste des anciens, pour redonner l'accès au besoin.
+      if (new URL(req.url).searchParams.has('former')) return json({ former: all.filter((u) => u?.removed && u.role !== 'admin').map((u) => ({ name: u.name, email: u.email, role: u.role, avatar: cleanAvatar(u.avatar), removedAt: u.removedAt || '', removedBy: u.removedBy || '' })).sort((a, b) => (b.removedAt || '').localeCompare(a.removedAt || '')) });
       const seen = all.filter((u) => u && !u.removed && (u.role !== 'admin' || u.workMode || u.email === me.email || me.role === 'admin'));
       return json({ users: seen.map((u) => ({ ...publicUser(u), ...(u.role === 'admin' && me.role !== 'admin' ? { role: 'employee', workMode: false } : {}), created: u.created })).sort((a, b) => a.name.localeCompare(b.name)) });
     }
     const b = await body(req);
     const email = String(b.email || '').trim().toLowerCase();
     const u = await users().get(email, { type: 'json' });
+    // Redonner l'accès à quelqu'un qui était parti (ou annuler un départ fait par erreur).
+    if (b.action === 'restore') {
+      if (!u?.removed || !u.hash) return json({ error: 'user' }, 404);
+      const { removed, removedAt, removedBy, ...back } = u;
+      await users().setJSON(email, back);
+      return json({ user: publicUser(back) });
+    }
     if (!u || u.removed) return json({ error: 'user' }, 404);
     if (b.action === 'reset') {
       const password = String(b.password || '');
@@ -278,12 +289,15 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       u.schedule = cleanSchedule(b.schedule);
       u.scheduleBy = me.name; u.scheduleAt = new Date().toISOString();
       await users().setJSON(email, u);
-      if (email !== me.email && !b.quiet) { try { await sendTo(email, (T) => ({ ...T.sched(me.name), tag: 'sched', url: './#horaire' })); } catch { /* jamais bloquant */ } }
+      if (email !== me.email && !b.quiet) { try { await sendTo(email, (T) => ({ ...T.sched(me.name), tag: 'sched', url: './#horaire' }), 'sched'); } catch { /* jamais bloquant */ } }
       return json({ user: publicUser(u) });
     }
+    // Un départ : l'accès est coupé tout de suite (le compte ne se connecte plus, ses sessions ne marchent
+    // plus); ses quarts passés restent dans les rapports. Le reste est gardé pour pouvoir annuler.
     if (b.action === 'remove') {
       if (email === me.email) return json({ error: 'self' }, 400);
-      await users().setJSON(email, { ...u, removed: true, hash: '' });
+      if (u.role === 'admin' && me.role !== 'admin') return json({ error: 'user' }, 404);
+      await users().setJSON(email, { ...u, removed: true, removedAt: new Date().toISOString(), removedBy: me.name });
       return json({ ok: true });
     }
     return json({ error: 'action' }, 400);
@@ -509,10 +523,16 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     return n;
   }
   const pushRecord = async (email) => (await pushes().get(email, { type: 'json' })) || { subs: [], remind: true, urgent: true, lang: 'fr' };
+  // Choix par type (propriétaire : des réglages par défaut équilibrés, tout est allumé sauf la nuit).
+  // Heures calmes : rien entre 23 h et 6 h, sauf un problème urgent.
+  const PUSH_KINDS = ['remind', 'sched', 'task', 'urgent', 'weekly'];
+  const quietNow = (now = clock()) => { const h = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', hourCycle: 'h23' }).format(now)); return h >= 23 || h < 6; };
   // Envoie à tous les appareils d'une personne; les abonnements expirés (404/410) sont retirés.
-  async function sendTo(email, make) {
+  async function sendTo(email, make, kind = '', now = clock()) {
     const rec = await pushes().get(email, { type: 'json' });
     if (!rec?.subs?.length) return 0;
+    if (kind && rec[kind] === false) return 0;
+    if (kind && kind !== 'urgent' && rec.quiet !== false && quietNow(now)) return 0;
     const keys = await vapid();
     const payload = make(PUSH_TEXT[rec.lang] || PUSH_TEXT.fr);
     let sent = 0;
@@ -529,7 +549,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const cat = (lang) => (CATEGORY_NAMES[p.category]?.[lang]) || p.category || '';
     for (const u of all.filter((u) => u && !u.removed && lead(u) && u.email !== p.byEmail)) {
       const rec = await pushes().get(u.email, { type: 'json' });
-      if (rec && rec.urgent !== false) await sendTo(u.email, (T) => ({ ...T.urgent(cat(rec.lang || 'fr'), p.by), tag: `p-${p.id}`, url: './#patron', urgent: true }));
+      if (rec && rec.urgent !== false) await sendTo(u.email, (T) => ({ ...T.urgent(cat(rec.lang || 'fr'), p.by), tag: `p-${p.id}`, url: './#patron', urgent: true }), 'urgent');
     }
     const n = await ntfySettings();
     if (n?.on && n.topic) {
@@ -554,7 +574,38 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const until = h * 60 + m - nowMin;
       if (until < 1 || until > 12) continue;
       await pushes().setJSON(key, { ...rec, reminded: day });
-      sent += await sendTo(key, (T) => ({ ...T.remind(slot.start), tag: `r-${day}`, url: './' }));
+      sent += await sendTo(key, (T) => ({ ...T.remind(slot.start), tag: `r-${day}`, url: './' }), 'remind', now);
+    }
+    return sent + await weeklyDue(now);
+  }
+  // Propriétaire : un résumé par semaine seulement, pour les superviseurs (dimanche, 21 h) :
+  // le % du gym (jamais une personne) et les urgents encore ouverts. Une fois par semaine.
+  async function weeklyDue(now = new Date()) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
+    if (parts.weekday !== 'Sun' || Number(parts.hour) !== 21 || Number(parts.minute) > 14) return 0;
+    const day = localDay(now);
+    const { blobs } = await pushes().list();
+    const leads = [];
+    for (const { key } of blobs) {
+      const rec = await pushes().get(key, { type: 'json' });
+      if (!rec?.subs?.length || rec.weekly === false || rec.weeklyFor === day) continue;
+      const u = await users().get(key, { type: 'json' });
+      if (u && !u.removed && lead(u)) leads.push([key, rec]);
+    }
+    if (!leads.length) return 0;
+    let done = 0, total = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = localDay(now.getTime() - i * 864e5);
+      for (const s of (await board().get(d, { type: 'json' })) || []) if (!s.open && !s.ghost) { const it = (s.items || []).filter((i) => i.id !== 'pointage'); done += it.filter((i) => i.status === 'done').length; total += it.length; }
+    }
+    const pct = total ? Math.round((100 * done) / total) : null;
+    const { blobs: pb } = await problems().list();
+    let urgent = 0;
+    for (const { key } of pb) { const p = await problems().get(key, { type: 'json' }); if (p?.urgent && p.status !== 'resolved') urgent += 1; }
+    let sent = 0;
+    for (const [key, rec] of leads) {
+      await pushes().setJSON(key, { ...rec, weeklyFor: day });
+      sent += await sendTo(key, (T) => ({ ...T.weekly(pct, urgent), tag: `w-${day}`, url: './#historique' }), 'weekly', now);
     }
     return sent;
   }
@@ -562,7 +613,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (req.method === 'GET') {
       const rec = await pushRecord(me.email);
       const n = lead(me) ? await ntfySettings(true) : null;
-      return json({ key: (await vapid()).publicKey, devices: rec.subs.length, remind: rec.remind !== false, urgent: rec.urgent !== false, ntfy: n ? { topic: n.topic, on: n.on === true } : null });
+      return json({ key: (await vapid()).publicKey, devices: rec.subs.length, ...Object.fromEntries(PUSH_KINDS.map((k) => [k, rec[k] !== false])), quiet: rec.quiet !== false, ntfy: n ? { topic: n.topic, on: n.on === true } : null });
     }
     const b = await body(req);
     const rec = await pushRecord(me.email);
@@ -581,8 +632,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     }
     if (b.action === 'prefs') {
       const next = { ...rec };
-      if (typeof b.remind === 'boolean') next.remind = b.remind;
-      if (typeof b.urgent === 'boolean') next.urgent = b.urgent;
+      for (const k of [...PUSH_KINDS, 'quiet']) if (typeof b[k] === 'boolean') next[k] = b[k];
       if (b.lang) next.lang = b.lang === 'en' ? 'en' : 'fr';
       await pushes().setJSON(me.email, next);
       return json({ ok: true });
@@ -602,7 +652,13 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
   // ---------- Changements d'un jour et tâches spéciales (superviseurs, propriétaire) ----------
   //  ov:<courriel> → { 'AAAA-MM-JJ': { start, end, by } | { off: true, by } }
   //  tasks:<date>  → [{ id, title, time, minutes, who: courriel | '*', by, at }]
+  //  repeat        → [{ id, title, time, minutes, who, wd (lundi = 0), from, until, skip: [dates], by, at }]
+  //                  (propriétaire : une tâche spéciale peut revenir chaque semaine, sans fin ou jusqu'à une date)
   const plans = () => getStore('plan');
+  const wdOf = (d) => (new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const datesIn = (from, to, max = 62) => { const out = []; for (let d = new Date(`${from}T12:00:00Z`); out.length < max; d.setUTCDate(d.getUTCDate() + 1)) { const iso = d.toISOString().slice(0, 10); if (iso > to) break; out.push(iso); } return out; };
+  const expandRepeat = (list, dates) => dates.flatMap((d) => list.filter((r) => r.wd === wdOf(d) && d >= r.from && (!r.until || d <= r.until) && !(r.skip || []).includes(d))
+    .map((r) => ({ id: r.id, date: d, title: r.title, time: r.time, minutes: r.minutes, who: r.who, by: r.by, at: r.at, repeat: 'weekly', until: r.until || '' })));
   const dayName = (d, lang) => new Date(`${d}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-CA' : 'fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
   // L'horaire de toute l'équipe, pour tout le monde (propriétaire, 23 oct.) : qui travaille, quand,
   // avec qui. Seulement le nom, la photo, le rôle et les heures (pas de courriel, pas de résultats).
@@ -616,8 +672,8 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const all = (await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })))).filter((u) => u && !u.removed && (u.role !== 'admin' || u.workMode || u.email === me.email));
     const people = await Promise.all(all.map(async (u) => {
       const ov = (await plans().get(`ov:${u.email}`, { type: 'json' })) || {};
-      const overrides = Object.fromEntries(Object.entries(ov).filter(([d]) => d >= from && d <= to).map(([d, v]) => [d, v.off ? { off: true } : { start: v.start, end: v.end }]));
-      return { id: createHash('sha256').update(`roster:${u.email}`).digest('hex').slice(0, 12), name: u.name, role: u.role === 'boss' ? 'boss' : 'employee' /* l'admin en mode employé : un employé ordinaire */, avatar: u.avatar || '', schedule: cleanSchedule(u.schedule), overrides, ...(u.email === me.email ? { me: true } : {}) };
+      const overrides = Object.fromEntries(Object.entries(ov).filter(([d]) => d >= from && d <= to).map(([d, v]) => [d, v.off ? { off: true, ...(v.conge ? { conge: true } : {}) } : { start: v.start, end: v.end }]));
+      return { id: createHash('sha256').update(`roster:${u.email}`).digest('hex').slice(0, 12), name: u.name, role: u.role === 'boss' ? 'boss' : 'employee' /* l'admin en mode employé : un employé ordinaire */, avatar: u.avatar || '', ...(lead(me) ? { email: u.email } : {}) /* un superviseur ouvre la fiche de la personne */, schedule: cleanSchedule(u.schedule), overrides, ...(u.email === me.email ? { me: true } : {}) };
     }));
     return json({ people: people.sort((a, b) => a.name.localeCompare(b.name)) });
   }
@@ -627,10 +683,10 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (req.method === 'GET') {
       const from = params.get('from') || localDay(Date.now()), to = params.get('to') || from;
       if (!DATE.test(from) || !DATE.test(to)) return json({ error: 'invalid' }, 400);
-      const dates = [];
-      for (let d = new Date(`${from}T12:00:00Z`); dates.length < 60; d.setUTCDate(d.getUTCDate() + 1)) { const iso = d.toISOString().slice(0, 10); if (iso > to) break; dates.push(iso); }
+      const dates = datesIn(from, to, 60);
       const team = params.has('team') && lead(me);
-      const tasks = (await Promise.all(dates.map((d) => plans().get(`tasks:${d}`, { type: 'json' })))).flat().filter(Boolean)
+      const repeat = (await plans().get('repeat', { type: 'json' })) || [];
+      const tasks = [...(await Promise.all(dates.map((d) => plans().get(`tasks:${d}`, { type: 'json' })))).flat().filter(Boolean), ...expandRepeat(repeat, dates)]
         .filter((x) => team || x.who === '*' || x.who === me.email);
       const overrides = {};
       if (team) {
@@ -656,12 +712,14 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const u = await users().get(email, { type: 'json' });
       if (!u || u.removed) return json({ error: 'user' }, 404);
       const all = (await plans().get(`ov:${email}`, { type: 'json' })) || {};
-      if (b.clear) delete all[date];
-      else if (b.off) all[date] = { off: true, by: me.name };
+      // Un congé peut couvrir plusieurs jours (jusqu'à 2 mois) : « to » = le dernier jour.
+      const span = b.to && DATE.test(String(b.to)) && b.to >= date ? datesIn(date, String(b.to), 62) : [date];
+      if (b.clear) for (const d of span) delete all[d];
+      else if (b.off || b.conge) for (const d of span) all[d] = { off: true, ...(b.conge ? { conge: true } : {}), by: me.name };
       else if (HHMM.test(b.start) && HHMM.test(b.end) && b.start !== b.end) all[date] = { start: b.start, end: b.end, by: me.name };
       else return json({ error: 'invalid' }, 400);
       await plans().setJSON(`ov:${email}`, all);
-      if (email !== me.email) { const L = await rec(email); try { await sendTo(email, (T) => ({ ...T.day(me.name, dayName(date, L)), tag: `ov-${date}`, url: './#horaire' })); } catch { /* ignore */ } }
+      if (email !== me.email) { const L = await rec(email); try { await sendTo(email, (T) => ({ ...T.day(me.name, dayName(date, L)), tag: `ov-${date}`, url: './#horaire' }), 'sched'); } catch { /* ignore */ } }
       return json({ ok: true });
     }
     if (b.action === 'task') {
@@ -669,9 +727,16 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const who = b.who === '*' ? '*' : String(b.who || '').trim().toLowerCase();
       if (!title || !who || (b.time && !HHMM.test(b.time))) return json({ error: 'invalid' }, 400);
       const minutes = Math.max(5, Math.min(240, Number(b.minutes) || 15));
-      const list = (await plans().get(`tasks:${date}`, { type: 'json' })) || [];
+      if (b.until && (!DATE.test(String(b.until)) || b.until < date)) return json({ error: 'invalid' }, 400);
       const task = { id: randomBytes(5).toString('hex'), date, title, time: b.time || '', minutes, who, by: me.name, at: new Date().toISOString() };
-      await plans().setJSON(`tasks:${date}`, [...list, task].slice(0, 60));
+      if (b.repeat === 'weekly') {
+        const list = (await plans().get('repeat', { type: 'json' })) || [];
+        Object.assign(task, { repeat: 'weekly', until: b.until || '' });
+        await plans().setJSON('repeat', [...list, { id: task.id, title, time: task.time, minutes, who, wd: wdOf(date), from: date, until: b.until || '', skip: [], by: me.name, at: task.at }].slice(-80));
+      } else {
+        const list = (await plans().get(`tasks:${date}`, { type: 'json' })) || [];
+        await plans().setJSON(`tasks:${date}`, [...list, task].slice(0, 60));
+      }
       // Avertir : une personne, ou tous ceux qui travaillent ce jour-là (d'après leur horaire).
       let targets = [];
       if (who === '*') {
@@ -680,12 +745,122 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
         const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
         targets = all.filter((u) => u && !u.removed && cleanSchedule(u.schedule)[String(wd)]).map((u) => u.email);
       } else targets = [who];
-      for (const email of targets.filter((e) => e !== me.email)) { try { await sendTo(email, (T) => ({ ...T.task(me.name, title, task.time), tag: `task-${task.id}`, url: './' })); } catch { /* ignore */ } }
+      for (const email of targets.filter((e) => e !== me.email)) { try { await sendTo(email, (T) => ({ ...T.task(me.name, title, task.time), tag: `task-${task.id}`, url: './', bell: true }), 'task'); } catch { /* ignore */ } }
       return json({ task });
     }
     if (b.action === 'deltask') {
+      // Une tâche qui revient : « all » enlève toute la série; sinon, seulement ce jour-là.
+      const repeat = (await plans().get('repeat', { type: 'json' })) || [];
+      const r = repeat.find((x) => x.id === b.id);
+      if (r) {
+        if (b.all) await plans().setJSON('repeat', repeat.filter((x) => x !== r));
+        else { r.skip = [...new Set([...(r.skip || []), date])].slice(-200); await plans().setJSON('repeat', repeat); }
+        return json({ ok: true });
+      }
       const list = (await plans().get(`tasks:${date}`, { type: 'json' })) || [];
       await plans().setJSON(`tasks:${date}`, list.filter((x) => x.id !== b.id));
+      return json({ ok: true });
+    }
+    // Annuler un « enlever ce jour-là » (bouton Annuler).
+    if (b.action === 'unskip') {
+      const repeat = (await plans().get('repeat', { type: 'json' })) || [];
+      const r = repeat.find((x) => x.id === b.id);
+      if (!r) return json({ error: 'missing' }, 404);
+      r.skip = (r.skip || []).filter((d) => d !== date);
+      await plans().setJSON('repeat', repeat);
+      return json({ ok: true });
+    }
+    // Remettre une série enlevée par erreur (bouton Annuler), telle quelle.
+    if (b.action === 'restoretask' && b.task && typeof b.task === 'object') {
+      const x = b.task;
+      const title = String(x.title || '').trim().slice(0, 80);
+      const who = x.who === '*' ? '*' : String(x.who || '').trim().toLowerCase();
+      if (!title || !who || !/^[a-f0-9]{6,12}$/.test(String(x.id || ''))) return json({ error: 'invalid' }, 400);
+      const repeat = (await plans().get('repeat', { type: 'json' })) || [];
+      if (!repeat.some((r) => r.id === x.id)) await plans().setJSON('repeat', [...repeat, { id: x.id, title, time: HHMM.test(x.time) ? x.time : '', minutes: Math.max(5, Math.min(240, Number(x.minutes) || 15)), who, wd: wdOf(date), from: DATE.test(String(x.from)) ? x.from : date, until: DATE.test(String(x.until)) ? x.until : '', skip: (Array.isArray(x.skip) ? x.skip : []).filter((d) => DATE.test(String(d))).slice(-200), by: me.name, at: new Date().toISOString() }]);
+      return json({ ok: true });
+    }
+    return json({ error: 'action' }, 400);
+  }
+
+  // ---------- La fiche d'un employé (superviseurs seulement, propriétaire 25 oct.) ----------
+  //  notes:<courriel> → [{ id, kind: note | report, cat, text, by, at }]
+  // Notes privées et « Signaler cet employé » : jamais vus par l'employé (ni par personne d'autre qu'un
+  // superviseur ou l'admin). Pas de note, pas de score : seulement des mots, pour s'entraider.
+  const people = () => getStore('people');
+  const NOTE_CATS = ['retard', 'tache', 'securite', 'attitude', 'bravo', 'autre'];
+  async function peopleApi(req, me) {
+    if (!lead(me)) return json({ error: 'boss' }, 403);
+    const params = new URL(req.url).searchParams;
+    if (req.method === 'GET') {
+      if (params.has('reports')) {
+        const { blobs } = await people().list();
+        const out = [];
+        for (const { key } of blobs.filter((x) => x.key.startsWith('notes:'))) {
+          const u = await users().get(key.slice(6), { type: 'json' });
+          for (const n of (await people().get(key, { type: 'json' })) || []) if (n.kind === 'report') out.push({ ...n, email: key.slice(6), name: u?.name || '' });
+        }
+        return json({ reports: out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60) });
+      }
+      const email = String(params.get('email') || '').trim().toLowerCase();
+      if (!EMAIL.test(email)) return json({ error: 'invalid' }, 400);
+      return json({ notes: ((await people().get(`notes:${email}`, { type: 'json' })) || []).slice().reverse() });
+    }
+    const b = await body(req);
+    const email = String(b.email || '').trim().toLowerCase();
+    const u = EMAIL.test(email) ? await users().get(email, { type: 'json' }) : null;
+    if (!u) return json({ error: 'user' }, 404);
+    const list = (await people().get(`notes:${email}`, { type: 'json' })) || [];
+    if (b.action === 'add') {
+      const text = String(b.text || '').trim().slice(0, 1000);
+      const kind = b.kind === 'report' ? 'report' : 'note';
+      const cat = NOTE_CATS.includes(b.cat) ? b.cat : kind === 'report' ? 'autre' : '';
+      if (!text && !(kind === 'report' && cat !== 'autre')) return json({ error: 'invalid' }, 400);
+      const note = { id: randomBytes(5).toString('hex'), kind, cat, text, by: me.name, at: new Date().toISOString() };
+      await people().setJSON(`notes:${email}`, [...list, note].slice(-200));
+      return json({ note });
+    }
+    if (b.action === 'del') {
+      await people().setJSON(`notes:${email}`, list.filter((n) => n.id !== b.id));
+      return json({ ok: true });
+    }
+    return json({ error: 'action' }, 400);
+  }
+
+  // ---------- Le coin des superviseurs + les idées des employés (propriétaire 25 oct.) ----------
+  //  ideas → [{ id, kind: post | idea, text, about: { kind: task | gym, label }, by, byEmail, at, status, statusBy }]
+  // Les superviseurs écrivent quand ils veulent et se lisent entre eux. Un employé envoie une idée;
+  // il ne voit que les siennes (avec la réponse : « On essaie », « Pas pour l'instant », « Ça marche »).
+  const IDEA_STATUS = ['open', 'try', 'later', 'worked'];
+  async function ideasApi(req, me) {
+    const store = getStore('ideas');
+    const all = (await store.get('all', { type: 'json' })) || [];
+    const strip = ({ byEmail, ...x }) => x;
+    if (req.method === 'GET') {
+      if (lead(me)) return json({ ideas: all.slice().reverse().map(strip) });
+      return json({ ideas: all.filter((x) => x.kind === 'idea' && x.byEmail === me.email).reverse().map(strip) });
+    }
+    const b = await body(req, 20_000);
+    if (b.action === 'post' || b.action === 'suggest') {
+      const text = String(b.text || '').trim().slice(0, 1500);
+      if (!text) return json({ error: 'invalid' }, 400);
+      if (b.action === 'post' && !lead(me)) return json({ error: 'boss' }, 403);
+      const about = b.about && ['task', 'gym'].includes(b.about.kind) ? { kind: b.about.kind, label: String(b.about.label || '').slice(0, 80) } : null;
+      const item = { id: randomBytes(5).toString('hex'), kind: b.action === 'post' ? 'post' : 'idea', text, about, by: me.name, byEmail: me.email, at: new Date().toISOString(), status: 'open', statusBy: '' };
+      await store.setJSON('all', [...all, item].slice(-300));
+      return json({ idea: strip(item) });
+    }
+    const it = all.find((x) => x.id === b.id);
+    if (!it) return json({ error: 'missing' }, 404);
+    if (b.action === 'status') {
+      if (!lead(me) || !IDEA_STATUS.includes(b.status)) return json({ error: 'boss' }, 403);
+      Object.assign(it, { status: b.status, statusBy: b.status === 'open' ? '' : me.name, statusAt: new Date().toISOString() });
+      await store.setJSON('all', all);
+      return json({ idea: strip(it) });
+    }
+    if (b.action === 'del') {
+      if (!lead(me) && it.byEmail !== me.email) return json({ error: 'boss' }, 403);
+      await store.setJSON('all', all.filter((x) => x !== it));
       return json({ ok: true });
     }
     return json({ error: 'action' }, 400);
@@ -712,7 +887,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const route = new URL(req.url).pathname.replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'auth') return await auth(req);
-      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi, plan: planApi, roster };
+      const routes = { users: team, board: shifts, problems: reports, alerts: alertList, push: pushApi, feedback: feedbackApi, plan: planApi, roster, people: peopleApi, ideas: ideasApi };
       if (!routes[route]) return json({ error: 'route' }, 404);
       const me = await currentUser(req);
       if (!me) return json({ error: 'auth' }, 401);

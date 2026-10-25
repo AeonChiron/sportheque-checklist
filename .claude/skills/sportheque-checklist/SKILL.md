@@ -197,3 +197,12 @@ Plain static site + one serverless function. No build step.
 - Bottom tab bar on phones (`#tabBar`, moved to `<body>`; `margin:0` because body children get auto margins), side rail ≥1000 px. Employee: Accueil · Mon quart · Historique · Équipe. Supervisor: Accueil · Signalements · Rapports · Équipe. Hidden on auth/setup/checklist/finish/sent/review/poster/problem and the admin dashboard. `tabOf(screen)` maps screens to tabs; tab switches fade (`data-nav="tab"`), deeper pages slide.
 - Employee "Historique" (`#mine`): week calendar on top + Mes quarts. The old employee history page is gone (`#historique` and data-go="history" → Historique for non-supervisors). Supervisors keep "Rapports" (#historique).
 - Hub tiles no longer duplicate tabs; the manual is a small link (`smallLinks()`). On tab pages the top "Accueil / Mes tâches / Superviseur" pills hide.
+
+## Supervisor tools (loop round 4)
+- Fiche (`#person`, route `#fiche=<email>`, `openPerson(email)`): supervisors only. Private notes via `people` route (leads only; cats in `NOTE_CATS`); "Signaler" = people `add {kind:'report'}` — the employee never sees either. Last 4 weeks: list of shifts, never a score or ranking.
+- Departures: users `remove` keeps the account (hash + `removedAt/By`), so past shifts stay in reports; `restore` brings it back; `users?former=1` lists them. Non-admins can't remove an admin.
+- Le coin (boss tab `coin`): `ideas` route. Leads see all; employees only their own (byEmail stripped). Status open/try/later/worked. Task reports post an idea with `about:{kind:'task'}`.
+- Special tasks: `plan {action:'task', repeat:'weekly', until?}`; series stored in `repeat`, expanded per date. Delete: one date (skip, `unskip` to undo) or `{all}` (`restoretask` to undo). Always icon k `misc` (not a star).
+- Congé: `override {to, conge:true}` ranges; shown in the week strip and roster.
+- Préférences (`#preferences`): push kinds `remind, sched, task, urgent, weekly` + `quiet` (23–6 h Toronto, urgent ignores it). `prefs.calm` → `calm-mode` class, no sounds, reducedMotion. `prefs.textSize` normal/large/xl (1, 1.15, 1.3). `setVolume` in fx.js (default 0.7).
+- Weekly summary (Q35 = weekly only): Sunday 21:00–21:14 Toronto, leads only, once per week (`weeklyFor`): gym % + open urgent problems, nothing else.

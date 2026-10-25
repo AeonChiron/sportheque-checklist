@@ -9,7 +9,7 @@ import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './plan
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
 import { CATEGORIES, ALL_CATEGORIES as FLAG_CATEGORIES, MAX_PROBLEM_PHOTOS } from './problem-shape.js';
-import { mountGlass, playFinish, fxSound, clickTap } from './fx.js';
+import { mountGlass, playFinish, fxSound, clickTap, setVolume } from './fx.js';
 import { hapticTrigger } from '../vendor/ios-haptics/index.js';
 import autoAnimate from '../vendor/auto-animate/index.js';
 import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, listRoster, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs, FICTIVE } from './auth.js';
@@ -26,7 +26,7 @@ const PREFS = 'gym-shift-prefs';
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const md = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reducedMotion = () => Boolean(prefs?.calm) || matchMedia('(prefers-reduced-motion: reduce)').matches; // le mode calme aussi
 
 // ---------- Persistance (un rechargement de Safari ne perd rien) ----------
 function read(key, fallback) {
@@ -89,7 +89,7 @@ const RANK = { poster: 6, auth: 0, setup: 0, checklist: 1, finish: 2, sent: 3, a
 // l'écran d'avant au lieu de quitter le site. Une feuille ouverte se ferme d'abord.
 let navRestoring = false;
 let navPopAt = 0;
-const NAV_HASH = { history: '#historique', apercu: '#apercu', boss: '#patron', poster: '#affiche' };
+const NAV_HASH = { history: '#historique', apercu: '#apercu', boss: '#patron', poster: '#affiche', prefs: '#preferences' };
 function navRecord(id) {
   if (navRestoring) return;
   const url = location.pathname + (NAV_HASH[id] ?? (['review', 'problem'].includes(id) ? location.hash : ''));
@@ -1257,8 +1257,9 @@ function pipsHTML(done, total, plate, land = -1) {
     <rect class="collar${full ? ' on' : ''}" x="${80 + outer}" y="11" width="3" height="8" rx="1"/>
   </svg>`;
 }
-const sfx = (name, opts) => { if (prefs.sound !== false) fxSound(name, opts); };
-document.addEventListener('click', (ev) => { if (prefs.sound !== false && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(() => prefs.sound !== false); }, true);
+const soundOn = () => prefs.sound !== false && !prefs.calm; // le mode calme coupe tous les sons
+const sfx = (name, opts) => { if (soundOn()) fxSound(name, opts); };
+document.addEventListener('click', (ev) => { if (soundOn() && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(soundOn); }, true);
 // iPhone : par défaut, le bouton silencieux coupe les sons et la musique de l'employé continue.
 // « Sons même en silencieux » (Menu) : les sons jouent quand même (la musique peut s'arrêter).
 function applyAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = prefs.soundSilent ? 'playback' : 'ambient'; } catch { /* ignore */ } }
@@ -2328,6 +2329,7 @@ function openSettings() {
       </div>` : ''}
     </div>
     <div class="menu-list">
+      ${signed ? `<button class="btn primary menu-item menu-prefs" id="mPrefs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>${t('prefsTitle')}</button>` : ''}
       ${signed ? `<button class="btn ghost menu-item" id="mAccount"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>${t('account')}</button>` : ''}
       ${signed ? `<button class="btn ghost menu-item" id="mNotify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>${t('notifyTitle')}</button>` : ''}
       ${signed && !bossWatching() ? `<button class="btn ghost menu-item" id="mEdit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>${t('editHours')}</button>` : ''}
@@ -2369,6 +2371,7 @@ function openSettings() {
     root.querySelector('#mProto').onclick = () => { closeSheet(); goProtocol(); };
     root.querySelector('#mEdit')?.addEventListener('click', () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); });
     root.querySelector('#mAccount')?.addEventListener('click', () => { closeSheet(); setTimeout(openAccount, 340); });
+    root.querySelector('#mPrefs')?.addEventListener('click', () => { closeSheet(); setTimeout(() => { if (location.hash === '#preferences') openPrefs(); else location.hash = 'preferences'; }, 300); });
     root.querySelector('#mNotify')?.addEventListener('click', () => { closeSheet(); setTimeout(openNotify, 340); });
     root.querySelector('#mView')?.addEventListener('click', () => { closeSheet(); setTimeout(openViewMenu, 340); });
     root.querySelector('#mRestart')?.addEventListener('click', () => { closeSheet(); setTimeout(() => $('#restartBtn').click(), 340); });
@@ -3204,11 +3207,44 @@ function openTaskInfo(shift, id) {
     <div><p class="block-label">${t('steps')}</p><ol class="steps static">${it.steps.map((s) => `<li><span class="step"><span class="step-text">${md(s)}</span></span></li>`).join('')}</ol></div>
     ${it.tvTable ? `<figure class="visual map-visual"><figcaption class="block-label">${t('channels')}</figcaption>${tvDiagram(TV_CHANNELS)}</figure>` : ''}
     ${tipsCallout(it)}
+    ${isBoss() ? `<button type="button" class="link flag-link" data-rtask="${esc(it.title)}">${ICON.flag}${esc(t('rtButton'))}</button>` : ''}
   `, (root) => {
     const mapBox = root.querySelector('[data-map]');
     if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: ap.day } : { mirrors: it.zone, date: ap.day });
   });
 }
+// La fiche d'une tâche dans le quart d'un employé (superviseur) : les étapes, les trucs, et deux
+// boutons — signaler la tâche (au coin des superviseurs) ou ouvrir la fiche de la personne.
+function openGlanceTask(id) {
+  const tg = glanceTarget;
+  const it = tg && shiftFacts(tg).items.find((x) => x.id === id);
+  if (!it) return;
+  openSheet(`
+    <div class="sheet-hero">
+      ${it.deep || (it.zone && it.photo === 'miroirs') ? '' : taskVisual(it)}
+      <div class="sheet-head">
+        <p class="eyebrow">${esc(t('glTaskOf', tg.name))}</p>
+        <h2>${esc(it.title)}</h2>
+        <div class="meta-row"><span class="pill num">${f(it.start)} – ${f(it.end)}</span><span class="pill num">${it.minutes} min</span>${it.zone ? `<span class="pill">Zone ${it.zone}</span>` : ''}</div>
+      </div>
+    </div>
+    ${it.steps?.length ? `<div><p class="block-label">${t('steps')}</p><ol class="steps static">${it.steps.map((s) => `<li><span class="step"><span class="step-text">${md(s)}</span></span></li>`).join('')}</ol></div>` : ''}
+    ${tipsCallout(it)}
+    ${it.deep || (it.zone && it.photo === 'miroirs') ? taskVisual(it) : ''}
+    <div class="gt-acts"><button type="button" class="btn ghost" data-rtask="${esc(it.title)}">${ICON.flag}<span>${esc(t('rtButton'))}</span></button>
+    ${tg.email ? `<button type="button" class="btn ghost" data-pfopen="${esc(tg.email)}" data-close-first>${HUB_ICO.team}<span>${esc(t('glProfile', tg.name))}</span></button>` : ''}</div>
+  `, (root) => {
+    const mapBox = root.querySelector('[data-map]');
+    if (mapBox) mountMap(mapBox, it.deep ? { highlight: it.zone, date: tg.date } : { mirrors: it.zone, date: tg.date });
+  });
+}
+document.addEventListener('click', (ev) => {
+  const g = ev.target.closest('[data-gltask]');
+  if (g) { openGlanceTask(g.dataset.gltask); return; }
+  const r = ev.target.closest('[data-rtask]');
+  if (r) { const title = r.dataset.rtask; closeSheet(); setTimeout(() => openReportTask(title), 340); return; }
+  if (ev.target.closest('[data-close-first]')) closeSheet();
+}, true);
 
 function changeWeek(n) {
   const today = todayISO();
@@ -3785,7 +3821,7 @@ $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
 // Employé : Accueil · Mon quart · Historique · Équipe. Superviseur : Accueil · Signalements · Rapports · Équipe.
 // Cachée pendant le quart (la checklist a sa propre barre), à l'envoi et sur la page bleue.
 const TAB_HIDDEN = new Set(['auth', 'setup', 'checklist', 'finish', 'sent', 'review', 'poster', 'problem']);
-const TAB_ROOTS = new Set(['hub', 'mine', 'glance', 'teamweek', 'todaygym', 'boss', 'history', 'plan', 'method', 'apercu']);
+const TAB_ROOTS = new Set(['hub', 'mine', 'glance', 'teamweek', 'todaygym', 'boss', 'history', 'plan', 'method', 'apercu', 'prefs', 'person']);
 const TAB_ICO = {
   hub: '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
   shift: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5M8.5 11l2 2 4-4M8.5 17h7"/>',
@@ -3802,7 +3838,8 @@ function tabOf(id) {
   if (id === 'history') return bossWatching() ? 'reports' : 'history';
   if (id === 'boss') return 'problems';
   if (id === 'teamweek' || id === 'todaygym' || id === 'apercu') return 'team';
-  if (id === 'method') return 'hub';
+  if (id === 'method' || id === 'prefs') return 'hub';
+  if (id === 'person') return 'team';
   return '';
 }
 // La barre vit au niveau de la page (un parent transformé la ferait suivre la colonne du milieu).
@@ -4530,7 +4567,8 @@ function openBoss({ keep = false } = {}) {
 async function refreshBoss() {
   const tab = boss.tab;
   try {
-    if (tab === 'team') { boss.team = await listTeam(); boss.teamLoaded = true; }
+    if (tab === 'team') { [boss.team] = await Promise.all([listTeam(), loadCoin()]); boss.teamLoaded = true; }
+    else if (tab === 'coin') await loadCoin();
     else if (tab === 'trends') {
       const [{ shifts }, problems] = await Promise.all([loadRecent(120), listProblems().catch(() => boss.problems)]);
       boss.trendShifts = shifts;
@@ -4540,7 +4578,7 @@ async function refreshBoss() {
     boss.error = '';
   } catch (err) {
     boss.error = err.status === 0 ? 'errNetwork' : 'errServer';
-    if (tab === 'team') boss.teamLoaded = true; else if (tab === 'trends') boss.trendLoaded = true; else boss.loaded = true;
+    if (tab === 'team') boss.teamLoaded = true; else if (tab === 'trends') boss.trendLoaded = true; else if (tab === 'coin') coin.loaded = true; else boss.loaded = true;
   }
   paintBossCount();
   if (current === 'boss' && boss.tab === tab) renderBoss({ animate: false });
@@ -4562,7 +4600,7 @@ function problemCard(p, i) {
     <span class="pb-ico">${catIcon(p.category)}</span>
     <span class="rp-main">
       <b>${esc(catName(p.category))}</b>
-      <span class="hi-meta">${p.location ? `${esc(p.location)} · ` : ''}${esc(p.by)} · <span class="nowrap">${esc(whenShort(p.at))}</span>${p.status !== 'resolved' ? ` ${openFor(p.at) ? `· <span class="nowrap pb-age">${esc(openFor(p.at))}</span>` : ''}` : ''}</span>
+      <span class="hi-meta">${p.location ? `${esc(p.location)} · ` : ''}${esc(p.by)} · <span class="nowrap">${esc(whenShort(p.at))}</span>${p.status !== 'resolved' ? ` ${openFor(p.at) ? `· <span class="nowrap pb-age${Date.now() - new Date(p.at).getTime() >= 7 * 864e5 ? ' old' : ''}">${esc(openFor(p.at))}</span>` : ''}` : ''}</span>
       ${p.text ? `<span class="pb-text">${esc(p.text)}</span>` : ''}
       ${tags ? `<span class="tags">${tags}</span>` : ''}
     </span>${CHEV_R}</button>`;
@@ -4586,15 +4624,9 @@ function renderBoss({ animate = true } = {}) {
   let panel = '';
   if (boss.tab === 'trends') panel = boss.trendLoaded ? trendsPanel() : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>';
   else if (boss.tab === 'team') {
-    panel = !boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
-      : `${teamWeek()}<p class="section-note">${esc(t('teamHint'))}</p>
-        <div class="panel team-list">${boss.team.map((u) => `<div class="team-row" data-email="${esc(u.email)}">
-          <div class="team-who"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
-          <span class="pill">${esc(roleName(u.role))}</span>
-          ${u.email === session.user?.email ? `<span class="team-you">${esc(t('you'))}</span>` : `<div class="team-acts">
-            ${session.mode === 'demo' ? '' : `<button type="button" class="link" data-reset>${esc(t('newPassword'))}</button>`}
-            <button type="button" class="link danger" data-remove>${esc(t('removeUser'))}</button></div>`}
-        </div>`).join('')}</div>`;
+    panel = !boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>' : teamPanel();
+  } else if (boss.tab === 'coin') {
+    panel = coinPanel();
   } else {
     const list = boss.filter === 'open' ? boss.problems.filter((p) => p.status !== 'resolved') : boss.problems;
     // À commander : ce que les signalements « Matériel manquant » encore ouverts demandent.
@@ -4614,6 +4646,7 @@ function renderBoss({ animate = true } = {}) {
   $('#bossBody').innerHTML = `
     <div class="segmented boss-tabs" role="tablist">
       <button type="button" role="tab" data-btab="problems" aria-selected="${boss.tab === 'problems'}">${esc(t('tabProblems'))}</button>
+      <button type="button" role="tab" data-btab="coin" aria-selected="${boss.tab === 'coin'}">${esc(t('tabCoin'))}${coin.ideas.some((x) => x.kind === 'idea' && x.status === 'open') ? '<i class="tab-dot" aria-hidden="true"></i>' : ''}</button>
       <button type="button" role="tab" data-btab="trends" aria-selected="${boss.tab === 'trends'}">${esc(t('tabTrends'))}</button>
       <button type="button" role="tab" data-btab="team" aria-selected="${boss.tab === 'team'}">${esc(t('tabTeam'))}</button>
     </div>
@@ -4906,6 +4939,7 @@ $('#installTip').addEventListener('click', async (ev) => {
 // ---------- Confort : texte plus grand ----------
 function setLarge(on, sw) {
   prefs.large = on;
+  prefs.textSize = on ? (prefs.textSize === 'xl' ? 'xl' : 'large') : 'normal';
   savePrefs();
   document.documentElement.classList.toggle('large', on);
   sw?.setAttribute('aria-checked', String(on));
@@ -4927,7 +4961,9 @@ function iosTextRatio() {
   } catch { return 1; }
 }
 function applyTextSize() {
-  const z = Math.round(iosTextRatio() * (prefs.large ? 1.15 : 1) * 100) / 100;
+  // Trois tailles (Préférences) : normale, grande (+15 %), très grande (+30 %).
+  const k = prefs.textSize || (prefs.large ? 'large' : 'normal');
+  const z = Math.round(iosTextRatio() * ({ large: 1.15, xl: 1.3 }[k] || 1) * 100) / 100;
   document.documentElement.style.zoom = z === 1 ? '' : String(z);
 }
 document.documentElement.classList.toggle('large', Boolean(prefs.large));
@@ -4979,6 +5015,8 @@ const HUB_ICO = {
   pause: '<svg viewBox="0 0 24 24"><path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M12 3v3"/></svg>',
   compost: '<svg viewBox="0 0 24 24"><path d="M5 7h14l-1.5 13h-11z"/><path d="M3 7h18M10 4h4M12 11c-2 1-2.5 3-1 5 1.5-1 3-3 1-5z"/></svg>',
   star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
+  // Les tâches spéciales (propriétaire : « toujours la même icône, une icône “divers” », pas une étoile)
+  misc: '<svg viewBox="0 0 24 24"><circle cx="7.5" cy="7.5" r="3.5"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><path d="M7.5 13.5l4 6.5h-8z"/><path d="M16.5 13.5v7M13 17h7"/></svg>',
   go: '<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   shield: '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
@@ -5044,7 +5082,7 @@ function shiftFacts(tg) {
   const facts = [];
   if (tg.special) facts.push({ k: 'star', label: t('glSpecial'), value: tasks.map((x) => x.title).join(' + ') });
   const asg = tasks.filter((x) => x.assigned);
-  if (asg.length) facts.unshift({ k: 'star', label: t('glAssigned'), value: asg.map((x) => `${x.title}${x.start ? ` · ${nb(f(x.start))}` : ''}`).join(' + '), sub: t('assignedBy', asg[0].by) });
+  if (asg.length) facts.unshift({ k: 'misc', label: t('glAssigned'), value: asg.map((x) => `${x.title}${x.start ? ` · ${nb(f(x.start))}` : ''}`).join(' + '), sub: t('assignedBy', asg[0].by) });
   const deep = find(/-profondeur$/);
   if (deep) {
     const z = dayInfo(tg.date).zones[shift];
@@ -5247,6 +5285,7 @@ async function openDaySheet(d) {
 function smallLinks() {
   return `<nav class="hb-links" aria-label="${esc(t('moreLinks'))}">
     <button type="button" class="hb-link" data-hub="method">${hubIco('method')}<span><b>${esc(t('tMethod'))}</b><small>${esc(t('tMethodSub'))}</small></span>${CHEV_R}</button>
+    ${!bossWatching() && session.mode === 'accounts' && !isVisitor() ? `<button type="button" class="hb-link" data-hub="idea">${hubIco('send')}<span><b>${esc(t('tIdea'))}</b><small>${esc(t('tIdeaSub'))}</small></span>${CHEV_R}</button>` : ''}
   </nav>`;
 }
 const tile = (k, ico, title, sub, extra = '') => `<button type="button" class="hb-tile t-${k}" data-hub="${k}">${hubIco(ico)}<span class="hb-tt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>${extra}</button>`;
@@ -5490,7 +5529,7 @@ document.addEventListener('click', (e) => {
 // Une personne à l'horaire : son nom, ses heures, et ce qu'elle fera (zone, miroirs, tâche de la semaine).
 function personRow(tg) {
   const F = shiftFacts(tg);
-  const chips = F.facts.filter((x) => ['star', 'zone', 'mirror', 'week'].includes(x.k)).map((x) => `<span class="tw-chip k-${x.k}">${esc(x.k === 'zone' ? x.value : x.k === 'week' ? x.value.split(/[.;]/)[0] : x.value)}</span>`).join('');
+  const chips = F.facts.filter((x) => ['star', 'misc', 'zone', 'mirror', 'week'].includes(x.k)).map((x) => `<span class="tw-chip k-${x.k}">${esc(x.k === 'zone' ? x.value : x.k === 'week' ? x.value.split(/[.;]/)[0] : x.value)}</span>`).join('');
   const nTask = assignedFor(tg.date, tg.email).length;
   const extra = `${tg.changed ? `<span class="tw-chip k-changed">${esc(t('twChanged'))}</span>` : ''}${nTask ? `<span class="tw-chip k-task">${esc(t('twTasks', nTask))}</span>` : ''}`;
   const { avatar, ...plain } = tg; // la photo reste hors de l'attribut (une photo peut peser 10 ko)
@@ -5518,19 +5557,23 @@ function renderGlance() {
   const rows = F.items.filter((i) => ['task', 'meal', 'pause'].includes(i.kind)).map((i, k) => {
     const rest = i.kind !== 'task';
     const isNow = now !== null && i.start <= now && now < i.end;
-    return `<li class="gl-row${rest ? ' rest' : ''}${isNow ? ' now' : ''}" style="--pc:var(--plate-${plateOf(i)});--k:${Math.min(k, 14)}">
-      <span class="gl-time num">${nb(f(i.start))}</span>
+    // Superviseur : un toucher sur une tâche ouvre sa fiche (étapes, trucs) avec « Signaler cette tâche ».
+    const tap = !own && isBoss() && !rest && i.id;
+    const inner = `<span class="gl-time num">${nb(f(i.start))}</span>
       <span class="gl-line" aria-hidden="true"><i></i></span>
       <span class="gl-main"><b>${esc(i.title)}</b>${i.summary ? `<small>${md(i.summary)}</small>` : ''}</span>
-      <span class="gl-min num">${esc(hours(i.minutes || 0))}</span></li>`;
+      <span class="gl-min num">${esc(hours(i.minutes || 0))}</span>`;
+    return `<li class="gl-row${rest ? ' rest' : ''}${isNow ? ' now' : ''}${tap ? ' tap' : ''}" style="--pc:var(--plate-${plateOf(i)});--k:${Math.min(k, 14)}">${tap ? `<button type="button" class="gl-tap" data-gltask="${esc(i.id)}">${inner}</button>` : inner}</li>`;
   }).join('');
   const live = own && tg.live;
   const bossActs = !own && tg.email && isBoss() && tg.date >= todayISO()
-    ? `<div class="gl-boss"><p class="block-label">${esc(t('glBossActs', tg.name))}</p><div class="gl-bossbtns">
+    ? `<div class="gl-boss"><p class="block-label">${esc(t('glBossActs', tg.name))}</p>
+        <button type="button" class="hb-link gl-profile" data-pfopen="${esc(tg.email)}"><span class="tw-av${tg.avatar ? ' has-pic' : ''}" aria-hidden="true">${avatarOf({ avatar: tg.avatar }, esc((tg.name[0] || '?').toUpperCase()))}</span><span><b>${esc(t('glProfile', tg.name))}</b><small>${esc(t('glProfileSub'))}</small></span>${CHEV_R}</button>
+        <div class="gl-bossbtns">
         <button type="button" class="btn ghost" data-gl-act="day">${HUB_ICO.plan}<span>${esc(t('glActDay'))}</span></button>
         <button type="button" class="btn ghost" data-gl-act="week">${HUB_ICO.team}<span>${esc(t('glActWeek'))}</span></button>
-        <button type="button" class="btn primary" data-gl-act="task">${HUB_ICO.star}<span>${esc(t('glActTask'))}</span></button></div>
-        ${assignedFor(tg.date, tg.email).filter((x) => x.who !== '*').map((x) => `<span class="tw-task">${hubIco('star')}<span><b>${esc(x.title)}</b><small>${esc([x.time && hm(x.time), x.by].filter(Boolean).join(' · '))}</small></span><button type="button" class="link danger" data-deltask="${esc(x.id)}" data-date="${tg.date}" aria-label="${esc(t('remove'))}">✕</button></span>`).join('')}</div>`
+        <button type="button" class="btn primary" data-gl-act="task">${HUB_ICO.misc}<span>${esc(t('glActTask'))}</span></button></div>
+        ${assignedFor(tg.date, tg.email).filter((x) => x.who !== '*').map((x) => `<span class="tw-task">${hubIco('misc')}<span><b>${esc(x.title)}</b><small>${esc([x.time && hm(x.time), x.repeat && (x.until ? t('taskUntilShort', dayMonth(x.until)) : t('taskEveryWeek')), x.by].filter(Boolean).join(' · '))}</small></span><button type="button" class="link danger" data-deltask="${esc(x.id)}" data-date="${tg.date}" aria-label="${esc(t('remove'))}">✕</button></span>`).join('')}</div>`
     : '';
   const cta = own ? `<button type="button" class="btn primary big gl-cta" data-hub="${live ? (shiftOver() ? 'finish' : 'tasks') : 'start'}">${esc(t(live ? (shiftOver() ? 'hbSend' : 'hbResume') : 'glStartThis'))}</button>` : bossActs;
   $('#glanceBody').innerHTML = `<div class="gl-wrap${reducedMotion() ? '' : ' cascade'}">
@@ -5704,7 +5747,7 @@ document.addEventListener('toggle', (e) => { if (e.target.classList?.contains('t
 // Les tâches « tout le monde ce jour-là » d'une journée (les tâches d'une personne sont sur sa ligne).
 function allTasks(d) {
   const list = (teamPlan.tasks || []).filter((x) => x.date === d && x.who === '*');
-  return list.length ? `<div class="tw-alltasks">${list.map((x) => `<span class="tw-task">${hubIco('star')}<span><b>${esc(x.title)}</b><small>${esc([x.time && hm(x.time), t('twEveryone'), x.by].filter(Boolean).join(' · '))}</small></span><button type="button" class="link danger" data-deltask="${esc(x.id)}" data-date="${d}" aria-label="${esc(t('remove'))}">✕</button></span>`).join('')}</div>` : '';
+  return list.length ? `<div class="tw-alltasks">${list.map((x) => `<span class="tw-task">${hubIco('misc')}<span><b>${esc(x.title)}</b><small>${esc([x.time && hm(x.time), t('twEveryone'), x.repeat && (x.until ? t('taskUntilShort', dayMonth(x.until)) : t('taskEveryWeek')), x.by].filter(Boolean).join(' · '))}</small></span><button type="button" class="link danger" data-deltask="${esc(x.id)}" data-date="${d}" aria-label="${esc(t('remove'))}">✕</button></span>`).join('')}</div>` : '';
 }
 const teamUser = (email) => (boss.team || []).find((u) => u.email === email);
 const shiftOpts = (cur) => `<div class="qs-opts">${[['off', t('qsOff'), ''], ...PRESETS.map((p) => [p.id, presetName(p.id), `${nb(f(toMin(p.start)))}–${nb(f(toMin(p.end)))}`]), ['custom', t('qsOther'), '']].map(([id, l, sub]) => `<button type="button" class="qs-opt${id === 'off' ? ' off' : ''}" data-dm="${id}" aria-pressed="${cur === id}"><b>${esc(l)}</b>${sub ? `<small class="num">${sub}</small>` : ''}</button>`).join('')}</div>`;
@@ -5749,11 +5792,14 @@ function openTaskSheet(date, preWho = '') {
   const people = (boss.team || []).filter((u) => !u.removed && !isLeadUser(u)); // les tâches vont aux employés
   let who = preWho || '*';
   let mins = 15;
+  let repeat = 'once';
   const working = (boss.team || []).map((u) => teamTarget(u, date) ? u.email : '').filter(Boolean);
-  openSheet(`<div class="sheet-head"><p class="eyebrow">${hubIco('star')}${esc(t('taskEyebrow'))}</p><h2>${esc(cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</h2><p class="lede">${esc(t('taskLede'))}</p></div>
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${hubIco('misc')}${esc(t('taskEyebrow'))}</p><h2>${esc(cap(dateOf(date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</h2><p class="lede">${esc(t('taskLede'))}</p></div>
     <label class="field"><span>${esc(t('taskWhat'))}</span><input id="tkTitle" type="text" maxlength="80" placeholder="${esc(t('taskWhatPh'))}"></label>
     <div class="field"><span>${esc(t('taskWhen'))}</span><div class="tk-when"><input id="tkTime" type="time" step="300"><small>${esc(t('taskWhenHint'))}</small></div></div>
     <div class="field"><span>${esc(t('taskHowLong'))}</span><div class="segmented tiny" role="radiogroup">${[10, 15, 30, 45, 60].map((m) => `<button type="button" role="radio" data-tkm="${m}" aria-checked="${m === mins}">${m} min</button>`).join('')}</div></div>
+    <div class="field"><span>${esc(t('taskRepeat'))}</span><div class="segmented tiny" role="radiogroup">${[['once', t('taskOnce')], ['weekly', t('taskWeekly', dateOf(date).toLocaleDateString(locale(), { weekday: 'long' }))]].map(([k, l]) => `<button type="button" role="radio" data-tkr="${k}" aria-checked="${k === 'once'}">${esc(l)}</button>`).join('')}</div>
+      <div class="tk-until" id="tkUntilBox" hidden><label><span>${esc(t('taskUntil'))}</span><input type="date" id="tkUntil" min="${date}"></label><small>${esc(t('taskUntilHint'))}</small></div></div>
     <div class="field"><span>${esc(t('taskWho'))}</span>
       <div class="tk-who">
         <button type="button" class="tk-person" data-tkw="*" aria-pressed="${who === '*'}"><span class="tw-av">★</span><b>${esc(t('twEveryone'))}</b><small>${esc(t('taskEveryoneSub', working.length))}</small></button>
@@ -5762,6 +5808,8 @@ function openTaskSheet(date, preWho = '') {
     root.addEventListener('click', (e) => {
       const m = e.target.closest('[data-tkm]');
       if (m) { mins = Number(m.dataset.tkm); for (const o of root.querySelectorAll('[data-tkm]')) o.setAttribute('aria-checked', String(o === m)); sfx('tap'); return; }
+      const r = e.target.closest('[data-tkr]');
+      if (r) { repeat = r.dataset.tkr; for (const o of root.querySelectorAll('[data-tkr]')) o.setAttribute('aria-checked', String(o === r)); root.querySelector('#tkUntilBox').hidden = repeat !== 'weekly'; sfx('tap'); return; }
       const w = e.target.closest('[data-tkw]');
       if (w) { who = w.dataset.tkw; for (const o of root.querySelectorAll('[data-tkw]')) o.setAttribute('aria-pressed', String(o === w)); sfx('tap'); }
     });
@@ -5770,10 +5818,11 @@ function openTaskSheet(date, preWho = '') {
       const title = root.querySelector('#tkTitle').value.trim();
       if (!title) { root.querySelector('#tkTitle').focus(); toast(t('taskNeedTitle'), 'muted'); return; }
       let made = null;
-      try { made = (await request('plan', { method: 'POST', body: { action: 'task', date, title, time: root.querySelector('#tkTime').value || '', minutes: mins, who } })).task; }
+      const until = repeat === 'weekly' ? root.querySelector('#tkUntil').value || '' : '';
+      try { made = (await request('plan', { method: 'POST', body: { action: 'task', date, title, time: root.querySelector('#tkTime').value || '', minutes: mins, who, ...(repeat === 'weekly' ? { repeat, until } : {}) } })).task; }
       catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
       closeSheet(); sfx('save');
-      toast(t('taskAdded'), 'ok', made?.id ? async () => { try { await request('plan', { method: 'POST', body: { action: 'deltask', date, id: made.id } }); await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13)); rerenderBossViews(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } } : null);
+      toast(t(repeat === 'weekly' ? 'taskAddedWeekly' : 'taskAdded'), 'ok', made?.id ? async () => { try { await request('plan', { method: 'POST', body: { action: 'deltask', date, id: made.id, all: true } }); await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13)); rerenderBossViews(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } } : null);
       await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
       rerenderBossViews();
     };
@@ -5804,9 +5853,29 @@ document.addEventListener('click', async (ev) => {
   if (a.dataset.addtask) { openTaskSheet(a.dataset.addtask); return; }
   if (a.dataset.addperson) { openAddPerson(a.dataset.addperson); return; }
   if (a.dataset.deltask) {
-    try { await request('plan', { method: 'POST', body: { action: 'deltask', date: a.dataset.date, id: a.dataset.deltask } }); } catch { toast(t('editServer'), 'muted'); return; }
-    await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
-    toast(t('taskRemoved')); rerenderBossViews(); return;
+    const date = a.dataset.date, id = a.dataset.deltask;
+    const task = (teamPlan.tasks || []).find((x) => x.id === id && x.date === date);
+    const refresh = async () => { await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13)); rerenderBossViews(); };
+    const del = async (all) => {
+      try { await request('plan', { method: 'POST', body: { action: 'deltask', date, id, ...(all ? { all: true } : {}) } }); } catch { toast(t('editServer'), 'muted'); return; }
+      await refresh();
+      // Annuler : une tâche d'un jour revient telle quelle; une série revient entière; un jour sauté revient.
+      const undo = async () => {
+        try {
+          if (task?.repeat && !all) await request('plan', { method: 'POST', body: { action: 'unskip', date, id } });
+          else if (task?.repeat) await request('plan', { method: 'POST', body: { action: 'restoretask', date: task.date, task: { ...task, from: task.date } } });
+          else if (task) await request('plan', { method: 'POST', body: { action: 'task', date, title: task.title, time: task.time, minutes: task.minutes, who: task.who } });
+          await refresh(); toast(t('undone'), 'muted');
+        } catch { toast(t('editServer'), 'muted'); }
+      };
+      toast(t(all ? 'taskSeriesRemoved' : 'taskRemoved'), 'muted', task ? undo : null);
+    };
+    if (!task?.repeat) { del(false); return; }
+    openSheet(`<div class="sheet-head"><p class="eyebrow">${hubIco('misc')}${esc(t('taskEveryWeek'))}</p><h2>${esc(task.title)}</h2><p class="lede">${esc(t('taskDelWhich'))}</p></div>`, () => {
+      $('#tdOne').onclick = () => { closeSheet(); del(false); };
+      $('#tdAll').onclick = () => { closeSheet(); del(true); };
+    }, `<button type="button" class="btn ghost" id="tdOne">${esc(t('taskDelOne', dayMonth(date)))}</button><button type="button" class="btn primary danger" id="tdAll">${esc(t('taskDelAll'))}</button>`);
+    return;
   }
   const g = glanceTarget;
   if (!g?.email) return;
@@ -5821,6 +5890,472 @@ $('#teamBody').addEventListener('click', (ev) => {
   sfx('tab');
   renderTeamWeek();
 });
+
+// ---------- Ronde 4 : les outils des superviseurs (propriétaire, 25 oct.) ----------
+// La fiche d'un employé (photo, horaire, prochain quart, 4 dernières semaines, notes privées,
+// « Signaler cet employé »), le coin des superviseurs, les idées des employés, les départs.
+// Règle d'or : aider, pas surveiller. Aucun score, aucun classement; l'employé ne voit jamais
+// ce qu'un superviseur écrit sur lui.
+const NOTE_CATS = ['retard', 'tache', 'securite', 'attitude', 'autre'];
+const IDEA_STATUS = ['try', 'later', 'worked'];
+const pf = { email: '', notes: [], weeks: null, loading: false };
+const coin = { ideas: [], reports: [], former: [], loaded: false };
+const shortDay = (iso) => cap(dateOf(iso).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', ''));
+const ago = (iso) => whenShort(iso);
+const firstOf = (name) => String(name || '').split(' ')[0];
+
+async function ensureTeam() {
+  if (!boss.teamLoaded || !boss.team?.length || boss.team.some((u) => u.email.startsWith('id:'))) {
+    try { boss.team = await listTeam(); boss.teamLoaded = true; } catch { /* hors ligne */ }
+  }
+  const from = mondayOf(todayISO());
+  if (!teamPlan.from || teamPlan.from > from) await refreshTeamPlan(from, addDays(from, 20));
+}
+// Ouvrir la fiche : d'un toucher sur une personne (Équipe, la semaine, le quart d'un employé).
+async function openPerson(email) {
+  if (!isBoss() || !email) return;
+  if (pf.email !== email) { pf.notes = []; pf.weeks = null; pf.all = false; }
+  pf.email = email;
+  paintStatic();
+  if (!teamUser(email)) $('#personBody').innerHTML = '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>';
+  else renderPerson();
+  show('person');
+  await ensureTeam();
+  if (!teamUser(email)) { $('#personBody').innerHTML = `<div class="notice bad">${esc(t('pfGone'))}</div>`; return; }
+  renderPerson();
+  loadPersonData();
+}
+async function loadPersonData() {
+  const email = pf.email;
+  const u = teamUser(email);
+  const dates = Array.from({ length: 28 }, (_, i) => addDays(todayISO(), -i));
+  const [notes, week] = await Promise.all([
+    request(`people?email=${encodeURIComponent(email)}`).then((r) => r.notes || []).catch(() => null),
+    loadWeek(dates).catch(() => null),
+  ]);
+  if (pf.email !== email) return;
+  if (notes) pf.notes = notes;
+  if (week) {
+    const isHim = (s) => (u?.uid && s.uid ? s.uid === u.uid : s.name?.toLowerCase() === u?.name?.toLowerCase());
+    pf.weeks = dates.flatMap((d) => (week.days[d] || []).filter((s) => !s.open && isHim(s)));
+  }
+  if (current === 'person') renderPerson();
+}
+function nextShiftOf(u) {
+  for (let i = 0; i < 14; i++) {
+    const d = addDays(todayISO(), i);
+    const tg = teamTarget(u, d);
+    if (!tg) continue;
+    if (i === 0 && toMin(tg.end) > toMin(tg.start) && toMin(tg.end) <= new Date().getHours() * 60 + new Date().getMinutes()) continue; // fini pour aujourd'hui
+    return tg;
+  }
+  return null;
+}
+function renderPerson() {
+  const u = teamUser(pf.email);
+  if (!u) return;
+  const lead = isLeadUser(u);
+  const me = u.email === myEmail();
+  const mon = mondayOf(todayISO());
+  const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+  const nx = nextShiftOf(u);
+  const strip = days.map((d) => {
+    const ov = teamPlan.overrides?.[u.email]?.[d];
+    const tg = teamTarget(u, d);
+    const label = ov?.off ? t(ov.conge ? 'pfConge' : 'pfOff') : tg ? `${hm(tg.start)}<br>${hm(tg.end)}` : '—';
+    return `<li class="pf-day${d === todayISO() ? ' today' : ''}${tg ? ' on' : ''}${ov?.conge ? ' conge' : ''}"><b>${esc(dateOf(d).toLocaleDateString(locale(), { weekday: 'narrow' }))}</b><span class="num">${label}</span></li>`;
+  }).join('');
+  // Les 4 dernières semaines : ses quarts, un par ligne. Pas de moyenne, pas de comparaison.
+  const shifts = pf.weeks;
+  const weeksHTML = shifts === null ? '<div class="hi-skel" aria-hidden="true"><i></i><i></i></div>'
+    : !shifts.length ? `<p class="hb-quiet">${esc(t('pfNoShifts'))}</p>`
+      : `<ul class="pf-shifts${pf.all ? '' : ' short'}">${shifts.slice(0, pf.all ? 40 : 5).map((s, i) => {
+        const tk = (s.items || []).filter((x) => x.id !== 'pointage');
+        const done = tk.filter((x) => x.status === 'done').length;
+        const notDone = tk.filter((x) => x.status === 'notdone').length;
+        return `<li><button type="button" class="pf-shift" data-pfshift="${i}"><span class="pf-sd">${esc(shortDay(s.date))}</span><span class="pf-sm"><b>${esc(SHIFTS[s.shift]?.[lang()]?.short || '')}</b><small class="num">${esc(t('pfTasks', done, tk.length))}${notDone ? ` · ${esc(t('pfNotDone', notDone))}` : ''}${s.flags?.length ? ` · ${esc(t('pfFlags', s.flags.length))}` : ''}</small></span>${CHEV_R}</button></li>`;
+      }).join('')}</ul>${shifts.length > 5 && !pf.all ? `<button type="button" class="btn ghost pf-more" data-pfact="more">${esc(t('pfMore', shifts.length))}</button>` : ''}`;
+  const notes = pf.notes.map((n) => `<li class="pf-note${n.kind === 'report' ? ' report' : ''}">
+      ${n.kind === 'report' ? `<span class="pf-cat">${esc(t(`noteCat_${n.cat || 'autre'}`))}</span>` : ''}
+      ${n.text ? `<p>${esc(n.text)}</p>` : ''}
+      <small>${esc(n.by)} · ${esc(ago(n.at))}</small>
+      <button type="button" class="link danger" data-pfdel="${esc(n.id)}" aria-label="${esc(t('remove'))}">✕</button></li>`).join('');
+  $('#personBody').innerHTML = `<div class="pf-wrap${reducedMotion() ? '' : ' cascade'}">
+    <section class="pf-hero">
+      <span class="pf-av${u.avatar ? ' has-pic' : ''}" aria-hidden="true">${avatarOf(u, esc((u.name[0] || '?').toUpperCase()))}</span>
+      <div><p class="eyebrow">${esc(roleName(u.role))}</p><h1>${esc(u.name)}</h1>
+      <p class="pf-next">${nx ? esc(t('pfNext', nx.date === todayISO() ? t('today') : shortDay(nx.date), `${hm(nx.start)} – ${hm(nx.end)}`)) : esc(t('pfNoNext'))}</p></div>
+    </section>
+    <section class="d-card pf-week"><div class="d-head"><h2>${esc(t('pfThisWeek'))}</h2>${me || lead ? '' : `<button type="button" class="link" data-pfact="sched">${esc(t('pfEditSched'))}</button>`}</div><ol class="pf-strip">${strip}</ol>
+      <div class="pf-acts">
+        ${nx ? `<button type="button" class="btn ghost" data-pfact="glance">${HUB_ICO.go}<span>${esc(t('pfSeeShiftShort'))}</span></button>` : ''}
+        ${lead ? '' : `<button type="button" class="btn ghost" data-pfact="conge">${HUB_ICO.plan}<span>${esc(t('pfCongeShort'))}</span></button>`}
+        ${lead ? '' : `<button type="button" class="btn ghost" data-pfact="task">${HUB_ICO.misc}<span>${esc(t('pfTaskShort'))}</span></button>`}
+      </div></section>
+    ${lead ? '' : `<section class="d-card"><div class="d-head"><h2>${esc(t('pfLast4'))}</h2></div><p class="section-note">${esc(t('pfLast4Note'))}</p>${weeksHTML}</section>`}
+    ${me ? '' : `<section class="d-card pf-private"><div class="d-head"><h2>${esc(t('pfNotes'))}</h2></div>
+      <p class="pf-lock">${HUB_ICO.access}<span>${esc(t('pfNotesLock', firstOf(u.name)))}</span></p>
+      <div class="pf-add"><textarea id="pfNote" rows="2" maxlength="1000" placeholder="${esc(t('pfNotePh'))}" aria-label="${esc(t('pfNotes'))}"></textarea><button type="button" class="btn ghost" data-pfact="note">${esc(t('pfNoteAdd'))}</button></div>
+      ${notes ? `<ul class="pf-notes">${notes}</ul>` : ''}
+      <button type="button" class="btn ghost danger-soft pf-report" data-pfact="report">${HUB_ICO.flag}<span>${esc(t('pfReport', firstOf(u.name)))}</span></button></section>
+    <section class="pf-access">
+      <p class="block-label">${esc(t('pfAccess'))}</p>
+      ${session.mode === 'demo' ? '' : `<button type="button" class="acct-row" data-pfact="password">${HUB_ICO.access}<span>${esc(t('newPassword'))}</span>${CHEV_R}</button>`}
+      <button type="button" class="acct-row danger" data-pfact="leave"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 8l-4 4 4 4M5 12h10"/></svg><span>${esc(t('pfLeave'))}<small>${esc(t('pfLeaveSub'))}</small></span>${CHEV_R}</button>
+    </section>`}
+  </div>`;
+}
+$('#personBody').addEventListener('click', async (ev) => {
+  const u = teamUser(pf.email);
+  if (!u) return;
+  const sh = ev.target.closest('[data-pfshift]');
+  if (sh) { const s = pf.weeks?.[Number(sh.dataset.pfshift)]; if (s) openReview(summaryReport(s), { from: 'history' }); return; }
+  const del = ev.target.closest('[data-pfdel]');
+  if (del) {
+    const gone = pf.notes.find((n) => n.id === del.dataset.pfdel);
+    try { await request('people', { method: 'POST', body: { action: 'del', email: u.email, id: del.dataset.pfdel } }); } catch { toast(t('editServer'), 'muted'); return; }
+    pf.notes = pf.notes.filter((n) => n !== gone); renderPerson(); sfx('tap');
+    toast(t('noteRemoved'), 'muted', gone ? async () => { try { const r = await request('people', { method: 'POST', body: { action: 'add', email: u.email, kind: gone.kind, cat: gone.cat, text: gone.text } }); pf.notes.unshift(r.note); renderPerson(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } } : null);
+    return;
+  }
+  const a = ev.target.closest('[data-pfact]');
+  if (!a) return;
+  const act = a.dataset.pfact;
+  if (act === 'sched') openTeamSchedule(u.email);
+  else if (act === 'glance') { const nx = nextShiftOf(u); if (nx) openGlance(nx); }
+  else if (act === 'task') openTaskSheet(nextShiftOf(u)?.date || todayISO(), u.email);
+  else if (act === 'conge') openCongeSheet(u);
+  else if (act === 'more') { pf.all = true; renderPerson(); }
+  else if (act === 'note') {
+    const box = $('#pfNote'), text = box.value.trim();
+    if (!text) { box.focus(); return; }
+    a.disabled = true;
+    try { const r = await request('people', { method: 'POST', body: { action: 'add', email: u.email, kind: 'note', text } }); pf.notes.unshift(r.note); sfx('save'); renderPerson(); toast(t('noteSaved'), 'ok'); }
+    catch { a.disabled = false; toast(t('editServer'), 'muted'); sfx('error'); }
+  } else if (act === 'report') openReportPerson(u);
+  else if (act === 'password') openPasswordSheet(u);
+  else if (act === 'leave') openLeaveSheet(u);
+});
+// « Signaler cet employé » : une catégorie, quelques mots. Seuls les superviseurs le verront.
+function openReportPerson(u) {
+  let cat = '';
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.flag}${esc(t('pfReportEyebrow'))}</p><h2>${esc(t('pfReport', firstOf(u.name)))}</h2><p class="lede">${esc(t('pfReportLede', firstOf(u.name)))}</p></div>
+    <div class="reasons pf-cats">${NOTE_CATS.map((k) => `<button type="button" data-ncat="${k}" aria-pressed="false">${esc(t(`noteCat_${k}`))}</button>`).join('')}</div>
+    <label class="field"><span>${esc(t('pfReportWhat'))}</span><textarea id="rpText" rows="3" maxlength="1000" placeholder="${esc(t('pfReportPh'))}"></textarea></label>`, (root) => {
+    root.addEventListener('click', (e) => { const b = e.target.closest('[data-ncat]'); if (!b) return; cat = b.dataset.ncat === cat ? '' : b.dataset.ncat; for (const o of root.querySelectorAll('[data-ncat]')) o.setAttribute('aria-pressed', String(o.dataset.ncat === cat)); sfx('tap'); });
+    $('#rpSave').onclick = async () => {
+      const text = root.querySelector('#rpText').value.trim();
+      if (!cat && !text) { toast(t('pfReportNeed'), 'muted'); return; }
+      try { const r = await request('people', { method: 'POST', body: { action: 'add', email: u.email, kind: 'report', cat: cat || 'autre', text } }); pf.notes.unshift(r.note); }
+      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      closeSheet(); sfx('save'); toast(t('pfReported'), 'ok'); coin.loaded = false;
+      if (current === 'person') renderPerson();
+    };
+  }, `<button type="button" class="btn primary" id="rpSave">${esc(t('pfReportSave'))}</button>`);
+}
+// Un congé, ajouté par un superviseur : un jour ou plusieurs (du … au …). La personne est avertie.
+function openCongeSheet(u) {
+  const d0 = todayISO();
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.plan}${esc(t('congeEyebrow'))}</p><h2>${esc(t('congeTitle', firstOf(u.name)))}</h2><p class="lede">${esc(t('congeLede'))}</p></div>
+    <div class="row2"><label class="field"><span>${esc(t('congeFrom'))}</span><input type="date" id="cgFrom" value="${d0}" min="${addDays(d0, -7)}"></label>
+    <label class="field"><span>${esc(t('congeTo'))}</span><input type="date" id="cgTo" value="${d0}" min="${d0}"></label></div>`, (root) => {
+    const from = root.querySelector('#cgFrom'), to = root.querySelector('#cgTo');
+    from.addEventListener('change', () => { to.min = from.value; if (to.value < from.value) to.value = from.value; });
+    $('#cgSave').onclick = async () => {
+      const a = from.value, b = to.value < a ? a : to.value;
+      if (!a) return;
+      try { await request('plan', { method: 'POST', body: { action: 'override', email: u.email, date: a, to: b, conge: true } }); }
+      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      closeSheet(); sfx('save');
+      const undo = async () => { try { await request('plan', { method: 'POST', body: { action: 'override', email: u.email, date: a, to: b, clear: true } }); await refreshTeamPlan(teamPlan.from, teamPlan.to); rerenderBossViews(); if (current === 'person') renderPerson(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } };
+      toast(t('congeDone', firstOf(u.name)), 'ok', undo);
+      await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 20));
+      rerenderBossViews(); if (current === 'person') renderPerson();
+    };
+  }, `<button type="button" class="btn primary" id="cgSave">${esc(t('congeSave'))}</button>`);
+}
+function openPasswordSheet(u) {
+  openSheet(`<div class="sheet-head"><h2>${esc(t('newPasswordFor', u.name))}</h2><p class="lede">${esc(t('newPasswordLede'))}</p></div>
+    <label class="field"><span>${t('password')}</span><input id="npw" type="text" autocomplete="off" minlength="6"></label>`, (root) => {
+    const input = root.querySelector('#npw'), ok = $('#npwSave');
+    input.addEventListener('input', () => { ok.disabled = input.value.length < 6; });
+    ok.onclick = async () => {
+      ok.disabled = true;
+      try { await teamAction('reset', u.email, { password: input.value }); closeSheet(); toast(t('passwordSet', u.name)); } catch (err) { ok.disabled = false; toast(t(err.status === 0 ? 'errNetwork' : 'errServer'), 'bad'); }
+    };
+  }, `<button class="btn primary" id="npwSave" disabled>${t('save')}</button>`);
+}
+// Un départ, sans stress (propriétaire : « ergonomique ») : on dit clairement ce qui arrive, on confirme
+// une fois, et on peut annuler tout de suite ou redonner l'accès plus tard (Équipe › Anciens).
+function openLeaveSheet(u) {
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${esc(t('pfAccess'))}</p><h2>${esc(t('leaveTitle', firstOf(u.name)))}</h2></div>
+    <ul class="leave-list">
+      <li>${HUB_ICO.access}<span>${esc(t('leave1'))}</span></li>
+      <li>${HUB_ICO.mine}<span>${esc(t('leave2'))}</span></li>
+      <li>${HUB_ICO.plan}<span>${esc(t('leave3'))}</span></li>
+      <li>${HUB_ICO.check}<span>${esc(t('leave4'))}</span></li>
+    </ul>`, () => {
+    $('#lvGo').onclick = async (e) => {
+      const b = e.currentTarget;
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = t('leaveSure', firstOf(u.name)); sfx('locked'); return; }
+      b.disabled = true;
+      try { await teamAction('remove', u.email); } catch (err) { b.disabled = false; toast(t(err.status === 0 ? 'errNetwork' : 'errServer'), 'bad'); return; }
+      closeSheet(); sfx('save');
+      boss.team = boss.team.filter((x) => x.email !== u.email);
+      coin.former = [{ ...u, removedAt: new Date().toISOString(), removedBy: session.user?.name || '' }, ...coin.former];
+      boss.tab = 'team';
+      toast(t('leaveDone', firstOf(u.name)), 'ok', () => restoreUser(u));
+      if (location.hash === '#patron') openBoss(); else location.hash = 'patron';
+    };
+  }, `<button type="button" class="btn ghost" data-close-sheet>${esc(t('cancel'))}</button><button type="button" class="btn primary danger" id="lvGo">${esc(t('leaveGo'))}</button>`);
+}
+async function restoreUser(u) {
+  try { await teamAction('restore', u.email); } catch { toast(t('editServer'), 'muted'); return; }
+  coin.former = coin.former.filter((x) => x.email !== u.email);
+  try { boss.team = await listTeam(); } catch { /* ignore */ }
+  sfx('save'); toast(t('restored', firstOf(u.name)), 'ok');
+  if (current === 'boss') renderBoss({ animate: false });
+}
+
+// ---------- Le coin des superviseurs (un onglet de l'Espace superviseur) ----------
+async function loadCoin() {
+  const [ideas, reports, former] = await Promise.all([
+    request('ideas').then((r) => r.ideas || []).catch(() => null),
+    request('people?reports=1').then((r) => r.reports || []).catch(() => null),
+    request('users?former=1').then((r) => r.former || []).catch(() => null),
+  ]);
+  if (ideas) coin.ideas = ideas;
+  if (reports) coin.reports = reports;
+  if (former) coin.former = former;
+  coin.loaded = true;
+}
+const STATUS_ICO = { try: '↻', later: '⏸', worked: '✓' };
+function ideaCard(x) {
+  const mine = x.by === session.user?.name;
+  const about = x.about?.label ? `<span class="cn-about k-${esc(x.about.kind)}">${x.about.kind === 'task' ? HUB_ICO.check : HUB_ICO.zone}${esc(x.about.label)}</span>` : '';
+  const st = x.kind === 'idea' ? `<div class="cn-status" role="group" aria-label="${esc(t('ideaAnswer'))}">${IDEA_STATUS.map((k) => `<button type="button" data-idst="${k}" data-id="${esc(x.id)}" aria-pressed="${x.status === k}" class="k-${k}">${STATUS_ICO[k]} ${esc(t(`idea_${k}`))}</button>`).join('')}</div>${x.statusBy ? `<small class="cn-by">${esc(t('ideaBy', x.statusBy))}</small>` : ''}` : '';
+  return `<li class="cn-card${x.kind === 'idea' ? ' idea' : ''}${x.status === 'worked' ? ' worked' : ''}">
+    <div class="cn-head"><b>${esc(x.by)}</b><small>${esc(ago(x.at))}</small>${mine || x.kind === 'post' ? `<button type="button" class="link danger" data-iddel="${esc(x.id)}" aria-label="${esc(t('remove'))}">✕</button>` : ''}</div>
+    ${about}<p>${esc(x.text)}</p>${st}</li>`;
+}
+function coinPanel() {
+  if (!coin.loaded) return '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>';
+  const posts = coin.ideas.filter((x) => x.kind === 'post');
+  const ideas = coin.ideas.filter((x) => x.kind === 'idea');
+  const fresh = ideas.filter((x) => x.status === 'open').length;
+  return `<p class="section-note">${esc(t('coinIntro'))}</p>
+    <div class="panel cn-compose"><textarea id="cnText" rows="2" maxlength="1500" placeholder="${esc(t('coinPh'))}" aria-label="${esc(t('coinPh'))}"></textarea><button type="button" class="btn primary" data-cnpost>${esc(t('coinPost'))}</button></div>
+    <h2 class="cn-h">${esc(t('coinIdeas'))}${fresh ? ` <span class="pill hot num">${fresh}</span>` : ''}</h2>
+    <p class="section-note">${esc(t('coinIdeasNote'))}</p>
+    ${ideas.length ? `<ul class="cn-list">${ideas.map(ideaCard).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoIdeas'))}</p>`}
+    <h2 class="cn-h">${esc(t('coinPosts'))}</h2>
+    ${posts.length ? `<ul class="cn-list">${posts.map(ideaCard).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoPosts'))}</p>`}
+    <h2 class="cn-h">${esc(t('coinReports'))}</h2>
+    <p class="section-note">${esc(t('coinReportsNote'))}</p>
+    ${coin.reports.length ? `<ul class="cn-list">${coin.reports.slice(0, 20).map((r) => `<li><button type="button" class="cn-card cn-report" data-pfopen="${esc(r.email)}"><div class="cn-head"><b>${esc(r.name)}</b><small>${esc(ago(r.at))}</small></div><span class="pf-cat">${esc(t(`noteCat_${r.cat || 'autre'}`))}</span>${r.text ? `<p>${esc(r.text)}</p>` : ''}<small class="cn-by">${esc(t('coinReportedBy', r.by))}</small></button></li>`).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoReports'))}</p>`}`;
+}
+// La liste de l'équipe (onglet Équipe) : un toucher ouvre la fiche. Les anciens, plus bas.
+function teamPanel() {
+  const row = (u) => `<button type="button" class="team-row" data-pfopen="${esc(u.email)}"><span class="tw-av${u.avatar ? ' has-pic' : ''}" aria-hidden="true">${avatarOf(u, esc((u.name[0] || '?').toUpperCase()))}</span>
+    <span class="team-who"><b>${esc(u.name)}</b><small>${esc(roleName(u.role))}${u.email === session.user?.email ? ` · ${esc(t('you'))}` : ''}</small></span>${CHEV_R}</button>`;
+  const emp = boss.team.filter((u) => !isLeadUser(u)), leads = boss.team.filter(isLeadUser);
+  return `${teamWeek()}<p class="section-note">${esc(t('teamTapHint'))}</p>
+    <h2 class="cn-h">${esc(t('teamEmployees'))} <span class="num">${emp.length}</span></h2><div class="panel team-list">${emp.map(row).join('') || `<p class="hb-quiet">${esc(t('teamNobody'))}</p>`}</div>
+    <h2 class="cn-h">${esc(t('teamLeads'))} <span class="num">${leads.length}</span></h2><div class="panel team-list">${leads.map(row).join('')}</div>
+    <details class="d-card former"${coin.former.length ? '' : ' hidden'}><summary><span>${esc(t('formerTitle'))}</span><span class="num">${coin.former.length}</span></summary>
+      <p class="section-note">${esc(t('formerNote'))}</p>
+      <ul class="former-list">${coin.former.map((u) => `<li><span class="team-who"><b>${esc(u.name)}</b><small>${esc(t('formerWhen', u.removedAt ? shortDay(u.removedAt.slice(0, 10)) : '', u.removedBy || ''))}</small></span><button type="button" class="btn ghost small" data-restore="${esc(u.email)}">${esc(t('formerBack'))}</button></li>`).join('')}</ul>
+    </details>`;
+}
+document.addEventListener('click', async (ev) => {
+  const op = ev.target.closest('[data-pfopen]');
+  if (op) { openPerson(op.dataset.pfopen); return; }
+  if (current !== 'boss') return;
+  const rs = ev.target.closest('[data-restore]');
+  if (rs) { const u = coin.former.find((x) => x.email === rs.dataset.restore); if (u) { rs.disabled = true; await restoreUser(u); } return; }
+  if (ev.target.closest('[data-cnpost]')) {
+    const box = $('#cnText'), text = box.value.trim();
+    if (!text) { box.focus(); return; }
+    try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text } }); coin.ideas.unshift(r.idea); } catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+    sfx('save'); toast(t('coinPosted'), 'ok'); renderBoss({ animate: false });
+    return;
+  }
+  const st = ev.target.closest('[data-idst]');
+  if (st) {
+    const it = coin.ideas.find((x) => x.id === st.dataset.id); if (!it) return;
+    const before = it.status, next = st.dataset.idst === it.status ? 'open' : st.dataset.idst;
+    const set = async (s) => { const r = await request('ideas', { method: 'POST', body: { action: 'status', id: it.id, status: s } }); Object.assign(it, r.idea); renderBoss({ animate: false }); };
+    try { await set(next); } catch { toast(t('editServer'), 'muted'); return; }
+    sfx(next === 'worked' ? 'save' : 'tap');
+    toast(t(next === 'open' ? 'ideaReopened' : `ideaSet_${next}`), next === 'worked' ? 'ok' : 'muted', async () => { try { await set(before); toast(t('undone'), 'muted'); } catch { /* ignore */ } });
+    return;
+  }
+  const del = ev.target.closest('[data-iddel]');
+  if (del) {
+    const it = coin.ideas.find((x) => x.id === del.dataset.iddel); if (!it) return;
+    try { await request('ideas', { method: 'POST', body: { action: 'del', id: it.id } }); } catch { toast(t('editServer'), 'muted'); return; }
+    coin.ideas = coin.ideas.filter((x) => x !== it); renderBoss({ animate: false });
+    toast(t('coinRemoved'), 'muted', it.kind === 'post' ? async () => { try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text: it.text, about: it.about } }); coin.ideas.unshift(r.idea); renderBoss({ animate: false }); } catch { /* ignore */ } } : null);
+  }
+});
+// « Signaler cette tâche » (superviseur) : depuis la fiche d'une tâche, droit dans le coin.
+function openReportTask(title) {
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.flag}${esc(t('rtEyebrow'))}</p><h2>${esc(title)}</h2><p class="lede">${esc(t('rtLede'))}</p></div>
+    <label class="field"><span>${esc(t('rtWhat'))}</span><textarea id="rtText" rows="3" maxlength="1500" placeholder="${esc(t('rtPh'))}"></textarea></label>`, (root) => {
+    setTimeout(() => root.querySelector('#rtText')?.focus({ preventScroll: true }), 350);
+    $('#rtSave').onclick = async () => {
+      const text = root.querySelector('#rtText').value.trim();
+      if (!text) { root.querySelector('#rtText').focus(); return; }
+      try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text, about: { kind: 'task', label: title } } }); coin.ideas.unshift(r.idea); }
+      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      closeSheet(); sfx('save'); toast(t('rtDone'), 'ok');
+    };
+  }, `<button type="button" class="btn primary" id="rtSave">${esc(t('rtSave'))}</button>`);
+}
+
+// ---------- Les idées des employés (un petit lien sur leur tableau de bord) ----------
+async function openIdeas() {
+  let mine = [];
+  const paint = (root) => {
+    const list = root.querySelector('#idList');
+    list.innerHTML = mine.length ? mine.map((x) => `<li class="cn-card idea${x.status === 'worked' ? ' worked' : ''}"><p>${esc(x.text)}</p><div class="cn-head"><small>${esc(ago(x.at))}</small>${x.status !== 'open' ? `<span class="id-answer k-${x.status}">${STATUS_ICO[x.status]} ${esc(t(`ideaMine_${x.status}`))}</span>` : `<span class="id-answer">${esc(t('ideaMine_open'))}</span>`}<button type="button" class="link danger" data-iddelmine="${esc(x.id)}" aria-label="${esc(t('remove'))}">✕</button></div></li>`).join('') : '';
+    root.querySelector('#idMineHead').hidden = !mine.length;
+  };
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.send}${esc(t('ideaEyebrow'))}</p><h2>${esc(t('ideaTitle'))}</h2><p class="lede">${esc(t('ideaLede'))}</p></div>
+    <label class="field"><span>${esc(t('ideaWhat'))}</span><textarea id="idText" rows="3" maxlength="1500" placeholder="${esc(t('ideaPh'))}"></textarea></label>
+    <p class="block-label" id="idMineHead" hidden>${esc(t('ideaMine'))}</p><ul class="cn-list" id="idList"></ul>`, (root) => {
+    request('ideas').then((r) => { mine = r.ideas || []; if (root.isConnected) paint(root); }).catch(() => {});
+    root.addEventListener('click', async (e) => {
+      const d = e.target.closest('[data-iddelmine]'); if (!d) return;
+      try { await request('ideas', { method: 'POST', body: { action: 'del', id: d.dataset.iddelmine } }); mine = mine.filter((x) => x.id !== d.dataset.iddelmine); paint(root); sfx('tap'); } catch { toast(t('editServer'), 'muted'); }
+    });
+    $('#idSend').onclick = async () => {
+      const box = root.querySelector('#idText'), text = box.value.trim();
+      if (!text) { box.focus(); return; }
+      try { const r = await request('ideas', { method: 'POST', body: { action: 'suggest', text } }); mine.unshift(r.idea); }
+      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      box.value = ''; paint(root); sfx('save'); toast(t('ideaSent'), 'ok');
+    };
+  }, `<button type="button" class="btn primary" id="idSend">${esc(t('ideaSend'))}</button>`);
+}
+
+// ---------- Préférences : une page, simple, avec de bons choix par défaut ----------
+// Propriétaire : « une page de préférences pour tout ce qu'ils touchent… assez complète, mais très
+// facile ». Les choix par défaut sont équilibrés (tout est allumé sauf la nuit; sons à 70 %).
+const TEXT_SIZES = [['normal', 1], ['large', 1.15], ['xl', 1.3]];
+const textSize = () => prefs.textSize || (prefs.large ? 'large' : 'normal');
+let pushInfo = null;
+async function openPrefs() {
+  paintStatic();
+  $('#prefsEyebrow').textContent = session.user?.name || '';
+  renderPrefs();
+  show('prefs');
+  if (session.mode === 'accounts' && !FICTIVE) { try { pushInfo = await request('push'); } catch { pushInfo = null; } if (current === 'prefs') renderPrefs(); }
+}
+function renderPrefs() {
+  const lead = isBoss() && !isRealAdmin();
+  const admin = isRealAdmin();
+  const sw = (id, label, on, sub = '') => `<button type="button" class="pr-row" id="${id}" role="switch" aria-checked="${Boolean(on)}"><span><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><i class="switch" aria-hidden="true"></i></button>`;
+  const seg = (name, cur, opts) => `<div class="segmented tiny" role="radiogroup" aria-label="${esc(name)}">${opts.map(([k, l]) => `<button type="button" role="radio" data-pr="${name}" data-v="${k}" aria-checked="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
+  const P = pushInfo;
+  const kinds = [['remind', t('prRemind'), t('prRemindSub')], ['sched', t('prSched'), t('prSchedSub')], ['task', t('prTask'), t('prTaskSub')], ...(isBoss() ? [['urgent', t('prUrgent'), t('prUrgentSub')], ['weekly', t('prWeekly'), t('prWeeklySub')]] : [])];
+  const vol = Math.round((prefs.volume ?? 0.7) * 100);
+  $('#prefsBody').innerHTML = `<div class="pr-wrap${reducedMotion() ? '' : ' cascade'}">
+    ${isBoss() && !session.user?.visitor ? `<section class="d-card pr-role"><div class="d-head"><h2>${esc(t('prRole'))}</h2></div>
+      ${admin ? sw('prAdminWork', t('adminWork'), session.user?.workMode, t(session.user?.workMode ? 'adminWorkOn' : 'adminWorkOff')) : sw('prWork', t('prWorkAs'), prefs.workAsEmp, t(prefs.workAsEmp ? 'prWorkOn' : 'prWorkOff'))}
+    </section>` : ''}
+    <section class="d-card"><div class="d-head"><h2>${esc(t('prProfile'))}</h2></div>
+      <button type="button" class="acct-row" data-pract="pic"><span class="pr-pic${session.user?.avatar ? ' has-pic' : ''}" aria-hidden="true">${avatarOf(session.user || {}, esc((session.user?.name?.[0] || '?').toUpperCase()))}</span><span>${esc(t('picChange'))}</span>${CHEV_R}</button>
+      <button type="button" class="acct-row" data-pract="sched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
+    </section>
+    <section class="d-card"><div class="d-head"><h2>${esc(t('prNotify'))}</h2></div>
+      ${P ? `${kinds.map(([k, l, s]) => sw(`prN-${k}`, l, P[k] !== false, s)).join('')}${sw('prN-quiet', t('prQuiet'), P.quiet !== false, t('prQuietSub'))}
+        <button type="button" class="acct-row" data-pract="device">${HUB_ICO.send}<span>${esc(t('prDevice'))}<small>${esc(t(P.devices ? 'prDeviceOn' : 'prDeviceOff', P.devices))}</small></span>${CHEV_R}</button>`
+      : `<p class="section-note">${esc(t(FICTIVE ? 'prNotifyFict' : session.mode === 'accounts' ? 'prNotifyLoading' : 'prNotifyNone'))}</p>`}
+    </section>
+    <section class="d-card"><div class="d-head"><h2>${esc(t('prDisplay'))}</h2></div>
+      <div class="pr-line"><span>${esc(t('language'))}</span>${seg('lang', lang(), [['fr', 'Français'], ['en', 'English']])}</div>
+      <div class="pr-line"><span>${esc(t('theme'))}</span>${seg('theme', themePref(), ['light', 'dark', 'auto'].map((k) => [k, t(`theme_${k}`)]))}</div>
+      <div class="pr-line"><span>${esc(t('prTextSize'))}</span>${seg('text', textSize(), TEXT_SIZES.map(([k]) => [k, t(`prText_${k}`)]))}</div>
+      ${!bossWatching() ? `<div class="pr-line"><span>${esc(t('listOrder'))}</span>${seg('order', prefs.listView || 'time', [['time', t('byTime')], ['zone', t('byZone')]])}</div>` : ''}
+    </section>
+    <section class="d-card"><div class="d-head"><h2>${esc(t('prSound'))}</h2></div>
+      ${sw('prCalm', t('prCalm'), prefs.calm, t('prCalmSub'))}
+      ${sw('prSoundOn', t('sounds'), prefs.sound !== false && !prefs.calm, t('prSoundSub'))}
+      <label class="pr-vol${prefs.sound === false || prefs.calm ? ' off' : ''}"><span>${esc(t('prVolume'))}</span><input type="range" id="prVol" min="10" max="100" step="10" value="${vol}" aria-valuetext="${vol} %"><b class="num" id="prVolN">${vol} %</b></label>
+      ${navigator.audioSession ? sw('prSilent', t('soundSilent'), prefs.soundSilent) : ''}
+    </section>
+    <section class="d-card"><div class="d-head"><h2>${esc(t('prMore'))}</h2></div>
+      <button type="button" class="acct-row" data-pract="tour"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
+      ${session.user && !session.user.visitor ? `<button type="button" class="acct-row" data-pract="account">${HUB_ICO.access}<span>${esc(t('account'))}</span>${CHEV_R}</button>` : ''}
+    </section>
+    <p class="section-note pr-defaults">${esc(t('prDefaults'))}</p>
+  </div>`;
+}
+$('#prefsBody').addEventListener('click', async (ev) => {
+  const s = ev.target.closest('[data-pr]');
+  if (s) {
+    const v = s.dataset.v, k = s.dataset.pr;
+    for (const o of s.parentElement.querySelectorAll('[data-pr]')) o.setAttribute('aria-checked', String(o === s));
+    if (k === 'lang') { setLang(v); renderPrefs(); }
+    else if (k === 'theme') setTheme(v, s);
+    else if (k === 'text') setTextSize(v);
+    else if (k === 'order') { prefs.listView = v; savePrefs(); if (state) { state.view = v; save(); } sfx('tap'); }
+    return;
+  }
+  const r = ev.target.closest('.pr-row');
+  if (r) {
+    const on = r.getAttribute('aria-checked') !== 'true';
+    if (r.id.startsWith('prN-')) {
+      const key = r.id.slice(4);
+      r.setAttribute('aria-checked', String(on)); sfx('tap');
+      try { await request('push', { method: 'POST', body: { action: 'prefs', [key]: on, lang: lang() } }); pushInfo[key] = on; }
+      catch { r.setAttribute('aria-checked', String(!on)); toast(t('notifyFail'), 'muted'); }
+      return;
+    }
+    if (r.id === 'prWork') { prefs.workAsEmp = on; savePrefs(); sfx('toggle'); paintStatic(); toast(t(on ? 'prWorkOn' : 'prWorkOff')); renderPrefs(); return; }
+    if (r.id === 'prAdminWork') {
+      r.disabled = true;
+      try { await updateMe('workmode', { on }); prefs.workAsEmp = on; savePrefs(); sfx('toggle'); toast(t(on ? 'adminWorkOn' : 'adminWorkOff')); paintStatic(); renderPrefs(); }
+      catch { r.disabled = false; toast(t('editServer'), 'muted'); sfx('error'); }
+      return;
+    }
+    if (r.id === 'prCalm') { setCalm(on); renderPrefs(); return; }
+    if (r.id === 'prSoundOn') { if (prefs.calm && on) setCalm(false); prefs.sound = on; savePrefs(); paintStatic(); if (on) clank('step'); renderPrefs(); return; }
+    if (r.id === 'prSilent') { prefs.soundSilent = on; savePrefs(); applyAudioSession(); r.setAttribute('aria-checked', String(on)); sfx('tap'); }
+    return;
+  }
+  const a = ev.target.closest('[data-pract]');
+  if (!a) return;
+  const k = a.dataset.pract;
+  if (k === 'pic') openAvatarPicker();
+  else if (k === 'sched') openScheduleSheet();
+  else if (k === 'device') openNotify();
+  else if (k === 'account') openAccount();
+  else if (k === 'tour') startTour();
+});
+$('#prefsBody').addEventListener('input', (ev) => {
+  if (ev.target.id !== 'prVol') return;
+  const v = Number(ev.target.value) / 100;
+  prefs.volume = v; savePrefs(); setVolume(v);
+  $('#prVolN').textContent = `${Math.round(v * 100)} %`;
+  ev.target.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
+});
+$('#prefsBody').addEventListener('change', (ev) => { if (ev.target.id === 'prVol') sfx('check', { level: 0.6 }); });
+function setTextSize(k) {
+  prefs.textSize = k; prefs.large = k !== 'normal'; savePrefs();
+  document.documentElement.classList.toggle('large', prefs.large);
+  applyTextSize(); sfx('tap');
+}
+// Mode calme (propriétaire : « un titre clair sur ce que ça fait ») : pas de sons, presque pas d'animations.
+function setCalm(on) {
+  prefs.calm = on; savePrefs();
+  document.documentElement.classList.toggle('calm-mode', on);
+  paintStatic();
+  toast(t(on ? 'calmOn' : 'calmOff'), 'muted');
+}
+document.documentElement.classList.toggle('calm-mode', Boolean(prefs.calm));
+setVolume(prefs.volume ?? 0.7);
 
 // ---------- Les actions du tableau de bord ----------
 document.addEventListener('click', (ev) => {
@@ -5843,6 +6378,7 @@ document.addEventListener('click', (ev) => {
   if (k === 'plan') { openPlan(); return; }
   if (k === 'flag') { openFlag(); return; }
   if (k === 'method') { openMethod(); return; }
+  if (k === 'idea') { openIdeas(); return; }
   if (k === 'teamweek') { openTeamWeek(); return; }
   if (k === 'myhours') { openQuickSchedule(); return; }
   if (k === 'reports') { if (location.hash === '#historique') openHistory({ team: true }); else location.hash = 'historique'; return; }
@@ -5907,6 +6443,8 @@ function route() {
   if (h === '#horaire') return openPlan();
   if (h === '#quart') return openGlance();
   if (h === '#methode') return openMethod();
+  if (h === '#preferences') return session.user ? openPrefs() : goFront();
+  if (h.startsWith('#fiche=')) return isBoss() ? openPerson(decodeURIComponent(h.slice(7))) : openHub();
   if (h === '#equipe') return session.user ? openTeamWeek() : goFront();
   if (h === '#aujourdhui') return session.user ? openToday() : goFront();
   if (h === '#affiche') return isBoss() ? openPoster() : openHub(); // l'affiche QR : superviseurs seulement

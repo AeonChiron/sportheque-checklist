@@ -21,6 +21,8 @@
 let ac = null;
 let master = null;
 let verbIn = null;
+let volNode = null;
+let level = 0.7; // propriétaire : sons allumés, à 70 %, sur un nouveau téléphone
 let lastAt = 0;
 let stepN = 0;
 let stepAt = 0;
@@ -34,7 +36,9 @@ function A() {
     const lim = ac.createDynamicsCompressor();
     lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.06;
     master = ac.createGain(); master.gain.value = 0.9;
-    master.connect(hp).connect(comp).connect(lim).connect(ac.destination);
+    // Le volume choisi (Préférences, 70 % par défaut) agit tout au bout, après la limite.
+    volNode = ac.createGain(); volNode.gain.value = level;
+    master.connect(hp).connect(comp).connect(lim).connect(volNode).connect(ac.destination);
     // Réverbération : une pièce douce, stéréo, qui s'assombrit en s'éteignant.
     const len = Math.floor(ac.sampleRate * 2.6);
     const ir = ac.createBuffer(2, len, ac.sampleRate);
@@ -65,7 +69,7 @@ function A() {
 let stale = false;
 function unlock() {
   try {
-    if (stale && ac) { try { ac.close(); } catch { /* ignore */ } ac = null; master = null; verbIn = null; stale = false; }
+    if (stale && ac) { try { ac.close(); } catch { /* ignore */ } ac = null; master = null; verbIn = null; volNode = null; stale = false; }
     const c = A();
     const b = c.createBuffer(1, 1, c.sampleRate), src = c.createBufferSource();
     src.buffer = b; src.connect(c.destination); src.start(0);
@@ -462,6 +466,11 @@ export function fxSound(name, opts = {}) {
     lastAt = now;
     fn(c.currentTime + 0.01, { ...opts, level: name === 'punch' ? 0.2 : opts.level });
   } catch { /* pas de son ici : tant pis */ }
+}
+// Le volume de l'app (0.1 à 1), réglé dans Préférences.
+export function setVolume(v) {
+  level = Math.max(0, Math.min(1, Number(v) || 0));
+  if (volNode && ac) volNode.gain.setTargetAtTime(level, ac.currentTime, 0.02);
 }
 // Pour écouter hors ligne (tests) : un son à un moment précis.
 export function fxSoundAt(name, at, opts = {}) {

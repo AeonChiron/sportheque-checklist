@@ -3,6 +3,34 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-25-boss',
+    date: '2026-10-25',
+    fr: {
+      title: 'Outils des superviseurs',
+      items: [
+        'Toucher un employé ouvre sa fiche : horaire, prochain quart, 4 dernières semaines, notes privées entre superviseurs, congé, nouveau mot de passe.',
+        '« Le coin » : les superviseurs se parlent entre eux et reçoivent les idées des employés (On essaie, Pas pour l’instant, Ça marche).',
+        'Signaler une tâche directement depuis sa fiche.',
+        'Tâches spéciales : une fois, chaque semaine, ou chaque semaine jusqu’à une date.',
+        'Départ d’un employé : l’accès est retiré, ses quarts restent dans les rapports. On peut le ramener.',
+        'Préférences : notifications par type, heures calmes la nuit, taille du texte, mode calme, volume.',
+        'Résumé chaque dimanche à 21 h pour les superviseurs.',
+      ],
+    },
+    en: {
+      title: 'Supervisor tools',
+      items: [
+        'Tap an employee to open their page: schedule, next shift, last 4 weeks, private supervisor notes, time off, new password.',
+        '“The corner”: supervisors talk to each other and get employee ideas (Let’s try, Not for now, It works).',
+        'Report a task right from its page.',
+        'Special tasks: once, every week, or every week until a date.',
+        'An employee leaves: access removed, their shifts stay in reports. They can be brought back.',
+        'Preferences: notifications by type, quiet hours at night, text size, calm mode, volume.',
+        'Summary every Sunday at 9 pm for supervisors.',
+      ],
+    },
+  },
+  {
     id: '2026-10-23-week',
     date: '2026-10-23',
     fr: {
