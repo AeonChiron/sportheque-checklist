@@ -29,6 +29,12 @@ const json = (body, status = 200) => Response.json(body, { status, headers: { 'C
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const SESSION_DAYS = 365;
+// Propriétaire (25 oct.) : un employé corrige ou efface son quart pendant 12 h après l'envoi;
+// un superviseur corrige n'importe quel quart, sans limite; l'admin fait tout.
+export const EDIT_HOURS = 12;
+const LOGIN_MAX = 50; // 50 mauvais mots de passe → 24 h sans pouvoir se connecter (propriétaire)
+const LOGIN_LOCK_MS = 24 * 3600e3;
+const UNDO_HOURS = 12; // annuler son propre signalement
 const MAX_PHOTO_BYTES = 900_000;
 
 const localDay = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
@@ -52,7 +58,8 @@ function cleanSchedule(raw) {
 const lead = (u) => u?.role === 'boss' || u?.role === 'admin';
 // Photo de profil : une mascotte (« m:ours ») ou une petite image JPEG/WebP (96 px, ~10 ko).
 const cleanAvatar = (v) => (typeof v === 'string' && (/^m:[a-z]{2,12}$/.test(v) || (/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 40000)) ? v : '');
-const publicUser = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule), scheduleBy: u.scheduleBy || '', scheduleAt: u.scheduleAt || '', avatar: cleanAvatar(u.avatar) });
+const uidOf = (email) => createHash('sha256').update(`uid:${String(email || '').toLowerCase()}`).digest('hex').slice(0, 12);
+const publicUser = (u) => ({ name: u.name, email: u.email, uid: uidOf(u.email), workMode: u.role === 'admin' && u.workMode === true, role: u.role, alerts: lead(u) && u.alerts === true, schedule: cleanSchedule(u.schedule), scheduleBy: u.scheduleBy || '', scheduleAt: u.scheduleAt || '', avatar: cleanAvatar(u.avatar) });
 // Courriels des problèmes urgents : par défaut, les superviseurs marqués
 // alerts dans la config (Daniel); les autres peuvent s'abonner eux-mêmes.
 const alertsByDefault = (name) => (CONFIG.supervisors || []).some((x) => x.alerts && x.name.toLowerCase() === name.toLowerCase());
@@ -136,7 +143,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const day = localDay(new Date());
       const ip = (req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || '?').split(',')[0].trim().slice(0, 60);
       const tries = (await settings().get(`tries:${day}`, { type: 'json' })) || {};
-      if ((tries[ip] || 0) >= 10 || (tries._all || 0) >= 300) return json({ error: 'tries' }, 429);
+      if ((tries[ip] || 0) >= 10 || (tries._all || 0) >= 2000) return json({ error: 'tries' }, 429); // par connexion; le plafond global est haut pour qu'une personne ne bloque pas toute l'équipe
       if (!sameText(String(b.code || '').trim().toLowerCase(), String(want).trim().toLowerCase())) {
         await settings().setJSON(`tries:${day}`, { ...tries, [ip]: (tries[ip] || 0) + 1, _all: (tries._all || 0) + 1 });
         return json({ error: 'code' }, 403);
@@ -149,9 +156,18 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       return json({ token: await newSession(email), user: publicUser(u) });
     }
     if (b.action === 'login') {
+      // Trop de mauvais mots de passe pour ce compte : 24 h de pause (le compte, pas l'appareil).
+      const lockKey = `login:${sha(email)}`;
+      const lock = (await settings().get(lockKey, { type: 'json' })) || { n: 0, until: 0 };
+      if (lock.until > Date.now()) return json({ error: 'locked', until: new Date(lock.until).toISOString() }, 429);
       const u = await users().get(email, { type: 'json' });
       const ok = u && !u.removed && sameText(hashPassword(String(b.password || ''), u.salt), u.hash);
-      if (!ok) return json({ error: 'login' }, 401);
+      if (!ok) {
+        const n = (lock.until && lock.until <= Date.now() ? 0 : lock.n || 0) + 1;
+        await settings().setJSON(lockKey, n >= LOGIN_MAX ? { n: 0, until: Date.now() + LOGIN_LOCK_MS } : { n, until: 0 });
+        return json({ error: n >= LOGIN_MAX ? 'locked' : 'login', left: Math.max(0, LOGIN_MAX - n) }, n >= LOGIN_MAX ? 429 : 401);
+      }
+      if (lock.n) await settings().delete(lockKey);
       return json({ token: await newSession(email), user: publicUser(u) });
     }
     if (b.action === 'codes') {
@@ -206,6 +222,16 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       await users().setJSON(u.email, u);
       return json({ user: publicUser(u) });
     }
+    // L'admin travaille aussi comme employé : « Mode employé » allumé, ses quarts sont de vrais quarts
+    // (vus dans l'équipe et les rapports, comme un employé ordinaire); éteint, il est un fantôme.
+    if (b.action === 'workmode') {
+      const u = await currentUser(req);
+      if (!u) return json({ error: 'auth' }, 401);
+      if (u.role !== 'admin') return json({ error: 'admin' }, 403);
+      u.workMode = b.on === true;
+      await users().setJSON(u.email, u);
+      return json({ user: publicUser(u) });
+    }
     if (b.action === 'alerts') {
       const u = await currentUser(req);
       if (!u) return json({ error: 'auth' }, 401);
@@ -230,7 +256,9 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (req.method === 'GET') {
       const { blobs } = await users().list();
       const all = await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })));
-      return json({ users: all.filter((u) => u && !u.removed).map((u) => ({ ...publicUser(u), created: u.created })).sort((a, b) => a.name.localeCompare(b.name)) });
+      // L'admin n'apparaît jamais comme admin : en mode employé, c'est un employé ordinaire; sinon, il n'y est pas.
+      const seen = all.filter((u) => u && !u.removed && (u.role !== 'admin' || u.workMode || u.email === me.email || me.role === 'admin'));
+      return json({ users: seen.map((u) => ({ ...publicUser(u), ...(u.role === 'admin' && me.role !== 'admin' ? { role: 'employee', workMode: false } : {}), created: u.created })).sort((a, b) => a.name.localeCompare(b.name)) });
     }
     const b = await body(req);
     const email = String(b.email || '').trim().toLowerCase();
@@ -242,6 +270,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       u.salt = randomBytes(16).toString('hex');
       u.hash = hashPassword(password, u.salt);
       await users().setJSON(email, u);
+      await settings().delete(`login:${sha(email)}`); // un nouveau mot de passe enlève aussi la pause de 24 h
       return json({ ok: true });
     }
     // Propriétaire : un superviseur (ou l'admin) peut changer l'horaire d'un employé. L'employé est averti.
@@ -265,10 +294,25 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const store = board();
     // Propriétaire : pas de surveillance. Un quart encore en cours n'est visible que par la personne
     // qui le fait (sa sauvegarde), et l'heure où chaque case a été cochée n'est jamais renvoyée.
-    const mine = (s) => String(s?.name || '').trim().toLowerCase() === String(me?.name || '').trim().toLowerCase();
+    // Un quart appartient à un COMPTE (byEmail), pas à un nom : deux « Noah » ne se mélangent plus.
+    // Les vieux quarts (avant le 25 oct.) n'ont que le nom : on retombe sur le nom pour eux.
+    const sameName = (s, n = me?.name) => String(s?.name || '').trim().toLowerCase() === String(n || '').trim().toLowerCase();
+    const mine = (s) => (s?.byEmail ? s.byEmail === me?.email : sameName(s));
     const admin = me?.role === 'admin';
-    // Les quarts « fantômes » de l'admin (tests) : seul un admin les voit.
-    const shown = (list) => (list || []).filter((s) => (!s.open || mine(s)) && (!s.ghost || admin)).map((s) => ({ ...s, items: (s.items || []).map(({ doneAt, ...i }) => i) }));
+    const boss = lead(me);
+    // Les quarts « fantômes » de l'admin (tests) : seul un admin les voit. Le courriel ne sort jamais :
+    // chacun reçoit un identifiant court (uid) et « mine » pour reconnaître ses propres quarts.
+    const shown = (list) => (list || []).filter((s) => (!s.open || mine(s)) && (!s.ghost || admin))
+      .map(({ byEmail, ...s }) => ({ ...s, uid: byEmail ? uidOf(byEmail) : '', mine: byEmail ? byEmail === me?.email : sameName(s), items: (s.items || []).map(({ doneAt, ...i }) => i) }));
+    // Le quart visé par une action : par uid si donné (deux personnes du même nom), sinon le mien, sinon le nom.
+    const target = (list, raw) => {
+      const sh = Number(raw.shift), uid = String(raw.uid || '');
+      const same = list.filter((x) => Number(x.shift) === sh);
+      if (uid) return same.find((x) => (x.byEmail ? uidOf(x.byEmail) === uid : false)) || null;
+      return same.find((x) => mine(x) && sameName(x, raw.name)) || same.find((x) => mine(x) && !raw.name) || same.find((x) => sameName(x, raw.name)) || null; // trouvé; les droits se vérifient ensuite
+    };
+    const firstAt = (s) => Date.parse(s?.savedAt || s?.submittedAt || '') || 0;
+    const fresh = (s) => firstAt(s) && Date.now() - firstAt(s) <= EDIT_HOURS * 3600e3;
     if (req.method === 'GET') {
       const params = new URL(req.url).searchParams;
       if (params.has('recent')) {
@@ -293,19 +337,17 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const raw = await body(req);
     // L'admin seulement peut effacer un quart de l'historique.
     // Effacer un quart : l'admin, n'importe lequel; chaque personne, le sien pendant 36 h (propriétaire).
+    // Effacer un quart : l'admin, n'importe lequel; chaque personne, le sien pendant 12 h (propriétaire).
     if (raw?.action === 'delete') {
       if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift))) return json({ error: 'invalid' }, 400);
-      const name = String(raw.name || '').trim().toLowerCase();
       const list = (await store.get(raw.date, { type: 'json' })) || [];
-      if (me?.role !== 'admin') {
-        const mineS = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
-        if (String(me?.name || '').trim().toLowerCase() !== name) return json({ error: 'admin' }, 403);
-        const at = new Date(mineS?.savedAt || mineS?.submittedAt || 0).getTime();
-        if (mineS && !mineS.open && (!at || Date.now() - at > 36 * 3600e3)) return json({ error: 'locked' }, 409);
+      const s = target(list, raw);
+      if (!s) return json({ error: 'missing' }, 404);
+      if (!admin) {
+        if (!mine(s)) return json({ error: 'admin' }, 403);
+        if (!s.open && !fresh(s)) return json({ error: 'locked' }, 409);
       }
-      const left = list.filter((x) => !(Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name));
-      if (left.length === list.length) return json({ error: 'missing' }, 404);
-      await store.setJSON(raw.date, left);
+      await store.setJSON(raw.date, list.filter((x) => x !== s));
       return json({ ok: true });
     }
     // L'admin corrige les tâches d'un quart déjà enregistré (ex. oublié de cocher), n'importe quel jour.
@@ -313,20 +355,20 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     // chaque personne, son propre quart pendant 36 h après le premier envoi (propriétaire).
     if (raw?.action === 'edit') {
       if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift)) || !Array.isArray(raw.items)) return json({ error: 'invalid' }, 400);
-      const name = String(raw.name || '').trim().toLowerCase();
       const list = (await store.get(raw.date, { type: 'json' })) || [];
-      const s = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
+      const s = target(list, raw);
       if (!s) return json({ error: 'missing' }, 404);
-      const admin = me?.role === 'admin';
-      const own = String(me?.name || '').trim().toLowerCase() === name;
-      const firstAt = new Date(s.savedAt || s.submittedAt || 0).getTime();
-      if (!admin && !own) return json({ error: 'admin' }, 403);
-      if (!admin && (!firstAt || Date.now() - firstAt > 36 * 3600e3)) return json({ error: 'locked' }, 409);
+      const own = mine(s);
+      // Le sien : 12 h. Un superviseur : n'importe quel quart, sans limite. L'admin : tout.
+      if (!admin && !boss && !own) return json({ error: 'admin' }, 403);
+      if (!admin && !boss && !fresh(s)) return json({ error: 'locked' }, 409);
       const ok = new Set(['done', 'notdone', 'unchecked']);
       const prev = new Map((s.items || []).map((i) => [i.id, i]));
       const edited = raw.items.slice(0, 40).filter((i) => i && typeof i.id === 'string' && ok.has(i.status)).map((i) => {
         const { doneAt, ...o } = prev.get(i.id) || { id: i.id.slice(0, 40), reason: '', remark: '' };
-        return { ...o, status: i.status, reason: i.status === 'notdone' ? o.reason : '' };
+        const reason = i.status === 'notdone' ? String(i.reason ?? o.reason ?? '').slice(0, 20) : '';
+        const remark = i.status === 'notdone' && typeof i.remark === 'string' ? i.remark.slice(0, 300) : o.remark || '';
+        return { ...o, status: i.status, reason, remark };
       });
       const seen = new Set(edited.map((i) => i.id));
       s.items = [...(s.items || []).filter((i) => !seen.has(i.id)), ...edited].slice(0, 40); // le pointage et le reste restent tels quels
@@ -334,15 +376,15 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       s.total = Math.max(s.total || 0, s.items.length);
       if (!own) { s.editedBy = me.name || ''; s.editedAt = new Date().toISOString(); } // sa propre correction : pas d'étiquette
       await store.setJSON(raw.date, list);
-      return json({ ok: true, shift: s });
+      const { byEmail, ...pub } = s;
+      return json({ ok: true, shift: { ...pub, uid: byEmail ? uidOf(byEmail) : '', mine: own } });
     }
     // Un superviseur valide (ou refuse) les activités personnalisées d'un quart.
     if (raw?.action === 'custom') {
       if (!['boss', 'admin'].includes(me?.role)) return json({ error: 'boss' }, 403);
       if (!DATE.test(String(raw.date || '')) || ![1, 2].includes(Number(raw.shift)) || !['approved', 'rejected'].includes(raw.status)) return json({ error: 'invalid' }, 400);
-      const name = String(raw.name || '').trim().toLowerCase();
       const list = (await store.get(raw.date, { type: 'json' })) || [];
-      const s = list.find((x) => Number(x.shift) === Number(raw.shift) && String(x.name || '').trim().toLowerCase() === name);
+      const s = target(list, raw);
       if (!s?.custom?.length) return json({ error: 'missing' }, 404);
       s.customStatus = raw.status;
       s.customBy = me.name || '';
@@ -351,20 +393,25 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     }
     const shift = sanitizeShift(raw);
     if (!shift) return json({ error: 'invalid' }, 400);
+    // On n'envoie que SON quart (propriétaire) : le nom vient du compte. L'admin peut tester sous un
+    // autre nom (simulation), mais ce quart reste alors un fantôme.
+    if (!admin && !sameName(shift)) return json({ error: 'name' }, 403);
     const list = (await store.get(shift.date, { type: 'json' })) || [];
-    // Propriétaire : un quart enregistré se modifie pendant 36 h après son premier envoi
-    // (heure du serveur, pas celle du téléphone). Un quart encore « en cours » se continue toujours.
-    const old = list.find((x) => x.shift === shift.shift && x.name.toLowerCase() === shift.name.toLowerCase());
+    const old = list.find((x) => x.shift === shift.shift && (x.byEmail ? x.byEmail === me.email : sameName(x, shift.name)));
     const today = localDay(new Date());
-    const firstAt = old && !old.open ? Date.parse(old.savedAt || old.submittedAt || '') || 0 : 0;
-    if (old && !old.open && (!firstAt || Date.now() - firstAt > 36 * 3600e3)) return json({ error: 'locked' }, 409);
+    // Un quart envoyé se modifie pendant 12 h après son premier envoi (heure du serveur, pas celle du
+    // téléphone). Un quart encore « en cours » se continue toujours.
+    if (old && !old.open && !admin && !fresh(old)) return json({ error: 'locked' }, 409);
     const savedAt = shift.open ? '' : old && !old.open && old.savedAt ? old.savedAt : new Date().toISOString();
     // La validation vient du superviseur, jamais du téléphone : elle reste tant que les
     // activités ne changent pas; une activité changée redevient « à valider ».
     const sameCustom = old && JSON.stringify(old.custom || []) === JSON.stringify(shift.custom);
     shift.customStatus = shift.custom.length ? (sameCustom && old.customStatus) || 'pending' : '';
     shift.customBy = shift.custom.length && sameCustom ? old.customBy || '' : '';
-    await store.setJSON(shift.date, mergeShift(list, { ...shift, savedOn: today, savedAt, ghost: me?.role === 'admin' }));
+    const ghost = admin && (!me.workMode || !sameName(shift));
+    const rest = list.filter((x) => x !== old);
+    const { uid, mine: _m, ...clean } = shift;
+    await store.setJSON(shift.date, [...rest, { ...clean, byEmail: me.email, savedOn: today, savedAt, ghost }].slice(-20));
     return json({ ok: true });
   }
 
@@ -399,6 +446,18 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
         await problems().setJSON(b.id, next);
         return json({ problem: next });
       }
+      // Annuler son propre signalement (propriétaire : « plein de boutons Annuler ») : 12 h, tant qu'il est ouvert.
+      if (b.action === 'undo') {
+        if (!PROBLEM_ID.test(b.id || '')) return json({ error: 'id' }, 400);
+        const p = await problems().get(b.id, { type: 'json' });
+        if (!p) return json({ error: 'missing' }, 404);
+        if (me.role !== 'admin' && p.byEmail !== me.email) return json({ error: 'owner' }, 403);
+        const at = parseInt(String(p.id).slice(0, 9), 36);
+        if (me.role !== 'admin' && (p.status === 'resolved' || !at || Date.now() - at > UNDO_HOURS * 3600e3)) return json({ error: 'locked' }, 409);
+        await problems().delete(p.id);
+        for (let i = 0; i < (p.photos || 0); i++) await photos().delete(`${p.id}-${i}`);
+        return json({ ok: true });
+      }
       const clean = sanitizeProblem(b);
       if (!clean) return json({ error: 'invalid' }, 400);
       const files = (Array.isArray(b.photos) ? b.photos : []).slice(0, MAX_PROBLEM_PHOTOS)
@@ -407,12 +466,19 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const id = problemId();
       await Promise.all(files.map((buf, i) => photos().set(`${id}-${i}`, buf)));
       await cleanPhotos();
-      const p = { ...clean, id, by: me.name, byEmail: me.email, photos: files.length, status: 'open', resolvedBy: '', resolvedAt: '', ghost: me.role === 'admin' };
+      const p = { ...clean, id, by: me.name, byEmail: me.email, photos: files.length, status: 'open', resolvedBy: '', resolvedAt: '', ghost: me.role === 'admin' && !me.workMode };
       await problems().setJSON(id, p);
       if (p.urgent && !p.ghost) { try { await notifyUrgent(p); } catch { /* l'envoi ne bloque jamais le signalement */ } }
       return json({ id });
     }
-    if (!lead(me)) return json({ error: 'boss' }, 403);
+    // Un employé voit seulement SES signalements (pour pouvoir les annuler); le superviseur, tous.
+    if (!lead(me)) {
+      if (!params.has('mine')) return json({ error: 'boss' }, 403);
+      const { blobs } = await problems().list();
+      const keys = blobs.map((x) => x.key).filter((k) => PROBLEM_ID.test(k)).sort().reverse().slice(0, 150);
+      const list = (await Promise.all(keys.map((k) => problems().get(k, { type: 'json' })))).filter((p) => p && p.byEmail === me.email);
+      return json({ problems: list.slice(0, 20).map(({ byEmail, ...p }) => p) });
+    }
     if (params.has('photo')) {
       const key = params.get('photo') || '';
       if (!/^[a-z0-9]{10,20}-[0-9]$/.test(key)) return json({ error: 'photo' }, 400);
@@ -428,7 +494,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const { blobs } = await problems().list();
     const keys = blobs.map((x) => x.key).filter((k) => PROBLEM_ID.test(k)).sort().reverse().slice(0, 150);
     const list = await Promise.all(keys.map((k) => problems().get(k, { type: 'json' })));
-    return json({ problems: list.filter(Boolean).filter((p) => !p.ghost || me.role === 'admin') });
+    return json({ problems: list.filter(Boolean).filter((p) => !p.ghost || me.role === 'admin').map(({ byEmail, ...p }) => ({ ...p, mine: byEmail === me.email })) });
   }
 
   // ---------- Notifications ----------
@@ -547,11 +613,11 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const from = params.get('from') || localDay(Date.now()), to = params.get('to') || from;
     if (!DATE.test(from) || !DATE.test(to) || to < from) return json({ error: 'invalid' }, 400);
     const { blobs } = await users().list();
-    const all = (await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })))).filter((u) => u && !u.removed && (u.role !== 'admin' || u.email === me.email));
+    const all = (await Promise.all(blobs.map((x) => users().get(x.key, { type: 'json' })))).filter((u) => u && !u.removed && (u.role !== 'admin' || u.workMode || u.email === me.email));
     const people = await Promise.all(all.map(async (u) => {
       const ov = (await plans().get(`ov:${u.email}`, { type: 'json' })) || {};
       const overrides = Object.fromEntries(Object.entries(ov).filter(([d]) => d >= from && d <= to).map(([d, v]) => [d, v.off ? { off: true } : { start: v.start, end: v.end }]));
-      return { id: createHash('sha256').update(`roster:${u.email}`).digest('hex').slice(0, 12), name: u.name, role: u.role === 'employee' ? 'employee' : 'boss', avatar: u.avatar || '', schedule: cleanSchedule(u.schedule), overrides, ...(u.email === me.email ? { me: true } : {}) };
+      return { id: createHash('sha256').update(`roster:${u.email}`).digest('hex').slice(0, 12), name: u.name, role: u.role === 'boss' ? 'boss' : 'employee' /* l'admin en mode employé : un employé ordinaire */, avatar: u.avatar || '', schedule: cleanSchedule(u.schedule), overrides, ...(u.email === me.email ? { me: true } : {}) };
     }));
     return json({ people: people.sort((a, b) => a.name.localeCompare(b.name)) });
   }

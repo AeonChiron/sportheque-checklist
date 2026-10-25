@@ -70,7 +70,7 @@ export async function request(path, { method = 'GET', body, timeout = 8000, raw 
     }
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      throw Object.assign(new Error(e.error || String(r.status)), { status: r.status });
+      throw Object.assign(new Error(e.error || String(r.status)), { status: r.status, data: e });
     }
     return raw ? r : await r.json();
   } finally {

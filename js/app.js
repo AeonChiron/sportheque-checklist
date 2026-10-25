@@ -14,10 +14,11 @@ import { hapticTrigger } from '../vendor/ios-haptics/index.js';
 import autoAnimate from '../vendor/auto-animate/index.js';
 import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, listRoster, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs, FICTIVE } from './auth.js';
 import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
-import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc } from './problems.js';
+import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc, undoProblem, listMyProblems } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport, deleteShift } from './board.js';
+import { key as shiftKey } from './board-shape.js';
 
 const KEY = 'gym-shift-v2';
 const PREFS = 'gym-shift-prefs';
@@ -1379,12 +1380,13 @@ function renderChecklist() {
     : '');
 }
 
-// Mon propre quart, enregistré il y a moins de 36 h : je peux encore corriger ses cases.
-const EDIT_HOURS = 36;
+// Mon propre quart, envoyé il y a moins de 12 h : je peux encore corriger ses cases ou l'effacer.
+// (Le serveur dit « mine »; un vieux quart sans compte se reconnaît encore par le nom.)
+const EDIT_HOURS = CONFIG.editHours || 12;
+const isMine = (src) => src?.mine === true || (Boolean(session.user?.uid) && src?.uid === session.user.uid) || (!src?.uid && String(src?.name || '').trim().toLowerCase() === String(session.user?.name || '').trim().toLowerCase() && Boolean(session.user?.name));
 function ownFixable(src) {
-  const me = String(session.user?.name || '').trim().toLowerCase();
   const at = new Date(src?.savedAt || src?.submittedAt || 0).getTime();
-  return Boolean(me) && String(src?.name || '').trim().toLowerCase() === me && at > 0 && Date.now() - at < EDIT_HOURS * 3600e3;
+  return isMine(src) && at > 0 && Date.now() - at < EDIT_HOURS * 3600e3;
 }
 
 // Met à jour une liste sans tout recréer : chaque ligne (data-id / data-key) garde son
@@ -1605,6 +1607,7 @@ $('#flagsBlock').addEventListener('click', (ev) => {
   }
   const [gone] = state.flags.splice(+b.dataset.delFlag, 1);
   (gone.photos || []).forEach(deletePhoto);
+  if (gone.id) undoProblem(gone.id); // déjà envoyé aux superviseurs : on le retire aussi là-bas
   save();
   renderChecklist();
 });
@@ -2130,7 +2133,8 @@ async function submitProblem(fl, s = state) {
       await sendFlagEmail(fl, s);
       fl.emailed = true;
     }
-    toast(fl.urgent ? (session.mode === 'demo' ? t('flagDemo') : t('flagSent', alertNames())) : t(s.loose ? 'flagInBoss' : 'flagNoted'));
+    // Annuler : le signalement disparaît (le courriel urgent déjà parti, lui, ne revient pas).
+    toast(fl.urgent ? (session.mode === 'demo' ? t('flagDemo') : t('flagSent', alertNames())) : t(s.loose ? 'flagInBoss' : 'flagNoted'), 'ok', fl.id ? () => undoFlag(fl, s) : null);
   } catch {
     toast(t(s.loose ? 'flagLater' : accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'), 'bad');
   }
@@ -2144,6 +2148,14 @@ async function submitProblem(fl, s = state) {
   }
 }
 const retryLoose = () => readLoose().forEach(({ fl, ctx }) => submitProblem(fl, ctx));
+async function undoFlag(fl, s = state) {
+  const ok = await undoProblem(fl.id);
+  if (!ok) { toast(t('undoTooLate'), 'muted'); return; }
+  if (s?.flags) { const i = s.flags.indexOf(fl); if (i >= 0) s.flags.splice(i, 1); }
+  (fl.photos || []).forEach(deletePhoto);
+  if (state === s) { save(); if (current === 'checklist') renderChecklist(); }
+  toast(t(fl.urgent && fl.emailed ? 'flagUndoneMail' : 'flagUndone'), 'muted');
+}
 
 // Le courriel : une ligne et un lien. Les détails et les photos sont sur le site.
 // Période de test (CONFIG.reportTo) : un seul courriel, à l'adresse de test,
@@ -2544,7 +2556,7 @@ const LAST_SHIFT = 'gym-last-shift';
 function editableShift() {
   const last = read(LAST_SHIFT, null);
   const mine = !session.user || last?.name === shiftName();
-  return last && mine && last.savedAt && Date.now() - new Date(last.savedAt).getTime() < 36 * 3600e3 ? last : null; // 36 h pour corriger
+  return last && mine && last.savedAt && Date.now() - new Date(last.savedAt).getTime() < EDIT_HOURS * 3600e3 ? last : null; // 12 h pour corriger
 }
 function paintEditToday() {
   const last = editableShift();
@@ -2599,8 +2611,8 @@ function openReview(r, opts = {}) {
       <span class="rv-main"><span class="rv-title">${esc(i.title)}</span>${detail(i)}</span>
       <span class="rv-time num">${esc(i.time.split('–')[0] || `${i.minutes} min`)}</span>
     </li>`;
-  // Propriétaire : chacun corrige les cases de SON quart pendant 36 h; l'admin, n'importe quel quart.
-  const canEdit = Boolean(r.src) && opts.from === 'history' && (adminPowers() || ownFixable(r.src));
+  // Propriétaire : chacun corrige les cases de SON quart pendant 12 h; un superviseur, n'importe quel quart, sans limite; l'admin, tout.
+  const canEdit = Boolean(r.src) && opts.from === 'history' && (adminPowers() || isBoss() || ownFixable(r.src));
   const attention = [
     ...r.flags.map((fl) => `<li class="rv-flag"><span class="rv-mark">${ICON.flag}</span><span class="rv-main"><span class="rv-title">${esc(fl.category)}${fl.location ? ` · ${esc(fl.location)}` : ''}</span>${fl.text ? `<span class="rv-quote">« ${esc(fl.text)} »</span>` : ''}${fl.photos?.length ? `<span class="rv-meta">${ICON.clip}${esc(fl.photos.join(', '))}</span>` : ''}${fl.emailed ? `<span class="rv-meta">${ICON.mail}${esc(t('flagEmailed'))}</span>` : fl.urgent ? `<span class="rv-meta">${esc(t('urgentShort'))}</span>` : ''}${fl.id && isBoss() ? `<button type="button" class="link rv-open" data-go="problem" data-id="${esc(fl.id)}">${esc(t('openProblem'))}</button>` : ''}</span><span class="rv-time num">${esc(fl.at)}</span></li>`),
     ...notDone.map(row),
@@ -2728,7 +2740,7 @@ $('#reviewBody').addEventListener('click', async (ev) => {
     const s = r.src;
     const items = r.items.map((x) => ({ id: x.id, status: x.status }));
     try {
-      const res = await request('board', { method: 'POST', body: { action: 'edit', date: s.date, shift: s.shift, name: s.name, items } });
+      const res = await request('board', { method: 'POST', body: { action: 'edit', date: s.date, shift: s.shift, name: s.name, uid: s.uid || '', items } });
       const saved = res?.shift || { ...s, items: items.map((x) => ({ ...(s.items.find((o) => o.id === x.id) || {}), ...x })), done: r.completion.done, editedBy: session.user?.name || '' };
       keepReport(saved);
       r.src = saved; r.editedBy = saved.editedBy;
@@ -2739,7 +2751,7 @@ $('#reviewBody').addEventListener('click', async (ev) => {
     return;
   }
 });
-// Propriétaire : chacun peut effacer son propre quart pendant 36 h (deux touchers).
+// Propriétaire : chacun peut effacer son propre quart pendant 12 h (deux touchers).
 $('#reviewBody').addEventListener('click', async (ev) => {
   const d = ev.target.closest('[data-rvdel]');
   if (!d || !lastReview) return;
@@ -2747,7 +2759,7 @@ $('#reviewBody').addEventListener('click', async (ev) => {
   const src = lastReview[0].src;
   const ok = await deleteShift(src);
   if (!ok) { toast(t('histDeleteFail'), 'bad'); return; }
-  hist.recent = (hist.recent || []).filter((x) => !(x.date === src.date && x.shift === src.shift && (x.name || '').trim().toLowerCase() === (src.name || '').trim().toLowerCase()));
+  hist.recent = (hist.recent || []).filter((x) => !(x.date === src.date && x.shift === src.shift && shiftKey(x) === shiftKey(src)));
   hist.loaded = true; hist.sig = '';
   toast(t('histDeleted')); sfx('toggle');
   openMine({ keep: true });
@@ -3341,7 +3353,7 @@ function heroCard() {
 // Deux chiffres : les quarts faits cette semaine (sur ceux prévus) et les tâches faites sur 30 jours.
 function myDoneShifts() {
   const me = shiftName().trim().toLowerCase();
-  return (hist.recent || []).filter((x) => !x.open && (x.name || '').trim().toLowerCase() === me);
+  return (hist.recent || []).filter((x) => !x.open && (isMine(x) || (x.name || '').trim().toLowerCase() === me));
 }
 function dashStats() {
   const today = todayISO(), mon = mondayOf(today);
@@ -3487,7 +3499,7 @@ function renderHistory({ animate = true } = {}) {
   const me = shiftName().trim().toLowerCase();
   // Un employé voit ses quarts; les superviseurs et l'admin voient ceux de toute l'équipe.
   let shifts = (isWeek ? weekDates(hist.week).flatMap((d) => hist.days[d] || []) : hist.recent.filter((x) => x.date >= since))
-    .filter((x) => isBoss() || !me || (x.name || '').trim().toLowerCase() === me);
+    .filter((x) => isBoss() || !me || isMine(x) || (x.name || '').trim().toLowerCase() === me);
   // Le patron voit toute l'équipe par défaut, ou un·e employé·e à la fois.
   // Par employé·e ou par quart (matin, soir). Sans nom connu, on écrit simplement « Employé·e ».
   const keyOf = (x) => (hist.by === 'shift' ? String(x.shift) : (x.name || '').trim() || '?');
@@ -3947,7 +3959,7 @@ $('#authForm').addEventListener('submit', async (ev) => {
   const up = authUI.tab === 'signup';
   const fields = { email: $('#aEmail').value.trim(), password: $('#aPass').value };
   if (up) Object.assign(fields, { name: $('#aName').value.trim(), role: authUI.role, code: $('#aCode').value.trim() });
-  const fail = (key) => { $('#authError').innerHTML = `<div class="notice bad">${esc(t(key))}</div>`; };
+  const fail = (key, ...a) => { $('#authError').innerHTML = `<div class="notice bad">${esc(t(key, ...a))}</div>`; };
   if (up && !fields.name) return fail('errName');
   if (!/^\S+@\S+\.\S+$/.test(fields.email)) return fail('errEmail');
   if (fields.password.length < 6) return fail('errPassword');
@@ -3971,7 +3983,10 @@ $('#authForm').addEventListener('submit', async (ev) => {
     // Nouveau compte : l'horaire d'abord; la visite guidée suit quand il se ferme.
     // Nouveau compte : la visite guidée d'abord (elle part toute seule); l'horaire vient à la fin.
   } catch (err) {
-    fail(err.status === 0 ? 'errNetwork' : AUTH_ERRORS[err.message] || (session.mode === 'demo' && err.message === 'login' ? 'errLogin' : 'errServer'));
+    // 50 mauvais mots de passe : 24 h de pause. On prévient quand il reste peu d'essais.
+    if (err.message === 'locked') fail('loginLocked');
+    else if (err.message === 'login' && Number.isFinite(err.data?.left) && err.data.left <= 10) fail('loginLeft', err.data.left);
+    else fail(err.status === 0 ? 'errNetwork' : AUTH_ERRORS[err.message] || (session.mode === 'demo' && err.message === 'login' ? 'errLogin' : 'errServer'));
   } finally {
     btn.disabled = false;
     paintAuth();
@@ -4213,7 +4228,8 @@ function openAccount() {
     <label class="field act-as"><span>${esc(t('actAsLabel'))}</span><div class="acct-btns"><input id="acActAs" autocomplete="off" maxlength="40" value="${esc(prefs.actAs || '')}" placeholder="${esc(u.name)}"><button type="button" class="btn ghost" id="acActAsSave">${esc(t('save'))}</button></div></label>
     <p class="section-note">${esc(prefs.actAs ? t('actAsOn', prefs.actAs) : t('actAsNote'))}</p>` : ''}
     <div class="acct-list">
-      ${isBoss() && !u.visitor ? `<button type="button" class="acct-row work-row" id="acWork" role="switch" aria-checked="${Boolean(prefs.workAsEmp)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21v-6l-2-3 3-6h8l3 6-2 3v6M9 6l3 4 3-4"/></svg><span>${esc(t('workAsEmp'))}<small>${esc(t(prefs.workAsEmp ? 'workAsEmpOn' : 'workAsEmpOff'))}</small></span><i class="switch" aria-hidden="true"></i></button>` : ''}
+      ${isRealAdmin() && !u.visitor ? `<button type="button" class="acct-row work-row admin-work" id="acAdminWork" role="switch" aria-checked="${Boolean(u.workMode)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21v-6l-2-3 3-6h8l3 6-2 3v6M9 6l3 4 3-4"/></svg><span>${esc(t('adminWork'))}<small>${esc(t(u.workMode ? 'adminWorkOn' : 'adminWorkOff'))}</small></span><i class="switch" aria-hidden="true"></i></button>`
+        : isBoss() && !u.visitor ? `<button type="button" class="acct-row work-row" id="acWork" role="switch" aria-checked="${Boolean(prefs.workAsEmp)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21v-6l-2-3 3-6h8l3 6-2 3v6M9 6l3 4 3-4"/></svg><span>${esc(t('workAsEmp'))}<small>${esc(t(prefs.workAsEmp ? 'workAsEmpOn' : 'workAsEmpOff'))}</small></span><i class="switch" aria-hidden="true"></i></button>` : ''}
       <button type="button" class="acct-row" id="acSched">${ICON.clock}<span>${esc(t('schedTitle'))}</span>${CHEV_R}</button>
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
         <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
@@ -4238,6 +4254,14 @@ function openAccount() {
     </div>` : ''}`,
   (root) => {
     $('#acSched').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 320); };
+    // L'admin : « Mode employé », clairement allumé ou éteint, gardé sur le serveur. Allumé, ses quarts
+    // sont de vrais quarts et l'équipe le voit comme un employé ordinaire; éteint, tout ce qu'il envoie est un fantôme.
+    if ($('#acAdminWork')) $('#acAdminWork').onclick = async (e) => {
+      const b = e.currentTarget, on = b.getAttribute('aria-checked') !== 'true';
+      b.disabled = true;
+      try { await updateMe('workmode', { on }); prefs.workAsEmp = on; savePrefs(); sfx('toggle'); toast(t(on ? 'adminWorkOn' : 'adminWorkOff')); paintStatic(); paintFront(); closeSheet(); setTimeout(openAccount, 340); }
+      catch { b.disabled = false; toast(t('editServer'), 'muted'); sfx('error'); }
+    };
     if ($('#acWork')) $('#acWork').onclick = () => { prefs.workAsEmp = !prefs.workAsEmp; savePrefs(); sfx('toggle'); paintStatic(); paintFront(); toast(t(prefs.workAsEmp ? 'workAsEmpOn' : 'workAsEmpOff')); closeSheet(); setTimeout(openAccount, 340); };
     $('#acPic').onclick = () => { closeSheet(); setTimeout(openAvatarPicker, 320); };
     $('#acRoleGo')?.addEventListener('click', async () => {
@@ -4928,7 +4952,7 @@ async function refreshHub() {
     if (pr.status === 'fulfilled') { boss.problems = pr.value; boss.loaded = true; boss.error = ''; } else if (!boss.loaded) boss.error = pr.reason?.status === 0 ? 'errNetwork' : 'errServer';
     if (tm.status === 'fulfilled') { boss.team = tm.value; boss.teamLoaded = true; }
     await refreshTeamPlan(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13));
-    ensureWeek(wk.mon);
+    ensureWeek(mondayOf(todayISO()), true);
     paintBossCount();
   } else {
     if (!hist.loaded) {
@@ -4936,7 +4960,7 @@ async function refreshHub() {
       if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
     }
     if (session.user && accounts()) await loadTeamView(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13)); // « Avec toi », la semaine
-    ensureWeek(wk.mon);
+    ensureWeek(mondayOf(todayISO()), true);
   }
   if (current === 'hub') renderHub({ animate: false });
 }
@@ -4961,8 +4985,9 @@ function renderHub({ animate = true } = {}) {
 // Toucher un jour ouvre sa journée : qui a travaillé, ce qui a été fait, les mots laissés.
 const wk = { mon: '', days: {}, loading: {} };
 const WK_BACK = 8; // jusqu'à 8 semaines en arrière
-async function ensureWeek(mon) {
-  if (!mon || mon > todayISO() || wk.days[mon] || wk.loading[mon]) return;
+// force : la semaine en cours se recharge à chaque visite (un quart vient peut-être d'être envoyé).
+async function ensureWeek(mon, force = false) {
+  if (!mon || mon > todayISO() || (wk.days[mon] && !force) || wk.loading[mon]) return;
   wk.loading[mon] = true;
   try {
     const r = await loadWeek(weekDates(mon).filter((d) => d <= todayISO()));
@@ -5355,7 +5380,7 @@ function renderGlance() {
     ${cta}</div>`;
 }
 
-// ---------- Mes quarts : revoir et corriger (36 h) ----------
+// ---------- Mes quarts : revoir et corriger (12 h) ----------
 async function openMine({ keep = false } = {}) {
   paintStatic();
   renderMine({ animate: !keep });
@@ -5713,7 +5738,7 @@ function route() {
   if (h === '#methode') return openMethod();
   if (h === '#equipe') return session.user ? openTeamWeek() : goFront();
   if (h === '#aujourdhui') return session.user ? openToday() : goFront();
-  if (h === '#affiche') return openPoster();
+  if (h === '#affiche') return isBoss() ? openPoster() : openHub(); // l'affiche QR : superviseurs seulement
   if (location.hash === '#apercu') return openApercu();
   if (location.hash === '#historique') return openHistory();
   dropStaleShift();

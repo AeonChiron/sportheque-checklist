@@ -181,3 +181,11 @@ Plain static site + one serverless function. No build step.
 - Hub card `weekCard()` (employee: after the main card; supervisor: after « Aujourd'hui dans le gym »): 7 day cells, ‹ › arrows (8 weeks back, 1 ahead). Past/today: ring = % of gym tasks done (all shifts that day, `dayDigest`); future: people count; employee's own shift as a blue time chip.
 - Tap a day → `openDaySheet(d)`: supervisors + who worked (from sent shifts) or who works (schedule), gym-level summary, what got done (big tasks first), not done, reports, handoff notes, special tasks; « Ton quart » button → glance. Results are for the whole gym, never a score per person for employees.
 - Pretend team entry lands on `#accueil` (must `history.replaceState` + `location.reload()` — changing only the hash doesn't reload) and never auto-starts a shift (`autoStart` returns false when FICTIVE).
+
+## Server rules (owner 25 oct., loop round 1)
+- Shifts belong to an ACCOUNT: server stores `byEmail`, never returns it; GET adds `uid` (sha slice) + `mine`. Non-admin can only save a shift with their own name (403 'name'). Old shifts without byEmail fall back to name.
+- Edit/delete own shift: 12 h after first send (`CONFIG.editHours`, server `EDIT_HOURS`). Supervisors edit any shift, no limit (editedBy set). Admin: everything.
+- Login: 50 wrong passwords → that account paused 24 h (`settings login:<sha(email)>`); a supervisor password reset clears it. Signup wrong codes: 10/day per connection, 2,000 global.
+- Undo own problem report (12 h, still open): `problems {action:'undo'}`; employees list only their own via `problems?mine=1`.
+- Admin "Mode employé" (`auth {action:'workmode'}`, `user.workMode`): on → real shifts, shown to the team as an employee; off → ghost, hidden from team lists. Never shown as admin.
+- Before-loop backup: commit c228873 (tag/branch push is blocked by the proxy; artifact "Sporthèque avant la boucle").

@@ -49,7 +49,8 @@ export async function flushQueue() {
 // 'queued' (gardé ici, sera envoyé au retour du réseau) ou 'local'
 // (pas d'historique partagé sur cet hébergement).
 export async function publishShift(raw, code = '') {
-  const shift = sanitizeShift(raw);
+  // Le quart porte l'identifiant court du compte (uid) : il reste « le mien » même si deux personnes ont le même nom.
+  const shift = sanitizeShift({ ...raw, uid: raw?.uid || session.user?.uid || '', mine: true });
   if (!shift) return 'local';
   keepLocal(shift, code);
   if (!shared()) return 'local';
@@ -116,7 +117,7 @@ export async function deleteShift(s) {
   writeJSON(QUEUE, readJSON(QUEUE, []).filter((x) => !(x.date === s.date && key(x) === key(s))));
   if (!shared()) return true;
   try {
-    await request('board', { method: 'POST', body: { action: 'delete', date: s.date, shift: s.shift, name: s.name } });
+    await request('board', { method: 'POST', body: { action: 'delete', date: s.date, shift: s.shift, name: s.name, uid: s.uid || '' } });
     return true;
   } catch (err) {
     return [404].includes(err?.status); // déjà parti du serveur

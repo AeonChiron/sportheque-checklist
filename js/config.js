@@ -53,6 +53,8 @@ export const CONFIG = {
 
   // Lundi qui correspond à « Semaine 1 » de la rotation A-B-C ET à
   // « Semaine I » des cycles murs / tuiles-miroirs (début officiel).
+  // Propriétaire (25 oct.) : un employé corrige ou efface son quart pendant 12 h après l'envoi.
+  editHours: 12,
   cycleAnchorMonday: '2026-10-19',
 
   // Photos de référence du gym dans les consignes (dossier photos/).

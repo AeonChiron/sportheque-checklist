@@ -130,7 +130,7 @@ function persist() { try { sessionStorage.setItem(DB, JSON.stringify(db)); } cat
 export function fictiveUser() { const d = load(); return d.users[fictiveWho()] || null; }
 export function fictiveBoardSize() { const d = load(); return Object.values(d.board).flat().length; }
 
-const pub = (u) => ({ name: u.name, email: u.email, role: u.role, alerts: u.role === 'boss', schedule: u.schedule || {}, scheduleBy: u.scheduleBy || '', scheduleAt: u.scheduleAt || '', avatar: u.avatar || '' });
+const pub = (u) => ({ uid: u.email.replace(/[^a-z0-9]/gi, '').slice(0, 12).padEnd(12, '0').toLowerCase().replace(/[^a-f0-9]/g, 'a'), name: u.name, email: u.email, role: u.role, alerts: u.role === 'boss', schedule: u.schedule || {}, scheduleBy: u.scheduleBy || '', scheduleAt: u.scheduleAt || '', avatar: u.avatar || '' });
 const err = (status, error = 'fictive') => Object.assign(new Error(error), { status });
 
 // Le faux serveur : mêmes routes, mêmes réponses que netlify/lib/api.mjs.
@@ -143,7 +143,9 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
   const P = url.searchParams;
   const lead = me.role === 'boss';
   const mine = (s) => s.name.toLowerCase() === me.name.toLowerCase();
-  const shown = (list) => (list || []).filter((s) => !s.open || mine(s));
+  // Comme le vrai serveur : un identifiant court par compte (uid) et « mine » pour mes quarts.
+  const uidOf = (name) => (d.users[Object.keys(d.users).find((k) => d.users[k].name === name)]?.email || name).replace(/[^a-z0-9]/gi, '').slice(0, 12).padEnd(12, '0').toLowerCase().replace(/[^a-f0-9]/g, 'a');
+  const shown = (list) => (list || []).filter((s) => !s.open || mine(s)).map((s) => ({ ...s, uid: uidOf(s.name), mine: mine(s) }));
   await new Promise((r) => setTimeout(r, 60)); // un petit délai, comme un vrai réseau
   if (route === 'auth') {
     if (method === 'GET') return { user: pub(me) };
@@ -170,7 +172,7 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
       const dates = String(P.get('dates') || '').split(',').filter(Boolean);
       return { days: Object.fromEntries(dates.map((x) => [x, shown(d.board[x])])) };
     }
-    const find = () => (d.board[body.date] || []).find((x) => x.shift === Number(body.shift) && x.name.toLowerCase() === String(body.name || '').toLowerCase());
+    const find = () => (d.board[body.date] || []).find((x) => x.shift === Number(body.shift) && (body.uid ? uidOf(x.name) === body.uid : x.name.toLowerCase() === String(body.name || '').toLowerCase()));
     if (body?.action === 'delete') { d.board[body.date] = (d.board[body.date] || []).filter((x) => x !== find()); persist(); return { ok: true }; }
     if (body?.action === 'custom') { const s = find(); if (s) { s.customStatus = body.status; s.customBy = me.name; persist(); } return { ok: true }; }
     if (body?.action === 'edit') {
@@ -190,6 +192,12 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
     return { ok: true };
   }
   if (route === 'problems') {
+    if (method === 'POST' && body?.action === 'undo') {
+      const i = d.problems.findIndex((x) => x.id === body.id && x.byEmail === me.email);
+      if (i < 0) throw err(404, 'missing');
+      d.problems.splice(i, 1); persist(); return { ok: true };
+    }
+    if (method === 'GET' && P.has('mine')) return { problems: d.problems.filter((x) => x.byEmail === me.email).slice(0, 20) };
     if (method === 'POST' && body?.action === 'status') {
       if (!lead) throw err(403, 'boss');
       const p = d.problems.find((x) => x.id === body.id); if (!p) throw err(404, 'missing');

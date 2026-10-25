@@ -37,6 +37,19 @@ export async function createProblem(p, blobs = []) {
   }
 }
 
+// Annuler son propre signalement (12 h, tant qu'il est ouvert) — propriétaire : « plein de boutons Annuler ».
+export async function undoProblem(id) {
+  if (!id) return true;
+  if (session.mode === 'demo') { const all = readDemo(); delete all[id]; writeDemo(all); return true; }
+  try { await request('problems', { method: 'POST', body: { action: 'undo', id } }); return true; }
+  catch (err) { return err?.status === 404; } // déjà parti
+}
+// Mes propres signalements (pour les revoir ou les annuler).
+export async function listMyProblems() {
+  if (session.mode === 'demo') return Object.values(readDemo()).filter((p) => p.by === session.user?.name).sort((a, b) => b.id.localeCompare(a.id));
+  try { return (await request('problems?mine=1')).problems.map(unTag); } catch { return []; }
+}
+
 export async function listProblems() {
   if (session.mode === 'demo') return Object.values(readDemo()).sort((a, b) => b.id.localeCompare(a.id));
   return (await request('problems')).problems.map(unTag);

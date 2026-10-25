@@ -35,7 +35,9 @@ export function sanitizeShift(raw) {
     })).filter((c) => c.id && c.title && c.start && c.end),
     customStatus: CUSTOM_STATUS.has(raw.customStatus) ? raw.customStatus : '',
     customBy: str(raw.customBy, 40),
-    savedAt: str(raw.savedAt, 30), // premier envoi final : 36 h pour le modifier
+    savedAt: str(raw.savedAt, 30), // premier envoi final : 12 h pour le modifier
+    uid: /^[a-f0-9]{12}$/.test(raw.uid || '') ? raw.uid : '', // le compte qui l'a envoyé (court, sans courriel)
+    mine: raw.mine === true, // dit par le serveur : c'est mon quart
     ghost: raw.ghost === true, // posté par l'admin : invisible pour tous les autres (tests)
     editedBy: str(raw.editedBy, 40), // l'admin a corrigé les tâches après coup
     editedAt: str(raw.editedAt, 30),
@@ -63,7 +65,8 @@ export function sanitizeShift(raw) {
   };
 }
 
-export const key = (s) => `${s.shift}|${s.name.toLowerCase()}`;
+// Un quart par personne : le compte (uid) quand on le connaît, sinon le nom (vieux quarts, ce téléphone).
+export const key = (s) => `${s.shift}|${s.uid || s.name.toLowerCase()}`;
 
 // Un quart par personne, par quart, par jour : le plus récent remplace l'ancien.
 export function mergeShift(list, shift) {
