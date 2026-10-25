@@ -3,6 +3,9 @@ name: sportheque-checklist
 description: Work on the Sporthèque gym cleaners' shift checklist website (this repository). Use for any change to its tasks, wording, translations, schedule logic, shift history, urgent-problem email, design, demo artifact or deployment.
 ---
 
+> **Continuing the 25 Oct optimization loop? Read `/HANDOFF.md` at the repo root first — it has every owner decision, the status and the exact next steps.**
+
+
 # Sporthèque shift checklist
 
 Mobile-first website (iPhone, Safari) for the cleaning staff of the Sporthèque gym
