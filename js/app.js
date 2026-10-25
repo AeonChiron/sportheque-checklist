@@ -96,11 +96,15 @@ function navRecord(id) {
   // d : combien de pages de l'app il y a derrière (pour le bouton « Retour », propriétaire 25 oct.).
   const d = history.state?.d || 0;
   try {
-    if (!history.state?.scr) history.replaceState({ scr: id, d: 0 }, '', url); // entrée toute neuve (chargement, lien #…)
+    // Entrée toute neuve : au chargement, d = 0; un lien « #… » ouvert dans l'app (ex. l'onglet
+    // Signalements) laisse une page derrière, donc le « Retour » y ramène.
+    if (!history.state?.scr) history.replaceState({ scr: id, d: navSeen ? (navSeen.d || 0) + 1 : 0 }, '', url);
     else if (history.state.scr !== id) history.pushState({ scr: id, d: d + 1 }, '', url);
     else if (location.pathname + location.hash !== url) history.replaceState({ scr: id, d }, '', url);
   } catch { /* ignore */ }
+  navSeen = history.state;
 }
+let navSeen = null; // le dernier état d'historique connu de l'app (null avant le premier écran)
 window.addEventListener('popstate', (e) => {
   // Un lien « #… » (ex. Rapports) déclenche aussi popstate, sans état : ce n'est pas un retour.
   // On laisse hashchange ouvrir l'écran, qui s'inscrit normalement dans l'historique.
@@ -114,6 +118,7 @@ window.addEventListener('popstate', (e) => {
     try { history.pushState({ scr: current }, '', location.pathname + (NAV_HASH[current] ?? '')); } catch { /* ignore */ }
     return;
   }
+  navSeen = e.state;
   const scr = e.state?.scr;
   // Le même écran deux fois de suite (laissé par une feuille fermée) : on saute ce pas en silence.
   if (scr && scr === current && !e.state?.sheet) { history.back(); return; }
@@ -3780,7 +3785,7 @@ $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
 // Employé : Accueil · Mon quart · Historique · Équipe. Superviseur : Accueil · Signalements · Rapports · Équipe.
 // Cachée pendant le quart (la checklist a sa propre barre), à l'envoi et sur la page bleue.
 const TAB_HIDDEN = new Set(['auth', 'setup', 'checklist', 'finish', 'sent', 'review', 'poster', 'problem']);
-const TAB_ROOTS = new Set(['hub', 'mine', 'glance', 'teamweek', 'todaygym', 'boss', 'history', 'plan', 'method']);
+const TAB_ROOTS = new Set(['hub', 'mine', 'glance', 'teamweek', 'todaygym', 'boss', 'history', 'plan', 'method', 'apercu']);
 const TAB_ICO = {
   hub: '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
   shift: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5M8.5 11l2 2 4-4M8.5 17h7"/>',
@@ -3796,7 +3801,7 @@ function tabOf(id) {
   if (id === 'mine' || id === 'plan') return 'history';
   if (id === 'history') return bossWatching() ? 'reports' : 'history';
   if (id === 'boss') return 'problems';
-  if (id === 'teamweek' || id === 'todaygym') return 'team';
+  if (id === 'teamweek' || id === 'todaygym' || id === 'apercu') return 'team';
   if (id === 'method') return 'hub';
   return '';
 }

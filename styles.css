@@ -3611,3 +3611,12 @@ html[data-nav="rush"]::view-transition-new(root) { animation: rush-in .7s cubic-
 .hb-crew.on-light small { color: var(--muted); opacity: 1; }
 .hub-left { display: flex; align-items: center; gap: 8px; }
 .qb-back span:empty { display: none; }
+
+/* ---------- « ‹ Retour » toujours visible (boucle, ronde 3) ---------- */
+/* Sur les écrans centrés (Bravo), la barre garde toute la largeur : Retour à gauche, réglages à droite. */
+.screen > .quick-bar { align-self: stretch; width: 100%; }
+/* Équipe fictive : l'en-tête collant de la checklist passe sous la pastille rouge, pas dessous. */
+body.fictive #checklist > .topbar { top: calc(var(--fict-pad) - var(--tb-skip, 0px)); }
+/* Un seul « Retour » : la pastille du haut. Les vieux liens « ‹ Espace superviseur / Accueil » faisaient doublon. */
+.screen:has(> .quick-bar:not([hidden])) .review-nav > .back, .screen:has(> .quick-bar:not([hidden])) #backBtn { display: none; }
+.screen:has(> .quick-bar:not([hidden])) .review-nav { justify-content: flex-end; }
