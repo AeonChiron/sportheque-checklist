@@ -10,10 +10,13 @@ export const FLAG_CATEGORIES = {
   equipement: { fr: 'Équipement brisé', en: 'Broken equipment' },
   fournitures: { fr: 'Fournitures manquantes', en: 'Missing supplies' },
   securite: { fr: 'Danger / sécurité', en: 'Hazard / safety' },
-  autre: { fr: 'Autre', en: 'Other' },
+  autre: { fr: 'Autre (écris pourquoi)', en: 'Other (write why)' },
 };
 
+// Propriétaire (25 oct.) : facultatif; les 5 raisons les plus courantes, puis « Autre » (on écrit).
+// « Fait, mais oublié de cocher » remet la tâche à « faite ».
 export const SKIP_REASONS = {
+  oublie: { fr: 'Fait, mais oublié de cocher', en: 'Done, forgot to check it' },
   temps: { fr: 'Manque de temps', en: 'Not enough time' },
   occupe: { fr: 'Appareil occupé', en: 'Machine in use' },
   materiel: { fr: 'Matériel manquant', en: 'Missing supplies' },

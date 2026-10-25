@@ -3591,3 +3591,23 @@ html[data-nav="tab"]::view-transition-new(root) { animation: tab-in .26s cubic-b
 .hb-link > .ico { width: 18px; height: 18px; opacity: .45; }
 .sec-h { margin: 22px 0 4px; font: 750 20px/1.15 var(--serif); font-variation-settings: 'SOFT' 100; }
 #mineBody > .hb-week { margin-top: 4px; }
+
+/* ---------- Le « Bravo », puis l'élan vers l'accueil (propriétaire, 25 oct.) ---------- */
+.sent-go { display: grid; gap: 8px; justify-items: center; margin: 18px auto 0; width: min(240px, 80%); font: 650 13px/1 var(--display); letter-spacing: .06em; color: var(--muted); }
+.sent-go i { display: block; width: 100%; height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; position: relative; }
+.sent-go i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, var(--accent), #3fc9e6); transform: scaleX(0); transform-origin: left; }
+.sent-go.run i::after { animation: sent-fill 3.4s linear forwards; }
+@keyframes sent-fill { to { transform: scaleX(1); } }
+html[data-nav="rush"]::view-transition-old(root) { animation: rush-out .5s cubic-bezier(.55, 0, .7, .2) both; }
+html[data-nav="rush"]::view-transition-new(root) { animation: rush-in .7s cubic-bezier(.15, .85, .25, 1) .08s both; }
+@keyframes rush-out { to { opacity: 0; transform: translateY(-9%) scale(1.06); filter: blur(16px) saturate(1.4); } }
+@keyframes rush-in { from { opacity: 0; transform: translateY(12%) scale(.97); filter: blur(14px); } 60% { filter: blur(0); } to { opacity: 1; transform: none; filter: none; } }
+.rs-forgot { border-color: color-mix(in srgb, #1f9d5c 45%, transparent) !important; color: #17804a !important; }
+:root[data-theme="dark"] .rs-forgot { color: #5fdc9a !important; }
+@media (prefers-reduced-motion: reduce) { .sent-go.run i::after { animation-duration: 2.6s; } }
+.hb-crew.on-light { margin: 0 0 12px; border-color: var(--line); background: var(--surface); color: var(--ink); }
+.hb-crew.on-light:hover { background: var(--sunk); }
+.hb-crew.on-light .tw-av.mini { border-color: var(--surface); }
+.hb-crew.on-light small { color: var(--muted); opacity: 1; }
+.hub-left { display: flex; align-items: center; gap: 8px; }
+.qb-back span:empty { display: none; }

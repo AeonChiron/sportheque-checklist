@@ -146,9 +146,19 @@ export function mountPool(root) {
   let sprites = null;
   // Des grains de poussière qui flottent dans la lumière.
   const MOTES = Array.from({ length: 34 }, (_, i) => { const r = rnd(900 + i); return { x: r(), y: r(), z: 0.4 + r() * 0.6, ph: r() * 6.28, sp: 0.4 + r() * 0.8 }; });
+  // Les grains de poussière : une petite image faite une fois (pas de dégradé recalculé à chaque image).
+  let moteImg = null;
+  function makeMote() {
+    const c = document.createElement('canvas'); c.width = c.height = 32;
+    const g = c.getContext('2d'), rg = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(0.35, 'rgba(255,255,255,.45)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, 32, 32);
+    return c;
+  }
   function light(D) {
     if (W < 2 || H < 2) return; // pas encore mesuré
     if (!sprites) sprites = BEAMS.map((b, i) => makeBeam(77 + i * 13, b.layer ? 9 : 5, !b.layer));
+    if (!moteImg) moteImg = makeMote();
     const R = Math.max(W, H);
     const Sx = -R * 0.06, Sy = -R * 0.42; // la fenêtre, loin au-dessus à gauche
     const ty = H * 0.62;
@@ -177,10 +187,9 @@ export function mountPool(root) {
       const near = Math.max(0, 1 - Math.hypot(px / W - 0.25, py / H - 0.3) * 1.3);
       const a = (0.1 + 0.5 * near) * (0.55 + 0.45 * Math.sin(t * m.sp * 1.7 + m.ph)) * (D ? 0.7 : 1);
       if (!(a >= 0.03)) continue;
-      const rr = 0.6 + 1.5 * m.z;
-      const mg = ctx.createRadialGradient(px, py, 0, px, py, rr * 2.4);
-      mg.addColorStop(0, `rgba(255,255,255,${a})`); mg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = mg; ctx.fillRect(px - rr * 2.4, py - rr * 2.4, rr * 4.8, rr * 4.8);
+      const rr = (0.6 + 1.5 * m.z) * 2.6;
+      ctx.globalAlpha = Math.min(1, a);
+      ctx.drawImage(moteImg, px - rr, py - rr, rr * 2, rr * 2);
     }
     ctx.restore();
   }

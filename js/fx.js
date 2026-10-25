@@ -285,6 +285,20 @@ const SOUNDS = {
     epiano(659.25, t, { gain: 0.11, dur: 1.2, pan: -0.15, verb: 0.45 });
     epiano(987.77, t + 0.09, { gain: 0.1, dur: 1.4, pan: 0.15, verb: 0.5 });
   },
+  // « Pas fait » (propriétaire : « womp womp womp, un peu drôle ») : trois notes de trombone en sourdine
+  // qui descendent, la dernière qui traîne et tremble. Doux, jamais méchant.
+  womp(t) {
+    const c = A();
+    [[293.66, 0, 0.2], [277.18, 0.24, 0.2], [261.63, 0.48, 0.2], [246.94, 0.74, 0.62]].forEach(([f, at, dur], i) => {
+      const t0 = t + at, g = voice(t0, { verb: 0.25, pan: -0.05 + i * 0.03 });
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, t0); lp.frequency.linearRampToValueAtTime(520, t0 + dur); lp.Q.value = 3;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.13, t0 + 0.04); g.gain.setTargetAtTime(0.0001, t0 + dur * 0.75, dur * 0.25);
+      const o = c.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 1.03, t0); o.frequency.exponentialRampToValueAtTime(f, t0 + 0.06);
+      if (i === 3) { const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 6; lg.gain.value = f * 0.025; lfo.connect(lg).connect(o.frequency); lfo.start(t0 + 0.15); lfo.stop(t0 + dur + 0.2); o.frequency.exponentialRampToValueAtTime(f * 0.94, t0 + dur); }
+      o.connect(lp).connect(g); o.start(t0); o.stop(t0 + dur + 0.3);
+    });
+  },
   error(t) {
     for (const [at, f] of [[0, 196], [0.15, 165]]) {
       const c = A(), g = voice(t + at, { verb: 0.25 });

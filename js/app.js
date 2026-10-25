@@ -93,11 +93,12 @@ const NAV_HASH = { history: '#historique', apercu: '#apercu', boss: '#patron', p
 function navRecord(id) {
   if (navRestoring) return;
   const url = location.pathname + (NAV_HASH[id] ?? (['review', 'problem'].includes(id) ? location.hash : ''));
-  const st = { scr: id };
+  // d : combien de pages de l'app il y a derrière (pour le bouton « Retour », propriétaire 25 oct.).
+  const d = history.state?.d || 0;
   try {
-    if (!history.state?.scr) history.replaceState(st, '', url); // entrée toute neuve (chargement, lien #…)
-    else if (history.state.scr !== id) history.pushState(st, '', url);
-    else if (location.pathname + location.hash !== url) history.replaceState(st, '', url);
+    if (!history.state?.scr) history.replaceState({ scr: id, d: 0 }, '', url); // entrée toute neuve (chargement, lien #…)
+    else if (history.state.scr !== id) history.pushState({ scr: id, d: d + 1 }, '', url);
+    else if (location.pathname + location.hash !== url) history.replaceState({ scr: id, d }, '', url);
   } catch { /* ignore */ }
 }
 window.addEventListener('popstate', (e) => {
@@ -126,6 +127,7 @@ window.addEventListener('popstate', (e) => {
   } finally { navRestoring = false; }
 });
 
+let navOverride = ''; // une transition spéciale pour le prochain changement d'écran (ex. « rush » après l'envoi)
 function show(id) {
   paintAdminTools();
   const prev = current;
@@ -140,6 +142,7 @@ function show(id) {
   if (id === 'auth') requestAnimationFrame(() => window.scrollTo(0, 0));
   placeQuickBar(id);
   paintTabBar();
+  if (id === 'hub') { const hb = $('#hubBack'); hb.hidden = !canGoBack(); hb.querySelector('span').textContent = t('goBack'); }
   if (!target.hidden) return;
   const swap = () => {
     for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -153,7 +156,8 @@ function show(id) {
   if (prev && document.startViewTransition && !reducedMotion() && !document.hidden) {
     // Propriétaire : glisser quand on va plus loin, fondu entre les onglets de la barre du bas.
     const tabs = tabOf(prev) && tabOf(id) && tabOf(prev) !== tabOf(id) && TAB_ROOTS.has(id) && TAB_ROOTS.has(prev);
-    document.documentElement.dataset.nav = tabs ? 'tab' : (RANK[id] ?? 0) < (RANK[prev] ?? 0) ? 'back' : 'fwd';
+    document.documentElement.dataset.nav = navOverride || (tabs ? 'tab' : (RANK[id] ?? 0) < (RANK[prev] ?? 0) ? 'back' : 'fwd');
+    navOverride = '';
     document.startViewTransition(swap);
   } else swap();
 }
@@ -196,6 +200,14 @@ function toast(msg, tone = 'ok', onUndo = null) {
 }
 
 // Petite fête quand tout est coché (rien si « réduire les animations »).
+// La foule qui crie « yay » : 3 fois par semaine au plus (propriétaire), pour qu'elle reste spéciale.
+function cheerAllowed() {
+  const wkKey = mondayOf(todayISO());
+  const c = prefs.cheers?.week === wkKey ? prefs.cheers : { week: wkKey, n: 0 };
+  if (c.n >= 3) return false;
+  prefs.cheers = { week: wkKey, n: c.n + 1 }; savePrefs();
+  return true;
+}
 function celebrate() {
   if (reducedMotion()) return;
   const box = $('#burst');
@@ -702,11 +714,16 @@ function openQuickSchedule({ first = false, target = null } = {}) {
     $('#qsSave').onclick = async () => {
       const chosen = Object.fromEntries(Object.entries(pick).filter(([, d]) => d.mode !== 'off').map(([i, d]) => [i, { start: d.start, end: d.end }]));
       if (target) { // un superviseur change l'horaire d'un employé (il est averti)
+        const before = JSON.parse(JSON.stringify(target.schedule || {}));
         try { const r = await request('users', { method: 'POST', body: { action: 'schedule', email: target.email, schedule: chosen } }); Object.assign(target, r.user || { schedule: chosen }); }
         catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
-        closeSheet(); toast(t('dayEditDone', target.name.split(' ')[0])); sfx('save'); rerenderBossViews();
+        closeSheet(); sfx('save'); rerenderBossViews();
+        toast(t('dayEditDone', target.name.split(' ')[0]), 'ok', async () => { // Annuler : l'horaire d'avant revient (sans nouvel avis)
+          try { const r = await request('users', { method: 'POST', body: { action: 'schedule', email: target.email, schedule: before, quiet: true } }); Object.assign(target, r.user || { schedule: before }); rerenderBossViews(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); }
+        });
         return;
       }
+      const beforeMine = JSON.parse(JSON.stringify(mySchedule() || {}));
       saveSchedule(chosen);
       // Un quart en cours aujourd'hui prend les nouvelles heures du jour (les tâches cochées restent).
       const td = pick[dowOf(todayISO())];
@@ -715,7 +732,8 @@ function openQuickSchedule({ first = false, target = null } = {}) {
         save(); plan = shiftPlan(state);
         if (current === 'checklist') renderChecklist();
       }
-      closeSheet(); toast(t('qsSaved')); setTimeout(() => sfx('save'), 120);
+      closeSheet(); setTimeout(() => sfx('save'), 120);
+      toast(t('qsSaved'), 'ok', () => { saveSchedule(beforeMine); if (current === 'hub') renderHub({ animate: false }); if (current === 'plan') renderPlan({ animate: false }); if (current === 'auth') paintFront(); toast(t('undone'), 'muted'); });
       if (current === 'auth') paintFront();
       if (current === 'history') renderHistory({ animate: false });
       if (current === 'hub') renderHub({ animate: false });
@@ -1123,7 +1141,7 @@ let handoff = null;
 async function loadHandoff() {
   if (!state) return;
   const { shifts } = await loadRecent(12).catch(() => ({ shifts: [] }));
-  const mine = (s) => s.date === state.date && s.shift === state.shift && s.name === state.name;
+  const mine = (s) => s.date === state.date && s.shift === state.shift && (isMine(s) || s.name === state.name);
   const h = shifts.find((s) => s.handoff && !mine(s) && s.date >= addDays(state.date, -2) && s.date <= state.date);
   handoff = h ? { text: h.handoff, by: h.name, date: h.date } : null;
   if (current === 'checklist') renderChecklist();
@@ -1132,6 +1150,8 @@ function openChecklist() {
   if (bossWatching()) { openHistory({ team: true }); return; }
   paintStatic();
   loadHandoff();
+  // « Avec toi » dans la liste aussi : qui travaille en même temps (chargé une fois).
+  if (session.user && accounts() && !boss.teamLoaded) loadTeamView(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13)).then(() => { if (current === 'checklist') renderChecklist(); });
   plan = shiftPlan(state);
   setTimeout(() => document.querySelector('#taskList .task.current, #taskList .task:not(.done)')?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }), current === 'checklist' ? 0 : 450);
   renderChecklist();
@@ -1334,6 +1354,11 @@ function renderChecklist() {
   if (!hn) { hn = document.createElement('div'); hn.id = 'handoffNote'; hn.className = 'handoff-note'; note.after(hn); }
   hn.hidden = !handoff;
   if (handoff) hn.innerHTML = `<small>${esc(t('handoffFrom', handoff.by.split(' ')[0]))}</small><p>${esc(handoff.text)}</p>`;
+  let cn = $('#crewNote');
+  if (!cn) { cn = document.createElement('div'); cn.id = 'crewNote'; hn.after(cn); }
+  const crewHTML = state?.date ? crewLine({ date: state.date, start: state.start, end: state.end }) : '';
+  cn.hidden = !crewHTML;
+  if (cn.innerHTML !== crewHTML) cn.innerHTML = crewHTML.replace('class="hb-crew"', 'class="hb-crew on-light"');
   const tasks = planTasks();
   const done = tasks.filter((x) => state.tasks[x.id]?.done).length;
   const d = plan.day;
@@ -1901,7 +1926,7 @@ function openTask(id) {
     ${tv}
     ${clockBox}
     ${tips}
-    ${skipped ? `<div><p class="block-label">${t('why')}</p><div class="reasons">${Object.entries(SKIP_REASONS).map(([k, v]) => `<button type="button" data-reason="${k}" aria-pressed="${e.reason === k}">${esc(v[lang()])}</button>`).join('')}</div></div>` : ''}
+    ${skipped ? `<div><p class="block-label">${t('whyOptional')}</p><div class="reasons">${Object.entries(SKIP_REASONS).map(([k, v]) => `<button type="button" data-reason="${k}" class="${k === 'oublie' ? 'rs-forgot' : ''}" aria-pressed="${e.reason === k}">${k === 'oublie' ? '✓ ' : ''}${esc(v[lang()])}</button>`).join('')}</div></div>` : ''}
     <label class="field"><span>${t('remark')}</span>
       <textarea id="remark" rows="2" placeholder="${esc(t(e.skipped ? 'remarkSkipPh' : 'remarkPh'))}">${esc(e.remark || '')}</textarea>
     </label>
@@ -1945,13 +1970,20 @@ function openTask(id) {
     root.querySelector('[data-status="skip"]').onclick = () => {
       const on = !(e.skipped && !e.done);
       e.skipped = on;
-      if (on) { e.done = false; delete e.doneAt; } else delete e.reason;
+      if (on) { e.done = false; delete e.doneAt; sfx('womp'); } else delete e.reason;
       save(); renderChecklist(); openTask(id);
     };
     for (const b of root.querySelectorAll('[data-reason]')) {
       b.onclick = () => {
-        e.reason = b.dataset.reason;
-        for (const o of root.querySelectorAll('[data-reason]')) o.setAttribute('aria-pressed', String(o === b));
+        // « Fait, mais oublié de cocher » : la tâche redevient faite (avec une petite note).
+        if (b.dataset.reason === 'oublie') {
+          e.skipped = false; delete e.reason; e.done = true; e.doneAt = new Date().toISOString(); e.forgot = true;
+          save(); closeSheet(); renderChecklist(); sfx('check', { level: 0.5 }); toast(t('forgotDone'), 'ok', () => { e.done = false; delete e.doneAt; delete e.forgot; e.skipped = true; save(); renderChecklist(); });
+          return;
+        }
+        e.reason = b.dataset.reason === e.reason ? '' : b.dataset.reason; // retoucher : enlève la raison (c'est facultatif)
+        for (const o of root.querySelectorAll('[data-reason]')) o.setAttribute('aria-pressed', String(o.dataset.reason === e.reason));
+        if (e.reason === 'autre') { const r = root.querySelector('#remark'); r.placeholder = t('otherWhyPh'); r.focus({ preventScroll: false }); }
         save(); renderChecklist();
       };
     }
@@ -2349,7 +2381,7 @@ $('#finishBtn').addEventListener('click', () => {
   if (notStarted()) { queueDraft(); toast(t('sendWait', sendWhen()), 'muted'); sfx('error'); return; }
   if (!canEnd()) { saveDraft({ manual: true }); return; }
   // Tout est coché : « Fin du quart » lance la fête (lapin, confettis, accord), puis le résumé.
-  if (allDone()) { showAllDone(); celebrate(); confettiRain(); sfx('celebrate'); sfx('cheer'); buzz('lift'); return; }
+  if (allDone()) { showAllDone(); celebrate(); confettiRain(); sfx('celebrate'); if (cheerAllowed()) sfx('cheer'); buzz('lift'); return; }
   openFinish();
 });
 // Le quart peut se fermer : chaque tâche cochée ou marquée « Pas pu faire », ou l'heure de fin passée.
@@ -2537,7 +2569,26 @@ async function saveShift() {
   paintStatic();
   show('sent');
   celebrate();
+  confettiRain();
+  // Propriétaire : le « Bravo », puis retour tout seul au tableau de bord, avec un élan (flou de
+  // mouvement) — sauf si on touche un bouton ici (on reste alors sur cette page).
+  sentAutoHome();
 }
+let sentTimer = 0;
+function sentAutoHome() {
+  clearTimeout(sentTimer);
+  const bar = $('#sentGo');
+  bar.hidden = false;
+  bar.classList.remove('run'); void bar.offsetWidth; bar.classList.add('run');
+  sentTimer = setTimeout(() => {
+    if (current !== 'sent') return;
+    bar.hidden = true;
+    navOverride = 'rush';
+    openHub();
+    setTimeout(() => { if (current === 'hub') { celebrate(); sfx('brim'); } }, reducedMotion() ? 0 : 520);
+  }, reducedMotion() ? 2600 : 3400);
+}
+for (const b of document.querySelectorAll('#sent button')) b.addEventListener('click', () => { clearTimeout(sentTimer); $('#sentGo').hidden = true; }, true);
 
 // Une petite victoire à la fin : quart parfait, ou série de quarts complets.
 function winLine(name, summary) {
@@ -3714,8 +3765,12 @@ function placeQuickBar(id) {
   $('#qbAccount').hidden = true; // dans Réglages maintenant
   bar.classList.toggle('no-tools', id === 'setup'); // l'accueil a déjà ses boutons
   // Sur une page d'onglet, la barre du bas a déjà Accueil, Mon quart et les signalements.
+  // Le bouton Retour reste toujours là (propriétaire); sur une page d'onglet, les autres raccourcis
+  // (Mes tâches, Superviseur) sont déjà dans la barre du bas.
   const root = tabBarOn() && TAB_ROOTS.has(id);
-  bar.querySelector('[data-front]').hidden = root;
+  const back = bar.querySelector('[data-front]');
+  back.hidden = false;
+  back.querySelector('span').textContent = t(canGoBack() ? 'goBack' : 'frontPage');
   if (root) { $('#qbTasks').hidden = true; $('#qbBoss').hidden = true; }
 }
 $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
@@ -3957,9 +4012,26 @@ function openNextOverview(pick) {
     $('#ovTime').onclick = () => { closeSheet(); setTimeout(() => openScheduleSheet(), 340); }; // les heures se changent dans « Quand travailles-tu? »
   }, `${isRealAdmin() ? `<button type="button" class="btn primary" id="ovSim">${t('simulationStart')}</button>` : ''}<button type="button" class="btn ghost" id="ovTime">${t('ovChangeTime')}</button><button type="button" class="btn primary" id="ovGo"${live || !state ? '' : ' disabled'}>${live ? t('ovBack') : t('ovStart')}</button>`);
 }
+// Propriétaire : un petit coup de pouce, doux, seulement si le quart est commencé (pointé) et que rien
+// n'a bougé depuis 60 minutes. Une fois par période calme, jamais de rouge, jamais d'heure affichée.
+const NUDGE_MIN = 60;
+function gentleNudge() {
+  if (!state?.date || !state.tasks?.pointage?.done || !plan) return;
+  const now = nowMinutes();
+  if (now === null || now >= plan.end) return;
+  const quietSince = Date.parse(state.updatedAt || state.tasks.pointage.doneAt || '') || 0;
+  if (!quietSince || Date.now() - quietSince < NUDGE_MIN * 6e4) return;
+  if ((prefs.nudgedFor || '') === state.updatedAt) return; // déjà dit pour cette période calme
+  prefs.nudgedFor = state.updatedAt; savePrefs();
+  const next = plan.items.find((it) => it.kind === 'task' && !state.tasks[it.id]?.done && !state.tasks[it.id]?.skipped);
+  if (!next) return;
+  toast(t('nudge', next.title), 'muted');
+  buzz('step');
+}
 // Le compte à rebours avance; 30 min avant, la carte passe à « C'est l'heure ».
 setInterval(() => {
   if (document.hidden || !session.user) return;
+  gentleNudge();
   if (autoStart()) return;
   if (current === 'auth') paintFront();
 }, 20000);
@@ -3984,7 +4056,15 @@ function goFront() {
   show('auth');
   if (bossWatching()) refreshBossCount(); // Daniel voit tout de suite s'il y a un problème urgent
 }
-for (const b of document.querySelectorAll('[data-front]')) b.addEventListener('click', () => (session.user ? openHub() : goFront())); // « Accueil » : le tableau de bord
+// « Retour » (propriétaire, 25 oct.) : toujours là, et il ramène à la page d'avant. Sans page d'avant
+// (ouvert par un lien), il mène au tableau de bord.
+const canGoBack = () => (history.state?.d || 0) > 0;
+function goBack() {
+  sfx('tick');
+  if (canGoBack()) history.back();
+  else if (session.user) openHub(); else goFront();
+}
+for (const b of document.querySelectorAll('[data-front]')) b.addEventListener('click', goBack);
 // « Recommencer le quart » : on demande une fois avant de tout décocher.
 $('#restartBtn').addEventListener('click', () => {
   openSheet(`<div class="sheet-head"><h2>${t('restartTitle')}</h2></div><p class="lede">${t('restartBody')}</p>`, (root) => {
@@ -4675,7 +4755,9 @@ function renderProblem(p) {
       boss.problems = boss.problems.map((x) => (x.id === next.id ? next : x));
       paintBossCount();
       renderProblem(next);
-      toast(t(done ? 'reopened' : 'markedResolved'));
+      toast(t(done ? 'reopened' : 'markedResolved'), 'ok', async () => {
+        try { const back = await setProblemStatus(p.id, done ? 'resolved' : 'open'); boss.problems = boss.problems.map((x) => (x.id === back.id ? back : x)); paintBossCount(); if (current === 'problem') renderProblem(back); toast(t('undone'), 'muted'); } catch { toast(t('customLater'), 'muted'); }
+      });
       if (!done) celebrate();
     } catch (err) {
       ev.currentTarget.disabled = false;
@@ -5645,10 +5727,14 @@ function openDayEdit(email, date) {
       saveDay(mode === 'off' ? { off: true } : hrs);
     };
   }, `<button type="button" class="btn primary" id="deSave">${esc(t('dayEditSave'))}</button>`);
-  async function saveDay(body) {
+  async function saveDay(body, undoing = false) {
+    const before = teamPlan.overrides?.[email]?.[date];
     try { await request('plan', { method: 'POST', body: { action: 'override', email, date, ...body } }); }
     catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
-    closeSheet(); toast(t('dayEditDone', u.name.split(' ')[0])); sfx('save');
+    if (!undoing) closeSheet();
+    sfx('save');
+    if (undoing) toast(t('undone'), 'muted');
+    else toast(t('dayEditDone', u.name.split(' ')[0]), 'ok', () => saveDay(before ? (before.off ? { off: true } : { start: before.start, end: before.end }) : { clear: true }, true));
     await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
     rerenderBossViews();
   }
@@ -5678,9 +5764,11 @@ function openTaskSheet(date, preWho = '') {
     $('#tkSave').onclick = async () => {
       const title = root.querySelector('#tkTitle').value.trim();
       if (!title) { root.querySelector('#tkTitle').focus(); toast(t('taskNeedTitle'), 'muted'); return; }
-      try { await request('plan', { method: 'POST', body: { action: 'task', date, title, time: root.querySelector('#tkTime').value || '', minutes: mins, who } }); }
+      let made = null;
+      try { made = (await request('plan', { method: 'POST', body: { action: 'task', date, title, time: root.querySelector('#tkTime').value || '', minutes: mins, who } })).task; }
       catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
-      closeSheet(); toast(t('taskAdded')); sfx('save');
+      closeSheet(); sfx('save');
+      toast(t('taskAdded'), 'ok', made?.id ? async () => { try { await request('plan', { method: 'POST', body: { action: 'deltask', date, id: made.id } }); await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13)); rerenderBossViews(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } } : null);
       await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
       rerenderBossViews();
     };
