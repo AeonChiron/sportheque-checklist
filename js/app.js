@@ -139,6 +139,7 @@ function show(id) {
   document.documentElement.classList.toggle('on-floor', id === 'auth'); // la page du plancher ne défile pas
   if (id === 'auth') requestAnimationFrame(() => window.scrollTo(0, 0));
   placeQuickBar(id);
+  paintTabBar();
   if (!target.hidden) return;
   const swap = () => {
     for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
@@ -150,7 +151,9 @@ function show(id) {
     target.enterTimer = setTimeout(() => target.classList.remove('enter'), 800); // pas de reprise à chaque mise à jour
   };
   if (prev && document.startViewTransition && !reducedMotion() && !document.hidden) {
-    document.documentElement.dataset.nav = (RANK[id] ?? 0) < (RANK[prev] ?? 0) ? 'back' : 'fwd';
+    // Propriétaire : glisser quand on va plus loin, fondu entre les onglets de la barre du bas.
+    const tabs = tabOf(prev) && tabOf(id) && tabOf(prev) !== tabOf(id) && TAB_ROOTS.has(id) && TAB_ROOTS.has(prev);
+    document.documentElement.dataset.nav = tabs ? 'tab' : (RANK[id] ?? 0) < (RANK[prev] ?? 0) ? 'back' : 'fwd';
     document.startViewTransition(swap);
   } else swap();
 }
@@ -160,7 +163,7 @@ if (document.startViewTransition) document.documentElement.classList.add('vt');
 const PILL_HIDDEN = new Set(['checklist', 'finish', 'sent', 'auth', 'hub']); // le tableau de bord a sa grande carte
 function paintShiftPill() {
   const pill = $('#shiftPill');
-  const on = Boolean(state && plan && !PILL_HIDDEN.has(current) && !(current === 'history' && !bossWatching())); // Mes shifts : la carte du quart fait déjà ce travail
+  const on = Boolean(state && plan && !PILL_HIDDEN.has(current) && !tabBarOn() && !(current === 'history' && !bossWatching())); // la barre du bas a « Mon quart »
   pill.hidden = !on;
   document.documentElement.classList.toggle('has-pill', on);
   if (!on) return;
@@ -3710,8 +3713,73 @@ function placeQuickBar(id) {
   $('#qbVisit').hidden = !isVisitor();
   $('#qbAccount').hidden = true; // dans Réglages maintenant
   bar.classList.toggle('no-tools', id === 'setup'); // l'accueil a déjà ses boutons
+  // Sur une page d'onglet, la barre du bas a déjà Accueil, Mon quart et les signalements.
+  const root = tabBarOn() && TAB_ROOTS.has(id);
+  bar.querySelector('[data-front]').hidden = root;
+  if (root) { $('#qbTasks').hidden = true; $('#qbBoss').hidden = true; }
 }
 $('#qbTasks').addEventListener('click', () => { if (state) openChecklist(); });
+
+// ---------- La barre du bas / le rail (propriétaire, 25 oct.) ----------
+// Téléphone : quatre onglets en bas, à portée de pouce. Ordinateur : les mêmes, en rail à gauche.
+// Employé : Accueil · Mon quart · Historique · Équipe. Superviseur : Accueil · Signalements · Rapports · Équipe.
+// Cachée pendant le quart (la checklist a sa propre barre), à l'envoi et sur la page bleue.
+const TAB_HIDDEN = new Set(['auth', 'setup', 'checklist', 'finish', 'sent', 'review', 'poster', 'problem']);
+const TAB_ROOTS = new Set(['hub', 'mine', 'glance', 'teamweek', 'todaygym', 'boss', 'history', 'plan', 'method']);
+const TAB_ICO = {
+  hub: '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
+  shift: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5M8.5 11l2 2 4-4M8.5 17h7"/>',
+  history: '<path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2"/>',
+  team: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.6 4.6 0 0 1 21 18.5"/>',
+  problems: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  reports: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+};
+const tabsFor = () => (bossWatching() ? ['hub', 'problems', 'reports', 'team'] : ['hub', 'shift', 'history', 'team']);
+function tabOf(id) {
+  if (id === 'hub') return 'hub';
+  if (id === 'checklist' || id === 'glance') return bossWatching() ? 'team' : 'shift';
+  if (id === 'mine' || id === 'plan') return 'history';
+  if (id === 'history') return bossWatching() ? 'reports' : 'history';
+  if (id === 'boss') return 'problems';
+  if (id === 'teamweek' || id === 'todaygym') return 'team';
+  if (id === 'method') return 'hub';
+  return '';
+}
+// La barre vit au niveau de la page (un parent transformé la ferait suivre la colonne du milieu).
+document.body.append($('#tabBar'));
+const tabBarOn = () => Boolean(session.user) && !adminHome() && !TAB_HIDDEN.has(current) && Boolean(tabOf(current));
+function paintTabBar() {
+  const bar = $('#tabBar');
+  const on = tabBarOn();
+  bar.hidden = !on;
+  document.documentElement.classList.toggle('has-tabbar', on);
+  if (!on) return;
+  const tabs = tabsFor(), act = tabOf(current);
+  const label = { hub: t('tabHome'), shift: t('tabShift'), history: t('tabHistory'), team: t('tabTeam'), problems: t('tabProblemsShort'), reports: t('tabReports') };
+  const urgent = bossWatching() ? urgentOpen().length : 0;
+  const live = !bossWatching() && Boolean(state?.date);
+  const sig = `${tabs.join()}|${act}|${urgent}|${live}|${lang()}`;
+  if (bar.dataset.sig === sig) return;
+  bar.dataset.sig = sig;
+  bar.style.setProperty('--n', tabs.length);
+  bar.style.setProperty('--i', Math.max(0, tabs.indexOf(act)));
+  bar.innerHTML = `<span class="tb-glow" aria-hidden="true"></span>${tabs.map((k) => `<button type="button" class="tb-item${k === act ? ' on' : ''}" data-tab="${k}"${k === act ? ' aria-current="page"' : ''}>
+    <span class="tb-ico"><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_ICO[k]}</svg>${k === 'shift' && live ? '<i class="tb-live" aria-hidden="true"></i>' : ''}${k === 'problems' && urgent ? `<i class="tb-badge num">${urgent}</i>` : ''}</span>
+    <span class="tb-label">${esc(label[k])}</span></button>`).join('')}`;
+}
+$('#tabBar').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tab]');
+  if (!b) return;
+  const k = b.dataset.tab;
+  sfx('tick'); buzz('step');
+  if (k === tabOf(current) && TAB_ROOTS.has(current)) { window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' }); if (k !== 'shift' || current !== 'glance') return; }
+  if (k === 'hub') openHub();
+  else if (k === 'shift') { if (state?.date) openChecklist(); else { const tg = myShiftTarget(); if (tg) openGlance(tg); else openScheduleSheet(); } }
+  else if (k === 'history') openMine();
+  else if (k === 'team') openTeamWeek();
+  else if (k === 'problems') { boss.tab = 'problems'; if (location.hash === '#patron') openBoss(); else location.hash = 'patron'; }
+  else if (k === 'reports') { if (location.hash === '#historique') openHistory({ team: true }); else location.hash = 'historique'; }
+});
 // La hauteur du titre de la checklist (il défile; le reste de l'en-tête colle).
 {
   const head = $('#checklist > .topbar'), row = head.querySelector('.topbar-row');
@@ -4994,9 +5062,11 @@ async function ensureWeek(mon, force = false) {
     wk.days[mon] = Object.fromEntries(Object.entries(r.days || {}).map(([d, list]) => [d, (list || []).filter((x) => !x.open)]));
   } catch { wk.days[mon] = {}; }
   wk.loading[mon] = false;
-  if (current === 'hub') renderHub({ animate: false });
+  rerenderWeek();
 }
 const shiftsOn = (d) => wk.days[mondayOf(d)]?.[d] || [];
+// La semaine vit dans « Historique » (employé) et sur le tableau de bord (superviseur).
+function rerenderWeek() { if (current === 'hub') renderHub({ animate: false }); else if (current === 'mine') renderMine({ animate: false }); }
 // Le résumé d'une journée, pour tout le gym.
 function dayDigest(d) {
   const list = shiftsOn(d);
@@ -5049,7 +5119,7 @@ function weekCard() {
 }
 document.addEventListener('click', (e) => {
   const nav = e.target.closest('[data-wk-nav]');
-  if (nav) { sfx('tick'); wk.mon = addDays(wk.mon || mondayOf(todayISO()), 7 * Number(nav.dataset.wkNav)); renderHub({ animate: false }); return; }
+  if (nav) { sfx('tick'); wk.mon = addDays(wk.mon || mondayOf(todayISO()), 7 * Number(nav.dataset.wkNav)); rerenderWeek(); return; }
   const day = e.target.closest('[data-wk-day]');
   if (day) openDaySheet(day.dataset.wkDay);
 });
@@ -5086,19 +5156,25 @@ async function openDaySheet(d) {
     root.querySelector('[data-dy-glance]')?.addEventListener('click', () => { closeSheet(); const m = mySched(d); setTimeout(() => openGlance({ mine: true, live: false, date: d, start: m.start, end: m.end }), 320); });
   }, bossWatching() && dg && dg.shifts.length ? `<button type="button" class="btn ghost" data-hub="reports">${esc(t('wkSeeReports'))}</button>` : '');
 }
+// Les petits liens du bas du tableau de bord : le manuel (le « pourquoi »), plus tard les idées.
+function smallLinks() {
+  return `<nav class="hb-links" aria-label="${esc(t('moreLinks'))}">
+    <button type="button" class="hb-link" data-hub="method">${hubIco('method')}<span><b>${esc(t('tMethod'))}</b><small>${esc(t('tMethodSub'))}</small></span>${CHEV_R}</button>
+  </nav>`;
+}
 const tile = (k, ico, title, sub, extra = '') => `<button type="button" class="hb-tile t-${k}" data-hub="${k}">${hubIco(ico)}<span class="hb-tt"><b>${esc(title)}</b><small>${esc(sub)}</small></span>${extra}</button>`;
 
 function hubEmployee() {
   const tg = myShiftTarget();
   const fixable = (hist.recent || []).filter((s) => !s.open && ownFixable(s)).length;
-  return `${hubMainCard(tg)}${weekCard()}${tg ? glanceCard(tg) : ''}
+  // Propriétaire : la semaine vit dans l'onglet « Historique »; le manuel reste là, plus petit.
+  return `${hubMainCard(tg)}${tg ? glanceCard(tg) : ''}
     <nav class="hb-tiles" aria-label="${esc(t('hubAsk'))}">
-      ${tile('mine', 'mine', t('tMine'), t('tMineSub'), fixable ? `<span class="hb-badge num">${esc(t('fixBadge', fixable))}</span>` : '')}
       ${tile('plan', 'plan', t('tPlan'), t('tPlanSub'))}
-      ${tile('teamweek', 'team', t('tTeamAll'), t('tTeamAllSub'))}
       ${tile('flag', 'flag', t('tFlag'), t('tFlagSub'))}
-      ${tile('method', 'method', t('tMethod'), t('tMethodSub'))}
-    </nav>`;
+      ${fixable ? tile('mine', 'mine', t('tMine'), t('tMineSub'), `<span class="hb-badge num">${esc(t('fixBadge', fixable))}</span>`) : ''}
+    </nav>
+    ${smallLinks()}`;
 }
 // La grande carte : commencer, continuer ou envoyer son quart. C'est elle qui sert le plus.
 function hubMainCard(tg) {
@@ -5248,12 +5324,10 @@ function hubBoss() {
   </section>`;
   return `${main}${todayCard}${weekCard()}
     <nav class="hb-tiles">
-      ${tile('reports', 'reports', t('tReports'), t('tReportsSub'))}
-      ${tile('teamweek', 'team', t('tTeamWeek'), t('tTeamWeekSub'))}
       ${tile('myhours', 'plan', t('tMyHours'), t('tMyHoursSub'))}
-      ${tile('method', 'method', t('tMethod'), t('tMethodSub'))}
       ${tile('access', 'access', t('tAccess'), t('tAccessSub'))}
-    </nav>`;
+    </nav>
+    ${smallLinks()}`;
 }
 // ---------- Superviseurs et employés, AM et PM (propriétaire, 22 oct.) ----------
 // AM : on commence avant midi. PM : tout le reste.
@@ -5385,6 +5459,8 @@ async function openMine({ keep = false } = {}) {
   paintStatic();
   renderMine({ animate: !keep });
   show('mine');
+  ensureWeek(mondayOf(todayISO()), true); // la semaine (ses anneaux) se recharge à chaque visite
+  if (session.user && accounts() && !boss.teamLoaded) loadTeamView(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13)).then(() => { if (current === 'mine') renderMine({ animate: false }); });
   if (!hist.loaded || !keep) {
     const r = await loadRecent(500).catch(() => null);
     if (r) { hist.recent = r.shifts; hist.loaded = true; hist.live = r.live; }
@@ -5407,7 +5483,8 @@ function renderMine({ animate = true } = {}) {
     const left = ownFixable(x) ? Math.max(1, Math.ceil((EDIT_HOURS * 3600e3 - (Date.now() - at)) / 3600e3)) : 0;
     return `<button type="button" class="d-shift mine-row" data-mine="${i}" style="--k:${Math.min(i, 10)}">${dDate(x.date)}<span class="d-st"><b class="num">${x.start ? `${nb(hhmm(x.start))} – ${nb(hhmm(x.end))}` : esc(SHIFTS[x.shift][lang()].short)}</b><small>${esc(cap(dateOf(x.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</small>${left ? `<span class="fix-left">${esc(t('fixLeft', left))}</span>` : ''}${x.ghost ? `<span class="fix-left ghost">${esc(t('ghostTag'))}</span>` : ''}</span><span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>${CHEV_R}</button>`;
   };
-  $('#mineBody').innerHTML = `<p class="page-lede">${esc(t('mineLede'))}</p>
+  $('#mineBody').innerHTML = `${weekCard()}
+    <h2 class="sec-h">${esc(t('mineMine'))}</h2><p class="page-lede">${esc(t('mineLede'))}</p>
     <div class="d-stats">
       <div class="d-stat"><p class="ds-label wk">${esc(t('mineWeek'))}</p><p class="ds-num num" ${wait ? '' : 'data-count'}>${wait ? '–' : week}</p><p class="ds-sub">${esc(t('mineShifts', week).replace(/^\d+\s*/, ''))}</p></div>
       <div class="d-stat"><p class="ds-label mo">${esc(t('mineMonth'))}</p><p class="ds-num num" ${wait || pct === null ? '' : 'data-count'}>${wait || pct === null ? '–' : `${pct}<small>%</small>`}</p><p class="ds-sub">${esc(t('mineDone'))}</p></div>
@@ -5714,6 +5791,7 @@ document.addEventListener('click', (ev) => {
   if (go.dataset.go === 'poster') { location.hash = 'affiche'; return; }
   if (go.dataset.go === 'problem') { location.hash = `probleme=${go.dataset.id}`; return; }
   if (go.dataset.go === 'history') {
+    if (!bossWatching()) { openMine(); return; } // propriétaire : une seule page « Historique » pour l'employé
     if (location.hash === '#historique') openHistory(); else location.hash = 'historique';
     return;
   }
@@ -5740,7 +5818,7 @@ function route() {
   if (h === '#aujourdhui') return session.user ? openToday() : goFront();
   if (h === '#affiche') return isBoss() ? openPoster() : openHub(); // l'affiche QR : superviseurs seulement
   if (location.hash === '#apercu') return openApercu();
-  if (location.hash === '#historique') return openHistory();
+  if (location.hash === '#historique') return bossWatching() ? openHistory() : openMine(); // l'employé : une seule page « Historique »
   dropStaleShift();
   if (state?.name && state?.date) return openChecklist();
   if (autoStart()) return;

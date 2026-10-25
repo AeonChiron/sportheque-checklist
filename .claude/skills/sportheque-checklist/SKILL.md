@@ -189,3 +189,8 @@ Plain static site + one serverless function. No build step.
 - Undo own problem report (12 h, still open): `problems {action:'undo'}`; employees list only their own via `problems?mine=1`.
 - Admin "Mode employé" (`auth {action:'workmode'}`, `user.workMode`): on → real shifts, shown to the team as an employee; off → ghost, hidden from team lists. Never shown as admin.
 - Before-loop backup: commit c228873 (tag/branch push is blocked by the proxy; artifact "Sporthèque avant la boucle").
+
+## Navigation (loop round 2)
+- Bottom tab bar on phones (`#tabBar`, moved to `<body>`; `margin:0` because body children get auto margins), side rail ≥1000 px. Employee: Accueil · Mon quart · Historique · Équipe. Supervisor: Accueil · Signalements · Rapports · Équipe. Hidden on auth/setup/checklist/finish/sent/review/poster/problem and the admin dashboard. `tabOf(screen)` maps screens to tabs; tab switches fade (`data-nav="tab"`), deeper pages slide.
+- Employee "Historique" (`#mine`): week calendar on top + Mes quarts. The old employee history page is gone (`#historique` and data-go="history" → Historique for non-supervisors). Supervisors keep "Rapports" (#historique).
+- Hub tiles no longer duplicate tabs; the manual is a small link (`smallLinks()`). On tab pages the top "Accueil / Mes tâches / Superviseur" pills hide.

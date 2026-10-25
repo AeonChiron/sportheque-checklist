@@ -3543,3 +3543,51 @@ body.fictive .screen:not(.pool-screen) { padding-top: var(--fict-pad) !important
 .dy-flags .pb-mini.urgent { border-color: color-mix(in srgb, #e25a3b 50%, transparent); }
 .dy-flags .pb-mini.urgent .ico { color: #e25a3b; }
 .dy-flags .pb-mini small { color: var(--muted); }
+
+/* ---------- La barre du bas / le rail (propriétaire, 25 oct.) ---------- */
+.tabbar { --n: 4; --i: 0; margin: 0; position: fixed; z-index: 45; left: 50%; bottom: calc(10px + var(--safe-b)); transform: translateX(-50%); width: min(460px, calc(100% - 20px)); display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 6px; border-radius: 26px; background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px) saturate(1.6); -webkit-backdrop-filter: blur(18px) saturate(1.6); border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: 0 14px 34px -14px rgba(10, 30, 60, .45), 0 1px 0 rgba(255, 255, 255, .5) inset; view-transition-name: tabbar; animation: tb-in .45s var(--spring) both; }
+.tabbar[hidden] { display: none; }
+@keyframes tb-in { from { opacity: 0; transform: translate(-50%, 24px); } }
+.tb-glow { position: absolute; z-index: 0; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / var(--n)); border-radius: 20px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent) inset; transform: translateX(calc(var(--i) * 100%)); transition: transform .42s var(--spring); }
+.tb-item { position: relative; z-index: 1; display: grid; justify-items: center; gap: 3px; padding: 7px 2px 6px; min-height: 54px; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; border-radius: 20px; -webkit-tap-highlight-color: transparent; }
+.tb-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tb-ico { position: relative; display: grid; place-items: center; width: 28px; height: 26px; }
+.tb-ico svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; transition: transform .3s var(--spring); }
+.tb-label { font: 650 11px/1.1 var(--display); letter-spacing: .02em; white-space: nowrap; }
+.tb-item.on { color: var(--accent); }
+.tb-item.on .tb-ico svg { stroke-width: 2.3; transform: translateY(-1px) scale(1.06); }
+.tb-item:active .tb-ico svg { transform: scale(.88); }
+.tb-live { position: absolute; top: 0; right: 0; width: 9px; height: 9px; border-radius: 50%; background: #1f9d5c; box-shadow: 0 0 0 2px var(--surface); animation: tb-pulse 1.8s ease-in-out infinite; }
+@keyframes tb-pulse { 50% { box-shadow: 0 0 0 2px var(--surface), 0 0 0 6px rgba(31, 157, 92, .25); } }
+.tb-badge { position: absolute; top: -4px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #e25a3b; color: #fff; font: 800 11px/18px var(--font); font-style: normal; text-align: center; box-shadow: 0 0 0 2px var(--surface); }
+html.has-tabbar .screen { padding-bottom: calc(96px + var(--safe-b)); }
+html.has-tabbar .toast { bottom: calc(92px + var(--safe-b)); }
+html.has-tabbar .bottom-spacer { height: 0; }
+@media (prefers-reduced-motion: reduce) { .tabbar, .tb-glow, .tb-live { animation: none !important; transition: none !important; } }
+/* Ordinateur : un rail à gauche */
+@media (min-width: 1000px) {
+  .tabbar { left: max(16px, env(safe-area-inset-left, 0px)); top: 50%; bottom: auto; transform: translateY(-50%); width: 92px; grid-template-columns: 1fr; grid-template-rows: repeat(var(--n), 1fr); padding: 8px; border-radius: 28px; animation-name: tb-in-side; }
+  @keyframes tb-in-side { from { opacity: 0; transform: translate(-24px, -50%); } }
+  .tb-glow { left: 8px; right: 8px; width: auto; top: 8px; bottom: auto; height: calc((100% - 16px) / var(--n)); transform: translateY(calc(var(--i) * 100%)); }
+  .tb-item { min-height: 72px; gap: 5px; }
+  .tb-label { font-size: 12px; }
+  html.has-tabbar .screen { padding-bottom: calc(32px + var(--safe-b)); }
+  html.has-tabbar .toast { bottom: calc(28px + var(--safe-b)); }
+}
+/* Fondu entre onglets (glisser quand on va plus loin) */
+html[data-nav="tab"]::view-transition-old(root) { animation: tab-out .16s ease both; }
+html[data-nav="tab"]::view-transition-new(root) { animation: tab-in .26s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes tab-out { to { opacity: 0; } }
+@keyframes tab-in { from { opacity: 0; transform: translateY(6px) scale(.995); } }
+::view-transition-group(tabbar) { animation: none; }
+/* Petits liens du tableau de bord (le manuel, plus petit) */
+.hb-links { display: grid; gap: 8px; margin-top: 2px; }
+.hb-link { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; transition: transform .18s var(--spring); }
+.hb-link:active { transform: scale(.98); }
+.hb-link .hb-ico { width: 34px; height: 34px; border-radius: 11px; }
+.hb-link > span:not(.hb-ico) { flex: 1; display: grid; gap: 1px; min-width: 0; }
+.hb-link b { font: 700 15px/1.2 var(--font); }
+.hb-link small { font: 500 12.5px/1.3 var(--font); color: var(--muted); }
+.hb-link > .ico { width: 18px; height: 18px; opacity: .45; }
+.sec-h { margin: 22px 0 4px; font: 750 20px/1.15 var(--serif); font-variation-settings: 'SOFT' 100; }
+#mineBody > .hb-week { margin-top: 4px; }
