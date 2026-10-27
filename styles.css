@@ -3783,3 +3783,9 @@ html.calm-mode *, html.calm-mode *::before, html.calm-mode *::after { animation-
 .pr-vol input[type="range"]::-moz-range-progress { height: 6px; border-radius: 99px; background: var(--accent); }
 .pr-vol input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
 .pr-vol input[type="range"]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+
+/* Barre du bas (Signaler / Fin du quart) : collée en bas en « sticky » plutôt qu'en « fixed ».
+   Sur iPad (Safari), une barre « fixed » restait parfois coincée au milieu de la liste après un défilement. */
+.screen > .bottombar { position: sticky; left: auto; right: auto; bottom: 0; margin: 0 calc(-1 * var(--gutter-r)) 0 calc(-1 * var(--gutter-l)); max-width: none; }
+.screen > .bottom-spacer:has(+ .bottombar) { height: 12px; }
+html.has-tabbar .screen:has(> .bottombar) { padding-bottom: 0; }
