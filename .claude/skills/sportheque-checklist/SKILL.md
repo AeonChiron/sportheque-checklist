@@ -206,3 +206,4 @@ Plain static site + one serverless function. No build step.
 - Congé: `override {to, conge:true}` ranges; shown in the week strip and roster.
 - Préférences (`#preferences`): push kinds `remind, sched, task, urgent, weekly` + `quiet` (23–6 h Toronto, urgent ignores it). `prefs.calm` → `calm-mode` class, no sounds, reducedMotion. `prefs.textSize` normal/large/xl (1, 1.15, 1.3). `setVolume` in fx.js (default 0.7).
 - Weekly summary (Q35 = weekly only): Sunday 21:00–21:14 Toronto, leads only, once per week (`weeklyFor`): gym % + open urgent problems, nothing else.
+- Accueil : un quart ouvert mais pas commencé (ex. demain) s'affiche « Ton prochain quart · dans X », bouton « Voir mon prochain quart »; décompte en j/h/min (h/min sous 24 h).

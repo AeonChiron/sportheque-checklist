@@ -4007,7 +4007,7 @@ if (simulated) {
 // La boîte du prochain quart, sous « Bon retour » : le jour, les heures et le
 // compte à rebours. Un toucher fait la même chose que la carte.
 function countdown(min) {
-  if (min >= 1440) return t('cdDays', Math.floor(min / 1440), Math.floor((min % 1440) / 60));
+  if (min >= 1440) return t('cdDays', Math.floor(min / 1440), Math.floor((min % 1440) / 60), min % 60);
   if (min >= 60) return t('cdHours', Math.floor(min / 60), String(min % 60).padStart(2, '0'));
   return t('cdMin', Math.max(1, min));
 }
@@ -5028,7 +5028,12 @@ const hm = (iso) => nb(f(toMin(iso)));
 
 // Le quart dont on parle : celui qui est ouvert, sinon le prochain à l'horaire.
 function myShiftTarget() {
-  if (state?.date && state?.start) return { live: true, mine: true, date: state.date, start: state.start, end: state.end, special: state.special || '', custom: state.custom || [] };
+  if (state?.date && state?.start) {
+    // Ouvert mais pas encore commencé (ex. demain) : c'est un quart « à venir », pas « commencé ».
+    const left = Math.ceil((startAt(state) - Date.now()) / 6e4);
+    const begun = left <= 0 || Object.values(state.tasks || {}).some((x) => x.done);
+    return { live: begun, mine: true, ready: begun || left <= EARLY_MIN, date: state.date, start: state.start, end: state.end, special: state.special || '', custom: state.custom || [] };
+  }
   const nx = nextShift();
   return nx ? { live: false, mine: true, ...nx } : null;
 }
@@ -5328,7 +5333,7 @@ function hubMainCard(tg) {
   const later = left > 0 && !tg.ready;
   const when = today ? t('sendAtTime', hm(tg.start)) : t('sendAtDay', dayWord(tg.date).toLowerCase(), hm(tg.start));
   return `<section class="hb-main${tg.ready ? ' is-now' : ''}" id="hbMain">${head(esc(t(tg.ready ? 'hbNow' : 'hbNext')), chip)}
-    <button type="button" class="hb-cta" data-hub="start"><span>${esc(t(tg.ready || today ? 'hbStart' : 'hbOpen'))}</span>${HUB_ICO.play}</button>
+    <button type="button" class="hb-cta" data-hub="start"><span>${esc(t(tg.ready ? 'hbStart' : 'hbView'))}</span>${HUB_ICO.play}</button>
     ${tg.changed && tg.by ? `<p class="hb-note hb-changed">${esc(t('hbChangedBy', tg.by))}</p>` : ''}
     ${crewLine(tg)}
     ${later ? `<p class="hb-note">${esc(t('hbEarly', when))}</p>` : ''}</section>`;
@@ -6368,6 +6373,7 @@ document.addEventListener('click', (ev) => {
   if (k === 'finish') { openFinish(); return; }
   if (k === 'start') {
     const tg = glanceTarget && current === 'glance' ? glanceTarget : myShiftTarget();
+    if (tg && !tg.ready && current !== 'glance') { openGlance(tg); return; } // trop tôt : on regarde le quart à venir
     if (state?.date) { openChecklist(); return; }
     if (tg) startScheduled(tg);
     return;
