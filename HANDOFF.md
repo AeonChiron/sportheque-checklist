@@ -14,7 +14,7 @@ Written 25 Oct 2026, 17:20 (America/Toronto), by the Claude session that ran the
 ## 1. Never do / always do (standing rules)
 
 Never:
-- **Deploy Netlify** unless the owner literally says "deploy netlify". Netlify redeploys only when a commit message contains `[netlify]` — never put that tag in a commit otherwise. Last Netlify deploy = commit `6c03f0b`; everything after it (server rules, team schedule `roster` route, supervisor plan/schedule, ghost posts, feedback, delete own shift, notifications, account-linked shifts, login pause…) is **not live yet**. Remind the owner of this in reports.
+- **Deploy Netlify** unless the owner literally says "deploy netlify". Netlify redeploys only when a commit message contains `[netlify]` — never put that tag in a commit otherwise. Last Netlify deploy = commit `a7dbb39` (27 oct.); before that `6c03f0b`; everything after it (server rules, team schedule `roster` route, supervisor plan/schedule, ghost posts, feedback, delete own shift, notifications, account-linked shifts, login pause…) is **not live yet**. Remind the owner of this in reports.
 - Invent facts (names, hours, data, results). Pretend-team data is fine (it's labeled fake). Flag what you couldn't verify.
 - Rank or score individual people anywhere (owner: "help, not watch"; he confirmed: **never rank people**). No check times shown. Supervisors never "validate" each shift.
 - Change fonts (Fraunces for titles, Saira Semi Condensed for labels, system font for text).
