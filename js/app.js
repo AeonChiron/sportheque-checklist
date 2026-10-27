@@ -5691,7 +5691,7 @@ function renderMethod({ animate = true } = {}) {
     <section class="mt-more"><h2>${esc(M.moreTitle)}</h2>
       <button type="button" class="hb-tile t-map" data-hub="map">${hubIco('zone')}<span class="hb-tt"><b>${esc(M.mapLink)}</b><small>${esc(M.mapSub)}</small></span></button>
       <button type="button" class="hb-tile t-tips" data-hub="tips">${hubIco('method')}<span class="hb-tt"><b>${esc(M.tipsLink)}</b><small>${esc(M.tipsSub)}</small></span></button></section>
-    <p class="mt-source">${esc(M.source)}</p></div>`;
+    </div>`;
   for (const d of $('#methodBody').querySelectorAll('details')) d.addEventListener('toggle', () => { if (d.open) { method.open.add(d.dataset.msec); sfx('open'); } else method.open.delete(d.dataset.msec); });
 }
 $('#methodBody').addEventListener('click', (ev) => {
