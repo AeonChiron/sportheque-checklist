@@ -3,6 +3,34 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-27-motion',
+    date: '2026-10-27',
+    fr: {
+      title: 'Des mouvements plus vivants',
+      items: [
+        'Le lapin de l’accueil colle au doigt, s’attrape plus facilement et ne glisse plus tout seul.',
+        'Cocher une tâche : le rond rebondit et des bulles de savon montent.',
+        'Pointer : la carte entre dans l’horloge et ressort poinçonnée (petit carnet animé).',
+        'Envoyer le rapport : un avion de papier s’envole.',
+        'Reflets d’eau sur la grande carte de l’accueil; l’anneau de progression se remplit en douceur.',
+        'La pastille de la barre du bas glisse d’un onglet à l’autre; les rapports se réorganisent en glissant.',
+        'Les fenêtres se ferment d’un petit coup vers le bas.',
+      ],
+    },
+    en: {
+      title: 'Livelier motion',
+      items: [
+        'The front-page bunny sticks to your finger, is easier to grab and no longer slides away.',
+        'Checking a task: the circle bounces and soap bubbles float up.',
+        'Clocking in: the card goes into the time clock and comes out punched (a little flipbook).',
+        'Sending the report: a paper plane flies off.',
+        'Water reflections on the big home card; the progress ring fills smoothly.',
+        'The bottom bar highlight glides between tabs; reports rearrange by sliding.',
+        'Sheets close with a quick flick down.',
+      ],
+    },
+  },
+  {
     id: '2026-10-25-boss',
     date: '2026-10-25',
     fr: {

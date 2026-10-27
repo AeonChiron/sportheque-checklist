@@ -207,3 +207,5 @@ Plain static site + one serverless function. No build step.
 - Préférences (`#preferences`): push kinds `remind, sched, task, urgent, weekly` + `quiet` (23–6 h Toronto, urgent ignores it). `prefs.calm` → `calm-mode` class, no sounds, reducedMotion. `prefs.textSize` normal/large/xl (1, 1.15, 1.3). `setVolume` in fx.js (default 0.7).
 - Weekly summary (Q35 = weekly only): Sunday 21:00–21:14 Toronto, leads only, once per week (`weeklyFor`): gym % + open urgent problems, nothing else.
 - Accueil : un quart ouvert mais pas commencé (ex. demain) s'affiche « Ton prochain quart · dans X », bouton « Voir mon prochain quart »; décompte en j/h/min (h/min sous 24 h).
+- Mouvements (27 oct.) : js/motion.js — ressorts (pastille des onglets, rond coché, anneau), FLIP (rapports), bulles (cocher), shader caustiques (carte d'accueil), flipbook (pointage), avion offset-path (envoi), feuille qui se ferme d'un coup. Pas de vidéo, squelette ni Rive/Lottie. Tout se tait en mode calme.
+- Ne plus pousser sur GitHub automatiquement (propriétaire, 26 oct.) : commit local; pousser seulement sur demande.

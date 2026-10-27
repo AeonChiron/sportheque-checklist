@@ -17,6 +17,7 @@ import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc, undoProblem, listMyProblems } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
+import { spring, boing, flip, bubbles, mountCaustics, flipbookPunch, paperPlane } from './motion.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport, deleteShift } from './board.js';
 import { key as shiftKey } from './board-shape.js';
 
@@ -1275,6 +1276,7 @@ function punchIn(manual = false) {
   landId = 'pointage';
   renderChecklist();
   justPunched = false;
+  flipbookPunch(document.querySelector('#taskList [data-id="pointage"] .t-icon')); // la carte entre dans l'horloge et ressort poinçonnée
   setTimeout(() => { sfx('punch'); buzz('plate'); celebrate(); }, 250);
 }
 function renderTimeline() {
@@ -1483,6 +1485,11 @@ function toggleDone(id) {
   if (e.done) landId = id;
   if (!wasAll && allDone()) liftNext = true;
   renderChecklist();
+  // Cocher : le rond rebondit (vrai ressort) et quelques bulles de savon montent (physique).
+  if (e.done) {
+    const ck = document.querySelector(`#taskList [data-id="${CSS.escape(id)}"] .check`);
+    if (ck) { boing(ck); const r = ck.getBoundingClientRect(); bubbles(r.left + r.width / 2, r.top + r.height / 2); }
+  }
   // Propriétaire : la grande fête (lapin, confettis, musique) seulement à « Fin du quart ».
   // La dernière tâche : le verre se remplit à ras bord, avec son propre son (pas une note de plus).
   if (e.done && !wasAll && allDone()) { sfx('brim'); buzz('plate'); }
@@ -1699,21 +1706,25 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#she
 
 // Glisser la feuille vers le bas pour la fermer.
 (() => {
-  let y0 = null;
+  // Elle suit le doigt; un petit coup rapide vers le bas suffit (vitesse), et elle résiste un peu vers le haut.
+  let y0 = null, last = null;
   const sheet = $('#sheet');
-  sheet.addEventListener('touchstart', (e) => { if ($('#sheetBody').scrollTop <= 0 && !e.target.closest('.gym3d')) y0 = e.touches[0].clientY; }, { passive: true });
+  sheet.addEventListener('touchstart', (e) => { if ($('#sheetBody').scrollTop <= 0 && !e.target.closest('.gym3d')) { y0 = e.touches[0].clientY; last = { y: y0, t: performance.now(), v: 0 }; } }, { passive: true });
   sheet.addEventListener('touchmove', (e) => {
     if (y0 === null) return;
-    const dy = e.touches[0].clientY - y0;
-    if (dy > 0) { sheet.classList.add('dragging'); sheet.style.setProperty('--drag', `${dy}px`); }
+    const y = e.touches[0].clientY, now = performance.now();
+    last.v = last.v * 0.5 + ((y - last.y) / Math.max(8, now - last.t)) * 0.5; last.y = y; last.t = now;
+    const dy = y - y0;
+    sheet.classList.add('dragging');
+    sheet.style.setProperty('--drag', `${dy > 0 ? dy : -Math.sqrt(-dy) * 2}px`);
   }, { passive: true });
   sheet.addEventListener('touchend', (e) => {
     if (y0 === null) return;
-    const dy = e.changedTouches[0].clientY - y0;
+    const dy = e.changedTouches[0].clientY - y0, flick = last.v > 0.6 && dy > 24;
     sheet.classList.remove('dragging');
     sheet.style.removeProperty('--drag');
     y0 = null;
-    if (dy > 90) closeSheet();
+    if (dy > 90 || flick) closeSheet();
   });
 })();
 
@@ -2575,6 +2586,7 @@ async function saveShift() {
   $('#sentWin').textContent = winLine(name, summary);
   $('#editShiftBtn').hidden = false;
   paintStatic();
+  paperPlane($('#sendBtn')); // le rapport s'envole en suivant une courbe
   show('sent');
   celebrate();
   confettiRain();
@@ -3411,7 +3423,7 @@ function histCard(s, i) {
     !all && unchecked && !s.open ? `<span class="tag time">${esc(t('nUnchecked', unchecked))}</span>` : '',
     s.notes || s.items.some((x) => x.remark) ? `<span class="tag note">${esc(t('remarks'))}</span>` : '',
   ].join('');
-  return `<button type="button" class="rp-card hi-card ${tone(m)}" data-hi="${i}" style="--k:${Math.min(i, 8)}">
+  return `<button type="button" class="rp-card hi-card ${tone(m)}" data-hi="${i}" data-fk="${esc(`${s.date}|${s.shift}|${s.uid || s.name}`)}" style="--k:${Math.min(i, 8)}">
     <span class="rv-ring small ${all ? 'r-ok' : 'r-warn'}" style="--p:${m.pct}"><span class="num">${m.pct}%</span></span>
     <span class="rp-main">
       <span class="hi-top"><b>${esc(s.name?.trim() || t('employeeUnknown'))}</b><span class="hi-meta num">${esc(SHIFTS[s.shift][L].short)}${s.start ? ` · ${hhmm(s.start)} – ${hhmm(s.end)}` : ''}</span></span>
@@ -3712,9 +3724,11 @@ $('#historyBody').addEventListener('click', (ev) => {
   if (ds.up) { const p = mySched(ds.up); const nx = nextShift(); openNextOverview(nx?.date === ds.up ? nx : { ...p, date: ds.up, ready: false }); return; }
   if (ds.upwk !== undefined) { const n = Number(ds.upwk); hist.up = n ? addDays(hist.up, 7 * n) : mondayOf(todayISO()); renderHistory(); return; }
   if (ds.hper || ds.hmode || ds.upwk !== undefined) sfx('tab');
-  if (ds.hby) { hist.by = ds.hby; hist.who = ''; sfx('tab'); renderHistory({ animate: false }); return; }
-  if (ds.hwho !== undefined) { hist.who = ds.hwho; sfx('tab'); renderHistory({ animate: false }); return; }
-  if (ds.hper) { hist.period = ds.hper; renderHistory({ animate: false }); return; }
+  // Changer de filtre : les cartes glissent vers leur nouvelle place (FLIP) au lieu de sauter.
+  const reflow = () => flip($('#historyBody'), '.hi-card, .hi-tally, .ap-stats > div', () => renderHistory({ animate: false }));
+  if (ds.hby) { hist.by = ds.hby; hist.who = ''; sfx('tab'); reflow(); return; }
+  if (ds.hwho !== undefined) { hist.who = ds.hwho; sfx('tab'); reflow(); return; }
+  if (ds.hper) { hist.period = ds.hper; reflow(); return; }
   if (ds.hmode) {
     if (ds.hmode === hist.mode) return;
     hist.mode = ds.hmode;
@@ -3859,7 +3873,10 @@ function paintTabBar() {
   if (bar.dataset.sig === sig) return;
   bar.dataset.sig = sig;
   bar.style.setProperty('--n', tabs.length);
-  bar.style.setProperty('--i', Math.max(0, tabs.indexOf(act)));
+  // La pastille glisse d'un onglet à l'autre avec un ressort (elle dépasse un peu, puis se pose).
+  const iTo = Math.max(0, tabs.indexOf(act)), iFrom = Number(bar.dataset.i ?? iTo);
+  bar.dataset.i = iTo;
+  spring('tabGlow', iFrom, iTo, (v) => bar.style.setProperty('--i', v.toFixed(3)), { stiffness: 380, damping: 26 });
   bar.innerHTML = `<span class="tb-glow" aria-hidden="true"></span>${tabs.map((k) => `<button type="button" class="tb-item${k === act ? ' on' : ''}" data-tab="${k}"${k === act ? ' aria-current="page"' : ''}>
     <span class="tb-ico"><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_ICO[k]}</svg>${k === 'shift' && live ? '<i class="tb-live" aria-hidden="true"></i>' : ''}${k === 'problems' && urgent ? `<i class="tb-badge num">${urgent}</i>` : ''}</span>
     <span class="tb-label">${esc(label[k])}</span></button>`).join('')}`;
@@ -5174,6 +5191,16 @@ function renderHub({ animate = true } = {}) {
   body.className = `hub-body${adminHome() ? ' is-admin' : bossWatching() ? ' is-boss' : ''}${animate && !reducedMotion() ? ' cascade' : ''}`;
   body.innerHTML = adminHome() ? hubAdmin() : bossWatching() ? hubBoss() : hubEmployee();
   paintAdminTools();
+  // La grande carte : des reflets d'eau (shader) et l'anneau qui se remplit avec un ressort.
+  const main = $('#hbMain');
+  if (main && !main.classList.contains('is-empty')) mountCaustics(main);
+  const ring = body.querySelector('.hb-ring');
+  if (ring) {
+    const to = Number(ring.style.getPropertyValue('--p')) || 0, from = renderHub.ringP ?? 0;
+    ring.style.setProperty('--p', from);
+    spring('hbRing', from, to, (v) => ring.style.setProperty('--p', v.toFixed(2)), { stiffness: 90, damping: 15 });
+    renderHub.ringP = to;
+  }
   if (animate) countUp(body);
 }
 // ---------- « Ta semaine en un coup d'œil » (propriétaire, 23 oct.) ----------
