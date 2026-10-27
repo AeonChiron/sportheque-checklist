@@ -5332,7 +5332,8 @@ function hubMainCard(tg) {
   const chip = `<span class="hb-chip num">${esc(left > 0 ? t('hbIn', countdown(left)) : t('nbGo'))}</span>`;
   const later = left > 0 && !tg.ready;
   const when = today ? t('sendAtTime', hm(tg.start)) : t('sendAtDay', dayWord(tg.date).toLowerCase(), hm(tg.start));
-  return `<section class="hb-main${tg.ready ? ' is-now' : ''}" id="hbMain">${head(esc(t(tg.ready ? 'hbNow' : 'hbNext')), chip)}
+  // « Ton quart est dans 11 h 30 min » : le temps qui reste, dans le titre (pas de pastille en double).
+  return `<section class="hb-main${tg.ready ? ' is-now' : ''}" id="hbMain">${head(esc(left > 0 ? t('hbInTitle', countdown(left)) : t('hbNow')), tg.ready && left > 0 ? chip : '')}
     <button type="button" class="hb-cta" data-hub="start"><span>${esc(t(tg.ready ? 'hbStart' : 'hbView'))}</span>${HUB_ICO.play}</button>
     ${tg.changed && tg.by ? `<p class="hb-note hb-changed">${esc(t('hbChangedBy', tg.by))}</p>` : ''}
     ${crewLine(tg)}
