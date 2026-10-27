@@ -54,7 +54,7 @@ export function mountPool(root) {
       else if (!horiz && (above ? s.y - oy < b.minY : s.y + oy > b.maxY)) horiz = true;
       const depth = horiz ? ox : oy;
       const sp = Math.hypot(s.vx, s.vy);
-      if (depth > 14 && sp < 260) {
+      if ((depth > 14 && sp < 260) || sp < 120) {
         // Bien enfoncé (on vient de le lâcher dessus) : il en sort en glissant, sans saut.
         const k = Math.min(1, dt * 7), push = Math.max(depth * k, 1.5);
         if (horiz) { s.x += left ? -push : push; s.vx = 0; } else { s.y += above ? -push : push; s.vy = 0; }
@@ -263,7 +263,7 @@ export function mountPool(root) {
     last = now; t += dt;
     const b = bounds();
     if (s.drag) {
-      const a = 1 - Math.exp(-16 * dt); // suit le doigt en douceur, un peu « dans l'eau », sans à-coups
+      const a = 1 - Math.exp(-45 * dt); // colle au doigt (juste un soupçon de douceur), même si l'iPad est lent
       const nx = s.x + (s.drag.tx - s.x) * a, ny = s.y + (s.drag.ty - s.y) * a;
       s.vx = (nx - s.x) / Math.max(dt, 1e-3); s.vy = (ny - s.y) / Math.max(dt, 1e-3);
       s.x = nx; s.y = ny;
@@ -314,14 +314,9 @@ export function mountPool(root) {
     const [x, y] = pt(e);
     s.touched = true;
     // Une zone généreuse autour de l'image (un doigt sur iPad est large) : on l'attrape facilement.
-    const r = hero.getBoundingClientRect(), o = root.getBoundingClientRect(), pad = 36;
+    const r = hero.getBoundingClientRect(), o = root.getBoundingClientRect(), pad = 60;
     const onHim = x > r.left - o.left - pad && x < r.right - o.left + pad && y > r.top - o.top - pad && y < r.bottom - o.top + pad;
-    if (!onHim) {
-      // Tout près sans le toucher : il glisse doucement vers le doigt (pas de saut).
-      const cx = (r.left + r.right) / 2 - o.left, cy = (r.top + r.bottom) / 2 - o.top;
-      if (Math.hypot(x - cx, y - cy) < Math.max(r.width, r.height) * 1.2) { Object.assign(hold, { on: true, id: e.pointerId, x, y }); try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
-      return;
-    }
+    if (!onHim) return; // ailleurs : rien ne bouge (il ne s'échappe pas et ne vient pas tout seul)
     e.preventDefault(); // iPad : pas de loupe, de sélection ni de défilement pendant qu'on le tient
     try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     s.drag = { id: e.pointerId, ox: x - s.x, oy: y - s.y, tx: s.x, ty: s.y, px: x, py: y, pt: performance.now(), vx: 0, vy: 0 };
@@ -344,9 +339,11 @@ export function mountPool(root) {
   function up(e) {
     if (hold.on && e.pointerId === hold.id) hold.on = false;
     if (!s.drag || e.pointerId !== s.drag.id) return;
-    const stale = performance.now() - s.drag.pt > 90; // doigt arrêté avant de lâcher : pas de lancer
-    s.vx = stale ? 0 : Math.max(-520, Math.min(520, s.drag.vx));
-    s.vy = stale ? 0 : Math.max(-520, Math.min(520, s.drag.vy));
+    // On le pose là où on le lâche : seulement un petit élan si on le lance vraiment (pas de glissade surprise).
+    const stale = performance.now() - s.drag.pt > 60;
+    const fast = Math.hypot(s.drag.vx, s.drag.vy) > 700;
+    s.vx = stale || !fast ? 0 : Math.max(-260, Math.min(260, s.drag.vx * 0.35));
+    s.vy = stale || !fast ? 0 : Math.max(-260, Math.min(260, s.drag.vy * 0.35));
     s.drag = null;
     hero.classList.remove('held');
   }
