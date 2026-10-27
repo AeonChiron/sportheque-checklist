@@ -34,7 +34,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"icons/rabbit-rest.svg","revision":"38b94e634be1"},
   {"url":"icons/rabbit.svg","revision":"e23c8e5bcb2a"},
   {"url":"index.html","revision":"413ca807c54a"},
-  {"url":"js/app.js","revision":"f2d5b56e3750"},
+  {"url":"js/app.js","revision":"c270fa538c1e"},
   {"url":"js/auth.js","revision":"30affe1946a9"},
   {"url":"js/avatars.js","revision":"6a1e3a290665"},
   {"url":"js/board-shape.js","revision":"e8d853425827"},

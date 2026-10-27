@@ -403,6 +403,12 @@ function setLang(l) {
   if (current === 'boss') renderBoss({ animate: false });
   if (current === 'problem' && lastProblem) renderProblem(lastProblem);
   if (current === 'review' && lastReview) openReview(...lastReview);
+  // Les pages plus récentes se redessinent aussi tout de suite dans la nouvelle langue (sans recharger).
+  const redraw = { hub: renderHub, todaygym: renderToday, glance: renderGlance, mine: renderMine, plan: renderPlan, method: renderMethod, teamweek: renderTeamWeek, person: renderPerson, prefs: renderPrefs }[current];
+  if (redraw) { try { redraw({ animate: false }); } catch { /* la page se redessinera à la prochaine visite */ } }
+  if (current === 'poster') openPoster();
+  paintTabBar();
+  placeQuickBar(current);
 }
 for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
 

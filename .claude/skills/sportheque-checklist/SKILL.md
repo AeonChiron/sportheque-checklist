@@ -211,3 +211,4 @@ Plain static site + one serverless function. No build step.
 - Ne plus pousser sur GitHub automatiquement (propriétaire, 26 oct.) : commit local; pousser seulement sur demande.
 - Fin de quart (27 oct.) : « photo du quart » imprimée (mosaïque des tâches faites, pas le lapin), arrive en ressort, penche en 3D au doigt et revient, paillettes, reflet; toucher la photo annule le retour automatique.
 - Étapes d'une tâche (27 oct.) : casse-tête (js/puzzle.js) — UNE image (la scène de la tâche) découpée en un morceau par étape; chaque étape pose son morceau; complet = joints effacés + reflet. Remplace l'haltère.
+- Changer de langue redessine tout de suite la page ouverte (accueil, historique, horaire, coup d'œil, méthode, équipe, fiche, réglages, barre du bas) — plus besoin de recharger (27 oct.).
