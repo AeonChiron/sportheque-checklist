@@ -17,6 +17,7 @@ import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc, undoProblem, listMyProblems } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
+import { puzzleHTML } from './puzzle.js';
 import { spring, boing, flip, bubbles, mountCaustics, flipbookPunch, paperPlane, mountPrint } from './motion.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport, deleteShift } from './board.js';
 import { key as shiftKey } from './board-shape.js';
@@ -1228,36 +1229,9 @@ function breakRow(it) {
 // droite, comme au gym. Barre pleine = quart fini.
 let landId = null; // la tâche qui vient d'être cochée : son disque arrive en glissant
 let liftNext = false;
-// Les étapes d'une tâche : une pastille de sa couleur par étape.
-// Les étapes d'une tâche montent un haltère (propriétaire : « plus satisfaisant, gym »).
-// La poignée est là dès le début; chaque étape glisse un disque (gauche, droite, en
-// alternance, du plus gros au plus petit), les places vides sont en pointillé. La dernière
-// étape serre les colliers et l'haltère fait une flexion.
-function pipsHTML(done, total, plate, land = -1) {
-  const n = Math.max(1, total);
-  const H = [24, 20, 16, 13, 11];
-  const slots = Array.from({ length: n }, (_, i) => {
-    const side = i % 2 ? 1 : -1, k = Math.floor(i / 2);
-    const w = 6, gap = 1.5;
-    const x = side < 0 ? 40 - (k + 1) * (w + gap) : 80 + k * (w + gap) + gap;
-    return { x, w, h: H[Math.min(k, H.length - 1)], side };
-  });
-  const full = done >= n;
-  const plates = slots.map((p, i) => {
-    const y = 15 - p.h / 2;
-    return i < done
-      ? `<g class="plate${i === land ? ' land' : ''}" style="--dir:${p.side}"><rect x="${p.x}" y="${y}" width="${p.w}" height="${p.h}" rx="1.6"/></g>`
-      : `<rect class="ghost" x="${p.x}" y="${y}" width="${p.w}" height="${p.h}" rx="1.6"/>`;
-  }).join('');
-  const outer = Math.max(...slots.map((p) => (p.side < 0 ? 40 - p.x : p.x + p.w - 80)), 0);
-  return `<svg class="db${full && land >= 0 ? ' curl' : ''}${full ? ' full' : ''}" viewBox="${40 - outer - 8} 0 ${40 + 2 * outer + 16} 30" role="img" aria-label="${done}/${n}">
-    <rect class="bar" x="${40 - outer - 5}" y="13.4" width="${40 + 2 * outer + 10}" height="3.2" rx="1.6"/>
-    <rect class="grip" x="46" y="12.6" width="28" height="4.8" rx="2.4"/>
-    ${plates}
-    <rect class="collar${full ? ' on' : ''}" x="${40 - outer - 3}" y="11" width="3" height="8" rx="1"/>
-    <rect class="collar${full ? ' on' : ''}" x="${80 + outer}" y="11" width="3" height="8" rx="1"/>
-  </svg>`;
-}
+// Les étapes forment un casse-tête : la scène de la tâche, un morceau par étape (remplace l'haltère).
+const PZ_TINT = { r: '#1f5cc4', b: '#1f5cc4', y: '#e0a800', g: '#1d8a4a', w: '#6f8396', k: '#4a5a6a' };
+const taskPuzzle = (it, done, land = -1) => puzzleHTML({ uid: it.id, art: illustration(it.auto ? 'pointage' : it.photo), n: it.steps.length, done, land, tint: PZ_TINT[plateOf(it)] || '#1f5cc4', label: t('pzLabel', done, it.steps.length) });
 const soundOn = () => prefs.sound !== false && !prefs.calm; // le mode calme coupe tous les sons
 const sfx = (name, opts) => { if (soundOn()) fxSound(name, opts); };
 document.addEventListener('click', (ev) => { if (soundOn() && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(soundOn); }, true);
@@ -1937,7 +1911,8 @@ function openTask(id) {
         <div class="meta-row">${pills}</div>
       </div>
     </div>
-    ${it.steps.length ? `<div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span><span class="pips" style="--pc:var(--plate-${plateOf(it)})">${pipsHTML((e.steps || []).length, it.steps.length)}</span></p>
+    ${it.steps.length ? `<div><p class="block-label steps-head">${t('steps')} <span class="steps-count num">${(e.steps || []).length}/${it.steps.length}</span></p>
+      <div class="pz-wrap">${taskPuzzle(it, e.done ? it.steps.length : (e.steps || []).length)}</div>
       <ol class="steps">${it.steps.map((s, i) => `<li><button type="button" class="step" data-step="${i}" aria-pressed="${Boolean(e.done || (e.steps || []).includes(i))}"><span class="step-text">${md(s)}</span><i aria-hidden="true">✓</i></button></li>`).join('')}</ol>
       <p class="hint">${t('stepsHint')}</p></div>` : ''}
     ${tv}
@@ -1971,7 +1946,7 @@ function openTask(id) {
         b.setAttribute('aria-pressed', String(set.has(i)));
         root.querySelector('.steps-count').textContent = `${set.size}/${it.steps.length}`;
         const added = set.has(i);
-        root.querySelector('.pips').innerHTML = pipsHTML(set.size, it.steps.length, null, added ? set.size - 1 : -1);
+        root.querySelector('.pz-wrap').innerHTML = taskPuzzle(it, set.size, added ? set.size - 1 : -1);
         if (added) { clank('step'); buzz('step'); }
         save();
         if (set.size === it.steps.length && !e.done) finishWithFx();
