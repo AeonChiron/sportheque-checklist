@@ -209,3 +209,4 @@ Plain static site + one serverless function. No build step.
 - Accueil : un quart ouvert mais pas commencé (ex. demain) s'affiche « Ton prochain quart · dans X », bouton « Voir mon prochain quart »; décompte en j/h/min (h/min sous 24 h).
 - Mouvements (27 oct.) : js/motion.js — ressorts (pastille des onglets, rond coché, anneau), FLIP (rapports), bulles (cocher), shader caustiques (carte d'accueil), flipbook (pointage), avion offset-path (envoi), feuille qui se ferme d'un coup. Pas de vidéo, squelette ni Rive/Lottie. Tout se tait en mode calme.
 - Ne plus pousser sur GitHub automatiquement (propriétaire, 26 oct.) : commit local; pousser seulement sur demande.
+- Fin de quart (27 oct.) : « photo du quart » imprimée (mosaïque des tâches faites, pas le lapin), arrive en ressort, penche en 3D au doigt et revient, paillettes, reflet; toucher la photo annule le retour automatique.

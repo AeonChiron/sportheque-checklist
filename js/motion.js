@@ -190,3 +190,55 @@ export function paperPlane(from) {
   document.body.append(el);
   el.animate([{ offsetDistance: '0%', opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, offset: 0.12 }, { opacity: 1, offset: 0.85 }, { offsetDistance: '100%', opacity: 0, scale: 0.8 }], { duration: 1900, easing: 'cubic-bezier(.45, .05, .35, 1)' }).finished.then(() => el.remove(), () => el.remove());
 }
+
+// ---------- La « photo » du quart (idée du propriétaire, 27 oct.) ----------
+// À la fin du quart, le travail devient une petite photo imprimée : elle arrive avec un ressort,
+// on peut la tirer du doigt (elle penche en 3D, puis revient se poser), des paillettes flottent
+// autour, et un reflet glisse sur le papier selon l'angle (les bords restent nets).
+export function mountPrint(host, { onTouch } = {}) {
+  const card = host?.querySelector('.print');
+  if (!card) return;
+  const specks = host.querySelector('.print-specks');
+  if (specks && !calm()) {
+    specks.innerHTML = Array.from({ length: 16 }, (_, i) => {
+      const a = (i / 16) * Math.PI * 2 + Math.random() * 0.4, r = 46 + Math.random() * 18;
+      return `<i style="--x:${(50 + Math.cos(a) * r).toFixed(1)}%;--y:${(50 + Math.sin(a) * r * 0.8).toFixed(1)}%;--d:${(Math.random() * 2.4).toFixed(2)}s;--s:${(0.6 + Math.random() * 0.9).toFixed(2)}" class="${i % 3 ? 'dot' : 'star'}"></i>`;
+    }).join('');
+  }
+  const st = { x: 0, y: 0, rot: -3, sc: calm() ? 1 : 0.55 };
+  const paint = () => {
+    const rx = Math.max(-22, Math.min(22, -st.y * 0.14)), ry = Math.max(-22, Math.min(22, st.x * 0.14));
+    card.style.transform = `translate3d(${st.x * 0.35}px, ${st.y * 0.35}px, 0) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) rotate(${(st.rot + ry * 0.12).toFixed(2)}deg) scale(${st.sc.toFixed(4)})`;
+    card.style.setProperty('--gx', `${(50 + ry * 2.2).toFixed(1)}%`);
+    card.style.setProperty('--gy', `${(40 - rx * 2.2).toFixed(1)}%`);
+    card.style.setProperty('--tilt', (Math.hypot(rx, ry) / 22).toFixed(3));
+  };
+  paint();
+  // Arrivée : grossit avec un rebond et se redresse presque droite.
+  spring('print-s', 0.55, 1, (v) => { st.sc = v; paint(); }, { stiffness: 210, damping: 15 });
+  spring('print-r', -9, -2, (v) => { st.rot = v; paint(); }, { stiffness: 120, damping: 11 });
+  let drag = null;
+  card.addEventListener('pointerdown', (e) => {
+    onTouch?.();
+    drag = { id: e.pointerId, x0: e.clientX - st.x, y0: e.clientY - st.y };
+    try { card.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    card.classList.add('held');
+    e.preventDefault();
+  });
+  card.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    // Un peu de résistance : plus on tire loin, plus ça tire fort (amortissement).
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0, k = 1 / (1 + Math.hypot(dx, dy) / 260);
+    st.x = dx * k; st.y = dy * k; paint();
+  });
+  const up = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag = null;
+    card.classList.remove('held');
+    // Relâchée : elle revient se poser avec un ressort amorti (petite oscillation, puis plus rien).
+    spring('print-x', st.x, 0, (v) => { st.x = v; paint(); }, { stiffness: 170, damping: 12 });
+    spring('print-y', st.y, 0, (v) => { st.y = v; paint(); }, { stiffness: 170, damping: 12 });
+  };
+  card.addEventListener('pointerup', up);
+  card.addEventListener('pointercancel', up);
+}

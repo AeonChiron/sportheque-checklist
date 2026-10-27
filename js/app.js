@@ -17,7 +17,7 @@ import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc, undoProblem, listMyProblems } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
-import { spring, boing, flip, bubbles, mountCaustics, flipbookPunch, paperPlane } from './motion.js';
+import { spring, boing, flip, bubbles, mountCaustics, flipbookPunch, paperPlane, mountPrint } from './motion.js';
 import { publishShift, flushQueue, loadWeek, loadRecent, keepReport, deleteShift } from './board.js';
 import { key as shiftKey } from './board-shape.js';
 
@@ -2585,9 +2585,12 @@ async function saveShift() {
   $('#sentText').textContent = t(where === 'queued' ? 'savedQueued' : 'savedText', name);
   $('#sentWin').textContent = winLine(name, summary);
   $('#editShiftBtn').hidden = false;
+  // La photo du quart remplace la mascotte ici : elle arrive, on peut la pencher du doigt.
+  $('#sentCrew').innerHTML = printHTML(summary, plan);
   paintStatic();
   paperPlane($('#sendBtn')); // le rapport s'envole en suivant une courbe
   show('sent');
+  mountPrint($('#sentCrew'), { onTouch: () => { clearTimeout(sentTimer); $('#sentGo').hidden = true; } });
   celebrate();
   confettiRain();
   // Propriétaire : le « Bravo », puis retour tout seul au tableau de bord, avec un élan (flou de
@@ -2606,11 +2609,27 @@ function sentAutoHome() {
     navOverride = 'rush';
     openHub();
     setTimeout(() => { if (current === 'hub') { celebrate(); sfx('brim'); } }, reducedMotion() ? 0 : 520);
-  }, reducedMotion() ? 2600 : 3400);
+  }, reducedMotion() ? 2600 : 5200); // le temps de voir la photo du quart
 }
 for (const b of document.querySelectorAll('#sent button')) b.addEventListener('click', () => { clearTimeout(sentTimer); $('#sentGo').hidden = true; }, true);
 
 // Une petite victoire à la fin : quart parfait, ou série de quarts complets.
+// La « photo » du quart : une petite impression avec les tâches faites en mosaïque (pas le lapin).
+function printHTML(summary, p) {
+  const done = new Set((summary.items || []).filter((x) => x.status === 'done').map((x) => x.id));
+  const tiles = (p?.items || []).filter((it) => it.kind === 'task' && done.has(it.id)).map((it) => (it.auto ? 'pointage' : it.photo)).filter(Boolean);
+  const pics = [...new Set(tiles)].slice(0, 6);
+  while (pics.length < 6) pics.push(['ouverture', 'desinfection', 'aspirateur', 'tuiles', 'miroirs', 'fermeture'][pics.length]);
+  const d = dateOf(summary.date);
+  const day = cap(d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' }));
+  const total = summary.total ?? (summary.items || []).length, nDone = summary.done ?? done.size;
+  return `<div class="print-wrap"><div class="print-specks" aria-hidden="true"></div>
+    <div class="print" role="img" aria-label="${esc(`${t('printTitle')} · ${day} · ${t('tasksDone', nDone, total)}`)}">
+      <div class="print-pic">${pics.map((k, i) => `<span class="pp-tile" style="--i:${i}">${illustration(k)}</span>`).join('')}</div>
+      <div class="print-cap"><b>${esc(t('printTitle'))}</b><small class="num">${esc(day)} · ${esc(t('tasksDone', nDone, total))}</small></div>
+      <i class="print-glare" aria-hidden="true"></i>
+    </div></div>`;
+}
 function winLine(name, summary) {
   const all = Object.values(read('gym-board-local', {})).flat()
     .filter((x) => x.name?.toLowerCase() === name.toLowerCase())
