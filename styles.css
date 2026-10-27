@@ -3864,3 +3864,6 @@ body.calm .print-specks { display: none; }
 @keyframes pz-sheen { from { transform: translateX(0); } to { transform: translateX(600px); } }
 @media (prefers-reduced-motion: reduce) { .pz-piece.land, .pz.just, .pz.just .pz-sheen, .pz-hole.next { animation: none !important; } }
 body.calm :is(.pz-piece.land, .pz.just, .pz.just .pz-sheen, .pz-hole.next) { animation: none !important; }
+/* Safari (iPad) : « overflow: hidden » + coins arrondis ne coupe pas un calque mélangé (mix-blend);
+   on découpe donc les reflets eux-mêmes aux coins de la carte (sinon un coin carré dépasse). */
+.fx-caustics { clip-path: inset(0 round 30px); -webkit-clip-path: inset(0 round 30px); }
