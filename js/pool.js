@@ -263,7 +263,7 @@ export function mountPool(root) {
     last = now; t += dt;
     const b = bounds();
     if (s.drag) {
-      const a = 1 - Math.exp(-22 * dt); // suit le doigt sans à-coups
+      const a = 1 - Math.exp(-16 * dt); // suit le doigt en douceur, un peu « dans l'eau », sans à-coups
       const nx = s.x + (s.drag.tx - s.x) * a, ny = s.y + (s.drag.ty - s.y) * a;
       s.vx = (nx - s.x) / Math.max(dt, 1e-3); s.vy = (ny - s.y) / Math.max(dt, 1e-3);
       s.x = nx; s.y = ny;
@@ -313,9 +313,16 @@ export function mountPool(root) {
     if (e.target.closest('button, a, .auth-sheet, .pool-ui')) return;
     const [x, y] = pt(e);
     s.touched = true;
-    const h = s.size * RATIO;
-    // Seulement si on touche le lapin lui-même; ailleurs, rien ne bouge.
-    if (!(Math.abs(x - s.x) < s.size * 0.55 && y < s.y + 24 && y > s.y - h - 10)) return;
+    // Une zone généreuse autour de l'image (un doigt sur iPad est large) : on l'attrape facilement.
+    const r = hero.getBoundingClientRect(), o = root.getBoundingClientRect(), pad = 36;
+    const onHim = x > r.left - o.left - pad && x < r.right - o.left + pad && y > r.top - o.top - pad && y < r.bottom - o.top + pad;
+    if (!onHim) {
+      // Tout près sans le toucher : il glisse doucement vers le doigt (pas de saut).
+      const cx = (r.left + r.right) / 2 - o.left, cy = (r.top + r.bottom) / 2 - o.top;
+      if (Math.hypot(x - cx, y - cy) < Math.max(r.width, r.height) * 1.2) { Object.assign(hold, { on: true, id: e.pointerId, x, y }); try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+      return;
+    }
+    e.preventDefault(); // iPad : pas de loupe, de sélection ni de défilement pendant qu'on le tient
     try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     s.drag = { id: e.pointerId, ox: x - s.x, oy: y - s.y, tx: s.x, ty: s.y, px: x, py: y, pt: performance.now(), vx: 0, vy: 0 };
     s.vx = 0; s.vy = 0;
@@ -344,6 +351,8 @@ export function mountPool(root) {
     hero.classList.remove('held');
   }
   root.addEventListener('pointerdown', down);
+  // Safari iPad : sans ça, un toucher sur le plancher peut devenir un geste de la page.
+  root.addEventListener('touchstart', (e) => { if (!e.target.closest('button, a, .auth-sheet')) e.preventDefault(); }, { passive: false });
   root.addEventListener('pointermove', move);
   root.addEventListener('pointerup', up);
   root.addEventListener('pointercancel', up);
