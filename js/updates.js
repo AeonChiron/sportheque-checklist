@@ -3,6 +3,32 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-28-visuals',
+    date: '2026-10-28',
+    fr: {
+      title: 'Plus beau, plus clair',
+      items: [
+        'La page d’accueil : une lumière plus large, un clair de lune en mode sombre et une douce lueur sous le lapin.',
+        'Le lapin est assez gros sur tous les appareils : téléphone, iPad et ordinateur.',
+        'Avec le très grand texte, la page d’accueil tient maintenant dans l’écran.',
+        'Dans une tâche : « Pourquoi » explique la raison, avec un lien vers toute la méthode.',
+        'Un petit plan du gym montre où est la tâche. Touche-le pour le grand plan en 3D.',
+        'Équipe fictive : le bouton rouge pour quitter devient un petit ✕ après 5 secondes.',
+      ],
+    },
+    en: {
+      title: 'Nicer and clearer',
+      items: [
+        'The front page: wider light, moonlight in dark mode and a soft glow under the bunny.',
+        'The bunny is big enough on every device: phone, iPad and computer.',
+        'With extra-large text, the front page now fits the screen.',
+        'In a task: “Why” explains the reason, with a link to the whole method.',
+        'A small gym map shows where the task is. Tap it for the big 3D map.',
+        'Pretend team: the red exit button turns into a small ✕ after 5 seconds.',
+      ],
+    },
+  },
+  {
     id: '2026-10-28-reports',
     date: '2026-10-28',
     fr: {

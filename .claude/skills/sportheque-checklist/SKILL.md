@@ -226,3 +226,9 @@ Plain static site + one serverless function. No build step.
 - Filters are never per person (help, not watch). The CSV keeps done/planned per shift but no % column.
 - Month boundaries use gym time (America/Toronto), not UTC.
 - Monthly push: 1st 09:00, leads, under the 'weekly' toggle; skip empty months.
+
+## Visuals (loop round 7)
+- Front-page bunny: size from the free band between title and buttons; never on top of text (hide the thank-you card on short screens first, hide the bunny only when nothing fits). Wide screens: it stands in the left margin.
+- "Pourquoi" in a task comes only from La méthode (`whyOf`), hidden when untrue for that day (`noWhy` from the planner) or already in the tips. Never invent a reason.
+- Mini maps only where the place is certain (`spotOf`: zone, cardio → A, spinning → room 4); the target pops, the rest fades.
+- Big text zooms `<html>`: anything full-screen or measured in screen pixels must divide by `--zoom`.

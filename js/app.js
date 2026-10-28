@@ -4180,7 +4180,7 @@ if (FICTIVE) {
   // un toucher la fait grandir à nouveau, un deuxième ouvre « Quitter ».
   const fx = $('#fictExit');
   let fxTimer = 0;
-  const shrinkSoon = () => { clearTimeout(fxTimer); fxTimer = setTimeout(() => (document.activeElement === fx ? shrinkSoon() : fx.classList.add('mini')), 5000); };
+  const shrinkSoon = () => { clearTimeout(fxTimer); fxTimer = setTimeout(() => (fx.matches(':focus-visible') ? shrinkSoon() : fx.classList.add('mini')), 5000); }; // focus au clavier : reste grande
   shrinkSoon();
   // Clavier ou lecteur d'écran (detail 0) : pas de petite étape muette, « Quitter » s'ouvre tout de suite.
   fx.addEventListener('click', (e) => {

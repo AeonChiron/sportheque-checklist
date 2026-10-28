@@ -126,7 +126,7 @@ export const METHOD = {
         { t: 'Rags, 3rd round', what: 'Pick up, wash, fold, hand out.' },
         { t: 'Vacuum: cardio', what: 'Grey mats, walkways, around the machines.' },
         { t: 'Task of the week', what: 'A small different task each day.' },
-        { t: 'Spinning', what: 'Every bike, the whole room.', why: 'Spinning is a morning-only job.' },
+        { t: 'Spinning', what: 'Every bike, the whole room.', why: 'The spin room is mornings only.' },
         { t: 'End of shift', what: 'Take out the trash, clean rags in place, report what’s missing.' },
       ],
       2: [

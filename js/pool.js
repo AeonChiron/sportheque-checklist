@@ -95,10 +95,10 @@ export function mountPool(root) {
     readObstacles();
     // Au repos : pile au milieu de l'espace libre entre le titre et le bouton.
     // Déplacé puis écran tourné : s'il sort de l'écran ou tombe sur les boutons, il revient à sa place.
-    if (s.touched && !s.drag && (s.x < 0 || s.x > W || s.y > H || s.y - s.size * RATIO < 0 || s.y - s.size * RATIO * 0.5 > edges.bottom)) s.touched = false;
+    if (s.touched && !s.drag && (s.x < 0 || s.x > W || s.y > H || s.y - s.size * RATIO < 0)) s.touched = false;
     if (!s.touched && W > 200) {
       const h = s.size * RATIO;
-      if (s.wide) { s.x = side / 2 + (FOOT_X - LOOK_X) * s.size; s.y = Math.min(H - 24, Math.max(h + 20, (foot?.bottom ?? H) - r.top)); } // debout au niveau du bas des boutons
+      if (s.wide) { s.x = Math.max(s.size * FOOT_X + 6, side / 2 + (FOOT_X - LOOK_X) * s.size); s.y = Math.min(H - 24, Math.max(h + 20, (foot?.bottom ?? H) - r.top)); } // debout au niveau du bas des boutons
       else { s.x = W * 0.5 + (FOOT_X - LOOK_X) * s.size; s.y = (edges.top + edges.bottom) / 2 + h * 0.45; }
     }
     if (still) draw();
@@ -249,7 +249,7 @@ export function mountPool(root) {
     }
     if (!still) light(D); else { t = 3; light(D); }
     // Une lueur douce au sol sous le lapin, là où les rayons se croisent (Q63).
-    {
+    if (hero.style.display !== 'none') {
       const hh = s.size * RATIO, gx = s.x, gy = s.y - hh * 0.08, gr = s.size * 1.3;
       const pool = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
       const c = D ? '190,215,255' : '255,250,235', k = 0.8 + 0.08 * Math.sin(t * 0.6);
@@ -347,6 +347,7 @@ export function mountPool(root) {
   const pt = (e) => { const r = root.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   function down(e) {
     if (e.target.closest('button, a, .auth-sheet, .pool-ui')) return;
+    if (hero.style.display === 'none') return; // caché (téléphone couché) : rien à attraper
     const [x, y] = pt(e);
     // Une zone généreuse autour de l'image (un doigt sur iPad est large) : on l'attrape facilement.
     const r = hero.getBoundingClientRect(), o = root.getBoundingClientRect(), pad = 60;

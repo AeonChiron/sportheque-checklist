@@ -4107,9 +4107,10 @@ html[data-text="xl"] .pr-vol input { grid-column: 1 / -1; grid-row: 2; }
 .mini-map .floor:has(.zC.hot) .zm-label-group:not(.zC) { opacity: .2; }
 .mini-map .floor .zm.hot .zm-tint { opacity: .62; }
 .mini-map .floor .hot .zm-edge { stroke-width: 7; }
-/* Texte grand ou très grand : la page bleue défile au lieu de couper les liens du bas (crew ronde 7). */
-html:is([data-text="large"], [data-text="xl"]) #auth:not(.inside) .pool-ui { overflow-y: auto; pointer-events: auto; }
-html:is([data-text="large"], [data-text="xl"]) #auth:not(.inside) .pool-ui > * { flex-shrink: 0; }
+/* Trop haut pour l'écran (texte agrandi, téléphone couché) : la page bleue défile au lieu de couper le bas.
+   Les blocs reçoivent les touchers, le vide entre eux reste au lapin. */
+#auth:not(.inside) .pool-ui { overflow-y: auto; overscroll-behavior: contain; }
+#auth:not(.inside) .pool-ui > * { flex-shrink: 0; pointer-events: auto; }
 html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
 /* Tuiles iPad : 1 tuile = pleine largeur, 5 tuiles = 3 + 2 (gagne sur les vieilles règles). */
 @media (min-width: 760px) and (max-width: 1099px) {
