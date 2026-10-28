@@ -14,7 +14,7 @@ import { mountGlass, playFinish, fxSound, clickTap, setVolume } from './fx.js';
 import { hapticTrigger } from '../vendor/ios-haptics/index.js';
 import autoAnimate from '../vendor/auto-animate/index.js';
 import { session, accounts, isBoss, isAdmin, isVisitor, ns, startVisitor, initAuth, signIn, signOut, listTeam, listRoster, teamAction, alertRecipients, setAlerts, request, authEvents, updateMe, isRealAdmin, viewAs, setViewAs, FICTIVE } from './auth.js';
-import { FICTIVE_PEOPLE, enterFictive, exitFictive } from './fictive.js';
+import { FICTIVE_PEOPLE, enterFictive, exitFictive, fictiveProgress } from './fictive.js';
 import { createProblem, listProblems, getProblem, setProblemStatus, photoSrc, undoProblem, listMyProblems } from './problems.js';
 import { illustration, zoneMap, tvDiagram } from './illustrations.js';
 import { mountPool } from './pool.js';
@@ -648,7 +648,18 @@ const todaySched = () => mySched(todayISO());
 // Le prochain quart à l'horaire. ready : on peut le partir, de 30 min avant le début jusqu'à la fin.
 const EARLY_MIN = 30;
 const nb = (x) => String(x).replace(/ /g, '\u00a0'); // « 7 h 30 » ne se coupe pas
+// Mode formation (ronde 9) : le prochain quart à l'horaire commence maintenant, pour l'essayer tout de suite
+// (tant qu'il n'est pas envoyé). Les vrais comptes ne passent jamais ici.
 function nextShift() {
+  const nx = plannedShift();
+  if (!nx || !training() || bossWatching() || state?.date || (nx.date === todayISO() && nx.ready) || fictiveProgress().send) return nx;
+  const now = new Date();
+  const dur = (toMin(nx.end) - toMin(nx.start) + 1440) % 1440 || 480;
+  const start = Math.max(0, Math.min(Math.floor((now.getHours() * 60 + now.getMinutes()) / 15) * 15, 1435 - dur));
+  const hh = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return { ...nx, date: todayISO(), start: hh(start), end: hh(start + dur), special: '', changed: false, ready: true };
+}
+function plannedShift() {
   const sc = mySchedule() || {};
   if (!mySchedule() && !SPECIALS.length) return null;
   const now = new Date();
@@ -888,7 +899,150 @@ function maybeWelcome() {
   // jamais tout seul pour lui (l'aperçu « Nouveau » ou « Revoir le tutoriel » le relancent).
   if (isRealAdmin() && !prefs.simNew) { prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true }; savePrefs(); return; }
   if (!$('#sheet').hidden) { setTimeout(maybeWelcome, 600); return; } // attend qu'un panneau se ferme
-  if (current === 'auth') startTour();
+  // Ronde 9 (Q97) : la toute première fois, le profil d'abord (langue, photo, confort, rappels), puis la formation conseillée.
+  if (current !== 'auth') return;
+  if (session.user.visitor) startTour();
+  else if (FICTIVE) { if (prefs.onboard) openOnboarding({ after: startTour }); else startTour(); }
+  else openOnboarding({ real: true });
+}
+// ---------- Mode formation (ronde 9, Q81 / D10) ----------
+// L'équipe fictive devient un « Mode formation » : le tutoriel du rôle part à l'arrivée, puis
+// quatre exercices sur l'accueil (différents pour l'employé et le superviseur). Ils se cochent
+// d'après ce que la personne a vraiment fait depuis son arrivée, jamais une note ni un classement.
+const training = () => FICTIVE && Boolean(prefs.training);
+const TRAIN = {
+  employee: [['start', 'start'], ['check', 'tasks'], ['flag', 'flag'], ['send', 'finish']],
+  boss: [['problem', 'problems'], ['reports', 'reports'], ['task', 'teamweek'], ['sched', 'teamweek']],
+};
+function trainingState() {
+  const p = fictiveProgress();
+  const live = Boolean(state?.date);
+  return {
+    start: live || p.send,
+    check: p.send || (live && Object.values(state.tasks || {}).some((x) => x.done)),
+    flag: p.flag, send: p.send, problem: p.problem, reports: Boolean(prefs.trainSeen?.reports), task: p.task, sched: p.sched,
+  };
+}
+function trainingCard() {
+  if (!training() || adminHome()) return '';
+  const list = TRAIN[bossWatching() ? 'boss' : 'employee'];
+  const done = trainingState();
+  const n = list.filter(([k]) => done[k]).length;
+  const all = n === list.length;
+  // Une mission pas encore possible (envoyer avant de commencer) mène à la grande carte.
+  const route = (k, hub) => (!state?.date && (hub === 'tasks' || hub === 'finish') ? 'start' : hub);
+  if (all && !prefs.trainCheered) { prefs.trainCheered = true; savePrefs(); setTimeout(() => { celebrate(); sfx('full'); }, 400); }
+  return `<section class="hb-train${all ? ' is-done' : ''}" aria-labelledby="trH">
+    <div class="tn-head"><h2 id="trH">${hubIco('star')}<span>${esc(t(all ? 'trDoneTitle' : 'trTitle'))}</span></h2><span class="tn-count num">${esc(t('trCount', n, list.length))}</span></div>
+    <span class="tn-bar" aria-hidden="true"><i style="width:${Math.round((100 * n) / list.length)}%"></i></span>
+    <p class="tn-sub">${esc(t(all ? 'trDoneText' : 'trSub'))}</p>
+    <ol class="tn-list">${list.map(([k, hub]) => `<li><button type="button" class="tn-row${done[k] ? ' done' : ''}" data-hub="${route(k, hub)}"${done[k] ? ' data-tap="soft"' : ''}>
+      <span class="tn-check" aria-hidden="true">${done[k] ? HUB_ICO.check : ''}</span>
+      <span class="tn-txt"><b>${esc(t(`tr_${k}`))}${done[k] ? `<span class="sr-only"> · ${esc(t('trDoneA11y'))}</span>` : ''}</b><small>${esc(t(`tr_${k}Sub`))}</small></span>${CHEV_R}</button></li>`).join('')}</ol>
+    ${all ? `<button type="button" class="btn ghost tn-exit" data-train="exit">${esc(t('trExit'))}</button>` : ''}
+  </section>`;
+}
+document.addEventListener('click', (ev) => { if (ev.target.closest('[data-train="exit"]')) $('#fictExit')?.click(); });
+
+// ---------- Le premier départ (ronde 9, Q97) ----------
+// Une seule fois par compte : la langue (français par défaut), la photo, le confort (taille du texte,
+// sons, mode calme), les rappels, puis, pour un vrai compte, la formation fortement conseillée.
+// Fermer la feuille compte comme « Passer » : on ne redemande pas.
+function openOnboarding({ after = null, real = false } = {}) {
+  const key = session.user?.email;
+  if (!key || $('#tour')) return;
+  const canNotify = !FICTIVE && session.mode === 'accounts' && pushSupported() && !(isIOS() && !standalone()) && Notification.permission !== 'denied';
+  const steps = ['lang', 'pic', 'comfort', ...(canNotify ? ['notify'] : []), ...(real ? ['train'] : [])];
+  let i = 0, over = false;
+  const mark = () => {
+    prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true };
+    prefs.onboarded = { ...(prefs.onboarded || {}), [key]: true };
+    delete prefs.onboard; savePrefs();
+  };
+  const watch = setInterval(() => { if (!over && $('#sheet').hidden) { over = true; clearInterval(watch); mark(); } }, 700);
+  const finish = (then) => { if (over) return; over = true; clearInterval(watch); mark(); closeSheet(); if (then) setTimeout(then, 380); };
+  const seg = (name, cur, opts, label) => `<div class="segmented ob-seg" role="radiogroup" aria-label="${esc(label)}">${opts.map(([k, l]) => `<button type="button" role="radio" data-ob="${name}" data-v="${k}" aria-checked="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
+  const sw = (id, label, on, sub = '') => `<button type="button" class="pr-row" data-obsw="${id}" role="switch" aria-checked="${Boolean(on)}"><span><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><i class="switch" aria-hidden="true"></i></button>`;
+  const first = (shiftName() || session.user.name || '').split(' ')[0];
+  const body = (k) => {
+    if (k === 'lang') return `<h2>${esc(t('obHello', first))}</h2><p class="lede">${esc(t('obHelloLede'))}</p>
+      <p class="block-label">${esc(t('obLang'))}</p>${seg('lang', lang(), [['fr', 'Français'], ['en', 'English']], t('obLang'))}`;
+    if (k === 'pic') {
+      const cur = (prefs.simNew ? prefs.simNew.avatar : session.user.avatar) || '';
+      return `<h2>${esc(t('picTitle'))}</h2><p class="lede">${esc(t('obPicLede'))}</p>
+        <div class="pic-grid ob-pics">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotImg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
+        <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="obFile" hidden></label></div>
+        <p class="section-note" id="obMsg" aria-live="polite"></p>`;
+    }
+    if (k === 'comfort') return `<h2>${esc(t('obComfortT'))}</h2><p class="lede">${esc(t('obComfortLede'))}</p>
+      <p class="block-label">${esc(t('prTextSize'))}</p>${seg('text', textSize(), TEXT_SIZES.map(([x]) => [x, t(`prText_${x}`)]), t('prTextSize'))}
+      <p class="ob-sample">${esc(t('obTextSample'))}</p>
+      <div class="ob-sw">${sw('sound', t('sounds'), prefs.sound !== false && !prefs.calm, t('prSoundSub'))}${sw('calm', t('prCalm'), prefs.calm, t('prCalmSub'))}</div>`;
+    if (k === 'notify') return `<h2>${esc(t('obNotifyT'))}</h2><p class="lede">${esc(t('obNotifyLede'))}</p>
+      <button type="button" class="btn primary big ob-wide" id="obPush">${HUB_ICO.send}<span>${esc(t('obNotifyGo'))}</span></button><p class="section-note" id="obMsg" aria-live="polite"></p>`;
+    return `<img class="tour-cheer ob-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2>${esc(t('obTrainT'))}</h2><p class="lede">${esc(t('obTrainLede'))}</p>
+      <button type="button" class="btn primary big ob-wide" id="obTrain" data-tap="big"><span>${esc(t('obTrainGo'))}</span>${HUB_ICO.go}</button><p class="section-note ob-time">${esc(t('obTrainTime'))}</p>`;
+  };
+  const paint = (focusFirst = false) => {
+    const k = steps[i], last = i === steps.length - 1;
+    openSheet(`<div class="sheet-head ob-head"><p class="eyebrow num">${esc(t('obStep', i + 1, steps.length))}</p>
+      <div class="tour-dots ob-dots" aria-hidden="true">${steps.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>${body(k)}</div>`, (root) => {
+      root.querySelector('.ob-head').addEventListener('click', async (e) => {
+        const o = e.target.closest('[data-ob]');
+        if (o) {
+          for (const b of o.parentElement.querySelectorAll('[data-ob]')) b.setAttribute('aria-checked', String(b === o));
+          if (o.dataset.ob === 'lang') { setLang(o.dataset.v); sfx('tap'); paint(); root.querySelector(`[data-ob="lang"][data-v="${o.dataset.v}"]`)?.focus({ preventScroll: true }); }
+          else if (o.dataset.ob === 'text') { setTextSize(o.dataset.v); }
+          return;
+        }
+        const w = e.target.closest('[data-obsw]');
+        if (w) {
+          const on = w.getAttribute('aria-checked') !== 'true';
+          if (w.dataset.obsw === 'calm') setCalm(on);
+          else { if (prefs.calm && on) setCalm(false); prefs.sound = on; savePrefs(); paintStatic(); if (on) clank('step'); }
+          paint(); root.querySelector(`[data-obsw="${w.dataset.obsw}"]`)?.focus({ preventScroll: true });
+          return;
+        }
+        const pic = e.target.closest('[data-pic]');
+        if (pic) {
+          const v = pic.dataset.pic;
+          try { if (prefs.simNew) { prefs.simNew.avatar = v; savePrefs(); } else await updateMe('avatar', { avatar: v }); }
+          catch { $('#obMsg').textContent = t('adminCodesLater'); sfx('locked'); return; }
+          sfx('save'); buzz('tap'); paintFront();
+          for (const b of root.querySelectorAll('.pic-opt')) { const on = b.dataset.pic === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }
+          const m = MASCOTS[v.slice(2)];
+          $('#obMsg').textContent = m ? t('picCheerMascot', m[lang()] || m.fr) : t('picCheer');
+          $('#obMsg').classList.add('pic-cheer');
+          return;
+        }
+        if (e.target.closest('#obPush')) {
+          const b = e.target.closest('#obPush'); b.disabled = true;
+          try { const info = await request('push'); await turnPushOn(info.key); sfx('save'); toast(t('obNotifyOn'), 'ok'); i += 1; if (i >= steps.length) finish(after); else paint(true); }
+          catch { b.disabled = false; $('#obMsg').textContent = t('obNotifyNo'); sfx('locked'); }
+          return;
+        }
+        if (e.target.closest('#obTrain')) finish(() => openFictive(isBoss() ? 'boss' : 'employee'));
+      });
+      root.querySelector('#obFile')?.addEventListener('change', async (e) => {
+        const f = e.target.files?.[0]; if (!f) return;
+        try {
+          const v = await shrinkPhoto(f);
+          if (prefs.simNew) { prefs.simNew.avatar = v; savePrefs(); } else await updateMe('avatar', { avatar: v });
+          sfx('save'); paintFront(); $('#obMsg').textContent = t('picCheer'); $('#obMsg').classList.add('pic-cheer');
+          for (const b of root.querySelectorAll('.pic-opt')) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }
+        } catch { $('#obMsg').textContent = t('picBad'); }
+      });
+      $('#obNext').onclick = () => { i += 1; if (i >= steps.length) finish(after); else { sfx('step'); paint(true); } };
+      $('#obSkip').onclick = () => finish(real ? startTour : after);
+      if (focusFirst) requestAnimationFrame(() => root.querySelector('.ob-head h2')?.focus?.({ preventScroll: true }));
+    }, k === 'train'
+      ? `<button type="button" class="btn ghost" id="obSkip">${esc(t('obLater'))}</button><button type="button" class="btn ghost" id="obNext" hidden></button>`
+      : `<button type="button" class="btn ghost" id="obSkip">${esc(t('obSkip'))}</button><button type="button" class="btn primary" id="obNext">${esc(t(last ? 'obDone' : k === 'notify' ? 'obLater' : 'obNext'))}</button>`);
+    // « Plus tard » de la formation : la visite de l'accueil, comme avant.
+    if (k === 'train') $('#obSkip').onclick = () => finish(startTour);
+    const h = $('#sheetBody .ob-head h2'); if (h) h.tabIndex = -1;
+  };
+  paint();
 }
 // Visite guidée de l'accueil : une lumière sur chaque bouton, une phrase, puis un bravo.
 function startTour() {
@@ -944,8 +1098,9 @@ function startTour() {
     tip.className = 'tour-tip done';
     tip.style.cssText = '';
     const need = !hasSched() && !bossWatching();
-    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t(need ? 'tourDoneSched' : 'tourDoneText'))}</p>
-      <div class="tour-btns"><button type="button" class="btn primary" data-tour="${need ? 'sched' : 'end'}">${esc(t(need ? 'tourDoneSchedGo' : 'tourDoneGo'))}</button></div>`;
+    const train = training() && !need;
+    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t(need ? 'tourDoneSched' : train ? 'tourDoneTrain' : 'tourDoneText'))}</p>
+      <div class="tour-btns"><button type="button" class="btn primary" data-tour="${need ? 'sched' : train ? 'train' : 'end'}">${esc(t(need ? 'tourDoneSchedGo' : train ? 'tourDoneTrainGo' : 'tourDoneGo'))}</button></div>`;
     celebrate(); sfx('full'); buzz('plate');
     tip.querySelector('[data-tour]').focus({ preventScroll: true });
   };
@@ -1010,6 +1165,7 @@ function startTour() {
       const watch = setInterval(() => { if (!back && !sheetOpen() && !$('#sheet').classList.contains('closing')) resume(); }, 700);
     }
     else if (act === 'end') end();
+    else if (act === 'train') end(() => { const c = $('#hubBody .hb-train'); if (c) { c.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' }); c.querySelector('.tn-row:not(.done)')?.focus({ preventScroll: true }); } });
     else if (act === 'sched') end(() => openScheduleSheet({ first: true }));
   });
   box.addEventListener('keydown', (e) => { if (e.key === 'Escape') end(); });
@@ -2220,7 +2376,7 @@ function openFlag({ where = '', urgentFirst = false, after = null } = {}) {
 
 // Où en est le signalement : envoyé aux superviseurs? courriel parti?
 const sending = new WeakSet();
-const flagNeedsWork = (fl) => (accounts() && !fl.id) || (fl.urgent && !fl.emailed && session.mode !== 'demo');
+const flagNeedsWork = (fl) => (accounts() && !fl.id) || (fl.urgent && !fl.emailed && session.mode !== 'demo' && !FICTIVE);
 function flagMailLine(fl, i) {
   const sup = alertNames();
   if (sending.has(fl)) return `<span class="mail-line">${ICON.mail}${esc(t('flagSending'))}</span>`;
@@ -2246,7 +2402,7 @@ async function submitProblem(fl, s = state) {
       fl.id = await createProblem({ category: fl.category, location: fl.location, text: fl.text, urgent: fl.urgent, at: fl.at, shiftDate: s.date, shift: s.shift }, blobs);
       if (state === s) save();
     }
-    if (fl.urgent && !fl.emailed && session.mode !== 'demo') {
+    if (fl.urgent && !fl.emailed && session.mode !== 'demo' && !FICTIVE) { // la formation n'envoie jamais de vrai courriel (ronde 9 : ça partait)
       await sendFlagEmail(fl, s);
       fl.emailed = true;
     }
@@ -2257,6 +2413,7 @@ async function submitProblem(fl, s = state) {
   }
   sending.delete(fl);
   if (state === s) { save(); if (current === 'checklist') renderChecklist(); }
+  if (training() && current === 'hub') renderHub({ animate: false }); // l'exercice « Signaler » se coche tout de suite
   if (s.loose) {
     // Pas de réseau : gardé sur le téléphone et renvoyé tout seul plus tard.
     const rest = readLoose().filter((x) => x.fl.at !== fl.at);
@@ -3464,6 +3621,7 @@ function openHistory({ keep = false, team = false } = {}) {
   if (!keep || !hist.week) hist.week = mondayOf(todayISO());
   if (!keep || !hist.up) { hist.up = mondayOf(todayISO()); hist.mode = 'upcoming'; }
   if (team || (!keep && bossWatching())) { hist.mode = 'recent'; hist.period = 'day'; hist.who = ''; } // le patron arrive sur la journée de toute l'équipe
+  if (training() && bossWatching() && !prefs.trainSeen?.reports) { prefs.trainSeen = { ...(prefs.trainSeen || {}), reports: true }; savePrefs(); } // un exercice de la formation
   renderHistory({ animate: !keep });
   show('history');
   refreshHistory();
@@ -4198,16 +4356,23 @@ function fictDays(sc) {
   const hrs = [...new Set(ks.map((k) => `${hhmm(sc[k].start)}–${hhmm(sc[k].end)}`))];
   return `${ks.map(dn).join(', ')} · ${hrs.length === 1 ? hrs[0] : hrs.slice(0, 2).join(' / ')}`;
 }
+// Ronde 9 : trois portes. Employé et Superviseur (on choisit une personne), et « Nouveau dans l'équipe » :
+// Alex, qui arrive (son profil d'abord, puis la visite et les exercices).
 function openFictive(role = '') {
-  const tile = (r, ico) => `<button type="button" class="fp-role${role === r ? ' on' : ''}" data-fprole="${r}" aria-pressed="${role === r}"><span class="fp-ico" aria-hidden="true">${ico}</span><b>${esc(t(r === 'boss' ? 'fictAsBoss' : 'fictAsEmp'))}</b><small>${esc(t(r === 'boss' ? 'fictAsBossSub' : 'fictAsEmpSub'))}</small><em>${FICTIVE_PEOPLE.filter((p) => p.role === r).length}</em></button>`;
-  const people = role ? FICTIVE_PEOPLE.filter((p) => p.role === role) : [];
-  openSheet(`<div class="sheet-head fp-head"><span class="pf-beta">${esc(t('fictBeta'))}</span><h2>${esc(t('fictTitle'))}</h2><p class="lede">${esc(t('fictLede'))}</p></div>
+  const count = (r) => FICTIVE_PEOPLE.filter((p) => p.role === r && !p.fresh).length;
+  const tile = (r, ico) => `<button type="button" class="fp-role${role === r ? ' on' : ''}" data-fprole="${r}" aria-pressed="${role === r}"><span class="fp-ico" aria-hidden="true">${ico}</span><b>${esc(t(r === 'boss' ? 'fictAsBoss' : 'fictAsEmp'))}</b><small>${esc(t(r === 'boss' ? 'fictAsBossSub' : 'fictAsEmpSub'))}</small><em>${count(r)}</em></button>`;
+  const fresh = FICTIVE_PEOPLE.find((p) => p.fresh);
+  const people = role ? FICTIVE_PEOPLE.filter((p) => p.role === role && !p.fresh) : [];
+  openSheet(`<div class="sheet-head fp-head"><h2>${esc(t('fictTitle'))}</h2><p class="lede">${esc(t('fictLede'))}</p></div>
+    ${fresh ? `<button type="button" class="fp-new" data-fpwho="${esc(fresh.email)}"><span class="fp-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 3.3-5.5 6.5-5.5 1.6 0 3 .4 4.1 1.3M18 14v6M15 17h6"/></svg></span><span class="fp-txt"><b>${esc(t('fictAsNew'))}</b><small>${esc(t('fictAsNewSub'))}</small></span>${CHEV_R}</button>` : ''}
     <div class="fp-roles">${tile('employee', '<svg viewBox="0 0 24 24"><path d="M7 3h10v4H7zM9 7v14M15 7v14M9 13h6"/></svg>')}${tile('boss', '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>')}</div>
     ${role ? `<p class="block-label fp-label">${esc(t(role === 'boss' ? 'fictPickBoss' : 'fictPickEmp'))}</p>
     <div class="fp-grid${role === 'boss' ? ' gold' : ''}">${people.map((p, i) => `<button type="button" class="fp-person" data-fpwho="${esc(p.email)}" style="--i:${i}"><span class="fp-av">${avatarOf(p, esc(p.name[0]))}</span><span class="fp-txt"><b>${esc(p.name)}</b><small>${esc(fictDays(p.schedule))}</small></span>${CHEV_R}</button>`).join('')}</div>` : ''}
     <p class="section-note fp-note">${esc(t('fictNote'))}</p>`, (root) => {
     root.querySelector('.fp-roles').addEventListener('click', (e) => { const b = e.target.closest('[data-fprole]'); if (b) { sfx('tap'); openFictive(b.dataset.fprole); requestAnimationFrame(() => root.querySelector('.fp-label')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); } });
-    root.querySelector('.fp-grid')?.addEventListener('click', (e) => { const b = e.target.closest('[data-fpwho]'); if (!b) return; b.classList.add('going'); sfx('tap'); setTimeout(() => enterFictive(b.dataset.fpwho), 260); });
+    const go = (e) => { const b = e.target.closest('[data-fpwho]'); if (!b || b.classList.contains('going')) return; b.classList.add('going'); sfx('tap'); setTimeout(() => enterFictive(b.dataset.fpwho), 260); };
+    root.querySelector('.fp-grid')?.addEventListener('click', go);
+    root.querySelector('.fp-new')?.addEventListener('click', go);
   });
 }
 $('#poolFict').addEventListener('click', () => openFictive());
@@ -4742,6 +4907,8 @@ function openAccount() {
       ${u.visitor ? '' : `<details class="acct-code"><summary class="acct-row"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M16 6l3 3M14 8l2 2"/></svg><span>${esc(t('codeRow'))}</span>${CHEV_R}</summary>
         <div class="acct-code-body"><p class="section-note">${esc(t('codeRowNote'))}</p><div class="acct-btns"><input id="acRoleCode" inputmode="text" autocomplete="off" aria-label="${esc(t('codeRow'))}"><button type="button" class="btn primary" id="acRoleGo">${esc(t('codeApply'))}</button></div><p class="section-note" id="acRoleMsg" aria-live="polite"></p></div></details>`}
       <button type="button" class="acct-row" id="acTour" data-tour-open><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
+      ${FICTIVE || u.visitor ? '' : `<button type="button" class="acct-row" id="acTrain">${TRAIN_ICO}<span>${esc(t('trainRow'))}<small>${esc(t('trainRowSub'))}</small></span>${CHEV_R}</button>`}
+      <button type="button" class="acct-row" id="acPriv">${PRIV_ICO}<span>${esc(t('privRow'))}</span>${CHEV_R}</button>
       
     </div>
     ${admin ? `<p class="block-label">${esc(t('adminTools'))}</p>
@@ -4772,6 +4939,8 @@ function openAccount() {
     };
     if ($('#acWork')) $('#acWork').onclick = () => { prefs.workAsEmp = !prefs.workAsEmp; savePrefs(); sfx('toggle'); paintStatic(); paintFront(); toast(t(prefs.workAsEmp ? 'workAsEmpOn' : 'workAsEmpOff')); closeSheet(); setTimeout(openAccount, 340); };
     $('#acPic').onclick = () => { closeSheet(); setTimeout(openAvatarPicker, 320); };
+    if ($('#acTrain')) $('#acTrain').onclick = () => openFictive(isBoss() && !prefs.workAsEmp ? 'boss' : 'employee');
+    $('#acPriv').onclick = () => openPrivacy();
     $('#acRoleGo')?.addEventListener('click', async () => {
       const code = $('#acRoleCode').value.trim(), msg = $('#acRoleMsg');
       if (!code) return;
@@ -5458,6 +5627,11 @@ function openHub({ keep = false } = {}) {
   renderHub({ animate: !keep });
   show('hub');
   refreshHub();
+  // Mode formation : à l'arrivée, le profil (le nouveau) puis le tutoriel du rôle partent tout seuls, une fois.
+  if (FICTIVE && !prefs.welcomed?.[session.user.email] && !openHub.trainQueued) {
+    openHub.trainQueued = true;
+    setTimeout(() => { if ($('#tour') || !$('#sheet').hidden || current !== 'hub') { openHub.trainQueued = false; return; } if (prefs.onboard) openOnboarding({ after: startTour }); else startTour(); }, 900);
+  }
 }
 async function refreshHub() {
   if (adminHome()) {
@@ -5651,7 +5825,7 @@ function hubEmployee() {
   const tg = myShiftTarget();
   const fixable = (hist.recent || []).filter((s) => !s.open && ownFixable(s)).length;
   // Propriétaire : la semaine vit dans l'onglet « Historique »; le manuel reste là, plus petit.
-  return `${holidayNotice()}${hubMainCard(tg)}${swapOffers()}${tg ? glanceCard(tg) : ''}
+  return `${holidayNotice()}${hubMainCard(tg)}${trainingCard()}${swapOffers()}${tg ? glanceCard(tg) : ''}
     <nav class="hb-tiles" aria-label="${esc(t('hubAsk'))}">
       ${tile('plan', 'plan', t('tPlan'), t('tPlanSub'))}
       ${tile('flag', 'flag', t('tFlag'), t('tFlagSub'))}
@@ -5733,6 +5907,7 @@ function hubAdmin() {
       <span class="hg-head"><span class="hg-title">${hubIco('star')}<b>${esc(t('admLastUpdate'))}</b></span><span class="hg-when num">${esc(cap(dateOf(up.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</span></span>
       <h3 class="adm-uptitle">${esc(U.title)}</h3>
       <ul class="adm-items">${U.items.map((x) => `<li>${HUB_ICO.check}<span>${md(x)}</span></li>`).join('')}</ul>
+      ${UPDATES.length > 1 ? `<details class="adm-older"><summary>${esc(t('admOlder', Math.min(4, UPDATES.length - 1)))}</summary>${UPDATES.slice(1, 5).map((o) => { const O = o[L] || o.fr; return `<div class="adm-old"><p class="adm-olddate num">${esc(cap(dateOf(o.date).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })))}</p><h4>${esc(O.title)}</h4><ul class="adm-items">${O.items.map((x) => `<li>${HUB_ICO.check}<span>${md(x)}</span></li>`).join('')}</ul></div>`; }).join('')}</details>` : ''}
     </section>
     <section class="hb-glance adm-fb">
       <span class="hg-title">${hubIco('flag')}<b>${esc(t('admFbTitle'))}</b></span>
@@ -5806,7 +5981,7 @@ function hubBoss() {
     ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i></div>'
       : `<div class="hb-grps">${groupTile('lead', on.lead)}${groupTile('emp', on.emp)}</div>`}
   </section>`;
-  return `${holidayNotice()}${main}${todayCard}${weekCard()}
+  return `${holidayNotice()}${main}${trainingCard()}${todayCard}${weekCard()}
     <nav class="hb-tiles">
       ${tile('myhours', 'plan', t('tMyHours'), t('tMyHoursSub'))}
       ${tile('access', 'access', t('tAccess'), t('tAccessSub'))}
@@ -6655,6 +6830,8 @@ function renderPrefs() {
     </section>
     <section class="d-card"><div class="d-head"><h2>${esc(t('prMore'))}</h2></div>
       <button type="button" class="acct-row" data-pract="tour"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></svg><span>${esc(t('tourRow'))}</span>${CHEV_R}</button>
+      ${FICTIVE ? '' : `<button type="button" class="acct-row" data-pract="train">${TRAIN_ICO}<span>${esc(t('trainRow'))}<small>${esc(t('trainRowSub'))}</small></span>${CHEV_R}</button>`}
+      <button type="button" class="acct-row" data-pract="privacy">${PRIV_ICO}<span>${esc(t('privRow'))}</span>${CHEV_R}</button>
       ${session.user && !session.user.visitor ? `<button type="button" class="acct-row" data-pract="account">${HUB_ICO.access}<span>${esc(t('account'))}</span>${CHEV_R}</button>` : ''}
     </section>
     <p class="section-note pr-defaults">${esc(t('prDefaults'))}</p>
@@ -6701,7 +6878,17 @@ $('#prefsBody').addEventListener('click', async (ev) => {
   else if (k === 'device') openNotify();
   else if (k === 'account') openAccount();
   else if (k === 'tour') startTour();
+  else if (k === 'train') openFictive(isBoss() && !prefs.workAsEmp ? 'boss' : 'employee');
+  else if (k === 'privacy') openPrivacy();
 });
+// ---------- Ta vie privée (ronde 9, Q96) : en mots simples, seulement ce que l'app fait vraiment ----------
+const TRAIN_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-5 9 5-9 5z"/><path d="M7 11.5V16c1.5 1.4 3.2 2 5 2s3.5-.6 5-2v-4.5M21 9v5"/></svg>';
+const PRIV_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><rect x="9" y="10.5" width="6" height="5" rx="1"/><path d="M10.5 10.5V9a1.5 1.5 0 0 1 3 0v1.5"/></svg>';
+function openPrivacy() {
+  const part = (k) => `<h3 class="priv-h">${esc(t(`priv${k}T`))}</h3><ul class="priv-list">${(t(`priv${k}`) || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  openSheet(`<div class="sheet-head priv-head">${PRIV_ICO}<h2>${esc(t('privTitle'))}</h2><p class="lede">${esc(t('privLede'))}</p></div>
+    <div class="priv">${['Kept', 'See', 'Never', 'Phone', 'More'].map(part).join('')}<p class="section-note">${esc(t('privAsk'))}</p></div>`);
+}
 $('#prefsBody').addEventListener('input', (ev) => {
   if (ev.target.id !== 'prVol') return;
   const v = Number(ev.target.value) / 100;
@@ -7085,5 +7272,16 @@ if ('serviceWorker' in navigator && isSecureContext) {
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloaded = false;
   navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'push' && !document.hidden) refreshExtras(); }); // un avis arrive, l'app à l'écran se met à jour (cachée : au retour)
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  // Ronde 9 : la mise à jour s'installe en silence. On recharge quand l'app est cachée, ou après
+  // 20 s sans toucher l'écran (aucun panneau ouvert, rien en train d'être tapé), jamais au milieu d'un geste.
+  let lastTouch = Date.now();
+  for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { lastTouch = Date.now(); }, { capture: true, passive: true });
+  const calm = () => $('#sheet').hidden && !$('#tour') && !document.activeElement?.matches?.('input, textarea, select') && Date.now() - lastTouch > 20000;
+  const reloadSoon = () => { if (document.hidden || calm()) location.reload(); else setTimeout(reloadSoon, 5000); };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    addEventListener('visibilitychange', () => { if (document.hidden) location.reload(); });
+    reloadSoon();
+  });
 }

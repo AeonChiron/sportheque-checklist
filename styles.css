@@ -4124,3 +4124,71 @@ html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
    et le grand titre ne déborde plus à droite. */
 .pool { zoom: calc(1 / var(--zoom, 1)); }
 .pool-head .pool-gym { zoom: calc(1 / var(--zoom, 1)); } /* le logo, pas du texte à lire */
+
+/* ---------- Ronde 9 : Mode formation, premier départ, vie privée ---------- */
+/* Les exercices sur l'accueil : une carte calme, une ligne par exercice, coché quand c'est fait. */
+.hb-train { width: 100%; border-radius: 26px; padding: 16px; background: var(--surface); border: 2px solid color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--ink); box-shadow: 0 14px 30px -24px rgba(0, 30, 80, .55); }
+.hb-train.is-done { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+.tn-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tn-head h2 { display: flex; align-items: center; gap: 10px; margin: 0; font: 750 20px/1.15 var(--serif); font-variation-settings: 'SOFT' 100; }
+.tn-count { flex: none; font: 800 13px/1 var(--font); padding: 6px 10px; border-radius: 99px; background: var(--sunk); }
+.tn-bar { display: block; height: 6px; margin: 12px 0 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
+.tn-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .5s cubic-bezier(.2, .9, .3, 1); }
+.hb-train.is-done .tn-bar i { background: var(--ok); }
+.tn-sub { margin: 0 0 10px; color: var(--muted); font-size: 15px; line-height: 1.4; }
+.tn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tn-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); text-align: left; font: inherit; cursor: pointer; transition: transform .16s, border-color .16s; }
+.tn-row:active { transform: scale(.985); }
+.tn-row:hover { border-color: var(--accent); }
+.tn-check { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--ink) 30%, transparent); display: grid; place-items: center; }
+.tn-check svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.tn-row.done .tn-check { border-color: var(--ok); background: var(--ok); }
+.tn-row.done .tn-txt b { text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: color-mix(in srgb, var(--ink) 35%, transparent); }
+.tn-row.done .tn-txt small { opacity: .7; }
+.tn-txt { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.tn-txt b { font: 700 16px/1.25 var(--font); }
+.tn-txt small { font: 500 13.5px/1.35 var(--font); color: var(--muted); }
+.tn-row > .ico { width: 18px; height: 18px; flex: none; opacity: .5; }
+.tn-exit { width: 100%; margin-top: 12px; }
+
+/* « Nouveau dans l'équipe » : une grande ligne au-dessus des deux tuiles. */
+.fp-new { display: flex; align-items: center; gap: 12px; width: 100%; margin: 6px 0 12px; padding: 14px; border-radius: 20px; border: 2px solid color-mix(in srgb, #1fae6a 45%, var(--line, rgba(0,0,0,.1))); background: var(--card, #fff); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; transition: transform .18s, box-shadow .18s; }
+.fp-new:active, .fp-new.going { transform: scale(.97); }
+.fp-new.going { box-shadow: 0 0 0 4px rgba(31,174,106,.2); }
+.fp-new .fp-ico { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(145deg, #3fd18b, #148a52); box-shadow: 0 6px 16px rgba(20,140,80,.3); }
+.fp-new .fp-ico svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fp-new .fp-txt b { font-size: 17px; }
+.fp-new > .ico { width: 18px; height: 18px; flex: none; opacity: .5; }
+
+/* Le premier départ : une étape à la fois, de gros boutons. */
+.ob-head .eyebrow { margin-bottom: 4px; }
+.ob-dots { justify-content: flex-start; margin: 0 0 14px; }
+.ob-head h2:focus { outline: none; }
+.ob-seg { width: 100%; }
+.ob-seg button { min-height: 52px; font-size: 16px; }
+.ob-sample { margin: 10px 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--sunk); font-size: 16px; line-height: 1.4; }
+.ob-sw { display: grid; gap: 4px; }
+.ob-pics { margin-top: 4px; }
+.ob-wide { width: 100%; max-width: none; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+.ob-wide svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ob-cheer { display: block; width: 96px; height: auto; margin: 0 auto 6px; }
+.ob-time { text-align: center; margin-top: 8px; }
+
+/* Ta vie privée : des titres courts et des listes simples. */
+.priv-h { margin: 18px 0 8px; font: 750 17px/1.2 var(--serif); font-variation-settings: 'SOFT' 100; }
+.priv-h:first-child { margin-top: 4px; }
+.priv-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15.5px; line-height: 1.45; }
+.priv .section-note { margin-top: 18px; }
+
+/* Admin : les 4 mises à jour d'avant, repliées sous la dernière. */
+.adm-older { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.adm-older summary { cursor: pointer; font: 700 15px/1.3 var(--font); color: var(--link, var(--accent)); padding: 6px 0; }
+.adm-old { margin-top: 12px; }
+.adm-old h4 { margin: 2px 0 8px; font: 700 16px/1.25 var(--font); }
+.adm-olddate { margin: 0; font-size: 13px; color: var(--muted); }
+/* Le premier départ : « Passer » petit, « Suivant » prend le reste de la largeur. */
+#sheet .sheet-foot:has(#obSkip) { display: flex; gap: 10px; }
+#sheet .sheet-foot #obSkip { flex: none; min-width: 104px; min-height: 54px; }
+#sheet .sheet-foot #obNext { flex: 1; min-height: 54px; }
+#sheet .sheet-foot:has(#obNext[hidden]) #obSkip { flex: 1; }
+.priv-head > .ico { width: 40px; height: 40px; padding: 8px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 8px; }

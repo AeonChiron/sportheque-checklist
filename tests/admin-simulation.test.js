@@ -23,8 +23,10 @@ function scheduleContext(hour = 10, minute = 0) {
     dowOf: iso => (new Date(iso+'T12:00:00').getDay()+6)%7,
     presetOf: x => x || null, toMin: x => +x.slice(0,2)*60 + +x.slice(3),
     specialFor: () => null, SPECIALS: [], extras: { overrides: {}, tasks: [] },
+    training: () => false, bossWatching: () => false, state: null, // le mode formation ne touche jamais un vrai compte
   });
   vm.runInContext(fn('mySched'), c);
+  vm.runInContext(fn('plannedShift'), c);
   vm.runInContext(fn('nextShift'), c);
   return c;
 }

@@ -29,7 +29,10 @@ const EMPLOYEES = [
   ['William', { 5: 'jour', 6: 'jour', 1: 'tot' }],
   ['Rosalie', { 3: 'mid', 5: 'mid', 6: 'mid' }],
   ['Thomas', { 1: 'jour', 2: 'tot', 4: 'jour' }],
+  // Ronde 9 (Q81) : « Nouveau dans l'équipe » : Alex vient d'arriver (pas de passé, pas de photo).
+  ['Alex', { 1: 'soir', 3: 'soir', 5: 'jour' }],
 ];
+const NEWCOMER = 'Alex';
 // Les superviseurs ont leurs heures aussi (propriétaire : AM / PM), un ou deux le matin, un le soir.
 const BOSSES = [
   ['Martine', { 0: 'bam', 1: 'bam', 2: 'bam', 3: 'bam' }],
@@ -43,7 +46,7 @@ const slug = (n) => n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().rep
 const mailOf = (n) => `${slug(n)}@equipe-fictive.ca`;
 
 export const FICTIVE_PEOPLE = [
-  ...EMPLOYEES.map(([name, sc], i) => ({ name, email: mailOf(name), role: 'employee', avatar: `m:${MASC[i % 8]}`, schedule: Object.fromEntries(Object.entries(sc).map(([k, v]) => [k, day(v)])) })),
+  ...EMPLOYEES.map(([name, sc], i) => ({ name, email: mailOf(name), role: 'employee', avatar: name === NEWCOMER ? '' : `m:${MASC[i % 8]}`, ...(name === NEWCOMER ? { fresh: true } : {}), schedule: Object.fromEntries(Object.entries(sc).map(([k, v]) => [k, day(v)])) })),
   ...BOSSES.map(([name, sc], i) => ({ name, email: mailOf(name), role: 'boss', avatar: `m:${MASC[(i + 10) % 8]}`, schedule: Object.fromEntries(Object.entries(sc).map(([k, v]) => [k, day(v)])) })),
 ];
 
@@ -76,7 +79,7 @@ function generate(today) {
   for (let back = DAYS_BACK; back >= 0; back--) {
     const date = addDays(today, -back);
     const nowMin = back === 0 ? new Date().getHours() * 60 + new Date().getMinutes() : 99999;
-    for (const p of FICTIVE_PEOPLE.filter((x) => x.role === 'employee')) {
+    for (const p of FICTIVE_PEOPLE.filter((x) => x.role === 'employee' && !x.fresh)) {
       const h = p.schedule[dow(date)];
       if (!h) continue;
       const end = +h.end.slice(0, 2) * 60 + +h.end.slice(3);
@@ -108,14 +111,15 @@ function generate(today) {
     }
   }
   // Ce qui s'en vient : quelques tâches et un changement d'horaire, comme dans la vraie vie.
+  const seeded = new Date(Date.now() - 864e5).toISOString(); // d'hier : les exercices de la formation ne comptent que ce qu'on fait soi-même
   const tasks = [
-    { id: 'f1', date: addDays(today, 1), title: 'Laver les vitres de l’entrée', time: '19:30', minutes: 20, who: '*', by: 'Martine', at: new Date().toISOString() },
-    { id: 'f2', date: today, title: 'Vérifier les extincteurs', time: '', minutes: 15, who: mailOf('Noah'), by: 'Patrick', at: new Date().toISOString() },
-    { id: 'f3', date: addDays(today, 2), title: 'Ranger le local d’entretien', time: '20:30', minutes: 30, who: mailOf('Félix'), by: 'Isabelle', at: new Date().toISOString() },
+    { id: 'f1', date: addDays(today, 1), title: 'Laver les vitres de l’entrée', time: '19:30', minutes: 20, who: '*', by: 'Martine', at: seeded },
+    { id: 'f2', date: today, title: 'Vérifier les extincteurs', time: '', minutes: 15, who: mailOf('Noah'), by: 'Patrick', at: seeded },
+    { id: 'f3', date: addDays(today, 2), title: 'Ranger le local d’entretien', time: '20:30', minutes: 30, who: mailOf('Félix'), by: 'Isabelle', at: seeded },
   ];
   const overrides = { [mailOf('Maya')]: { [addDays(today, 3)]: { start: '18:00', end: '23:00', by: 'Martine' } }, [mailOf('Zoé')]: { [addDays(today, 8)]: { off: true, conge: true, by: 'Patrick' }, [addDays(today, 9)]: { off: true, conge: true, by: 'Patrick' } } };
   // Une tâche qui revient chaque semaine (le jour de la semaine d'aujourd'hui), pour tout le monde.
-  const repeat = [{ id: 'fr1', title: 'Désinfecter les poignées de porte', time: '', minutes: 10, who: '*', wd: dow(today), from: addDays(today, -14), until: '', skip: [], by: 'Martine', at: new Date().toISOString() }];
+  const repeat = [{ id: 'fr1', title: 'Désinfecter les poignées de porte', time: '', minutes: 10, who: '*', wd: dow(today), from: addDays(today, -14), until: '', skip: [], by: 'Martine', at: seeded }];
   const ago = (n, h = '10:00') => atISO(addDays(today, -n), h);
   // Le coin des superviseurs (inventé) : quelques messages entre eux et des idées d'employés.
   const ideas = [
@@ -270,6 +274,7 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
       const all = (d.overrides[body.email] ||= {});
       const span = []; for (let x = body.date; x <= (body.to && body.to >= body.date ? body.to : body.date) && span.length < 62; x = addDays(x, 1)) span.push(x);
       if (body.clear) for (const x of span) delete all[x]; else if (body.off || body.conge) for (const x of span) all[x] = { off: true, ...(body.conge ? { conge: true } : {}), by: me.name }; else all[body.date] = { start: body.start, end: body.end, by: me.name };
+      if (body.email !== me.email && !body.clear) (d.trained ||= {})[me.email] = { ...(d.trained?.[me.email] || {}), sched: true }; // un exercice de la formation
       persist(); return { ok: true };
     }
     if (body.action === 'task') {
@@ -351,14 +356,16 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
 }
 
 // Entrer : un espace à part (clés « fict: »), les réglages de langue et de thème suivent.
+// Ronde 9 : c'est le « Mode formation » : le tutoriel du rôle part à l'arrivée (pas de « welcomed »), puis
+// des exercices sur l'accueil. Le nouveau (Alex) commence par son profil (langue, photo, confort), en français.
 export function enterFictive(email) {
   const real = (() => { try { return JSON.parse(localStorage.getItem('gym-shift-prefs')) || {}; } catch { return {}; } })();
   clearFictiveKeys();
   sessionStorage.removeItem(DB);
-  sessionStorage.setItem(FLAG, JSON.stringify({ who: email }));
+  sessionStorage.setItem(FLAG, JSON.stringify({ who: email, since: new Date().toISOString() }));
   const u = FICTIVE_PEOPLE.find((p) => p.email === email);
   try {
-    localStorage.setItem('fict:gym-shift-prefs', JSON.stringify({ lang: real.lang || 'fr', theme: real.theme || 'light', sound: real.sound, welcomed: { [email]: true }, installSeen: true, swipeSeen: true, schedules: { [email]: u?.schedule || {} } }));
+    localStorage.setItem('fict:gym-shift-prefs', JSON.stringify({ lang: u?.fresh ? 'fr' : real.lang || 'fr', theme: real.theme || 'light', sound: real.sound, volume: real.volume, calm: real.calm, textSize: u?.fresh ? undefined : real.textSize, training: true, ...(u?.fresh ? { onboard: true } : {}), installSeen: true, swipeSeen: true, schedules: { [email]: u?.schedule || {} } }));
   } catch { /* ignore */ }
   // Propriétaire : on arrive sur le tableau de bord, pas dans un quart. (Changer seulement le « # »
   // ne recharge pas la page : on pose l'adresse, puis on recharge.)
@@ -370,5 +377,21 @@ export function exitFictive() {
   sessionStorage.removeItem(FLAG);
   sessionStorage.removeItem(DB);
   location.replace(location.pathname);
+}
+// Les exercices de la formation : faits ou pas, d'après ce que la personne a fait depuis son arrivée.
+export function fictiveProgress() {
+  const d = load(), who = fictiveWho(), me = d.users[who];
+  if (!me) return {};
+  let since = '';
+  try { since = JSON.parse(sessionStorage.getItem(FLAG))?.since || ''; } catch { /* ignore */ }
+  const after = (x) => Boolean(x) && x >= since;
+  const mine = Object.values(d.board).flat().filter((s) => s.byEmail === who || s.name === me.name);
+  return {
+    send: mine.some((s) => after(s.submittedAt)),
+    flag: d.problems.some((p) => p.byEmail === who && after(p.at)),
+    problem: d.problems.some((p) => p.status === 'resolved' && p.resolvedBy === me.name && after(p.resolvedAt)),
+    task: [...d.tasks, ...d.repeat].some((x) => x.by === me.name && after(x.at)),
+    sched: Boolean(d.trained?.[who]?.sched) || Object.values(d.users).some((u) => u.scheduleBy === me.name && after(u.scheduleAt)),
+  };
 }
 function clearFictiveKeys() { try { for (const k of Object.keys(localStorage)) if (k.startsWith('fict:')) localStorage.removeItem(k); } catch { /* ignore */ } }
