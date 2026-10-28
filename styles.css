@@ -4006,8 +4006,8 @@ html[data-text="xl"] .pr-vol input { grid-column: 1 / -1; grid-row: 2; }
 .dy-open:hover .dy-person, .dy-open:focus-visible .dy-person { border-color: var(--accent); }
 .dy-zone { margin: 8px 2px 6px; font: 700 13px/1.2 var(--font); color: var(--muted); }
 .rc-rb-ico svg, .rc-month-acts .btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.wk-misc { top: -6px; left: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; z-index: 1; }
-.wk-misc svg { width: 12px; height: 12px; }
+.wk-misc { top: -12px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; z-index: 1; }
+.wk-misc svg { width: 11px; height: 11px; } /* au-dessus de la pastille, centré : ne cache plus « JEU » */
 /* Ronde 6, après l'équipe : filtres sur deux lignes, flèche expliquée, chiffres visibles, mois d'avant/après. */
 .rc-filters { flex-wrap: wrap; overflow: visible; }
 .rc-vs { margin: -4px 4px 12px; font-size: 12.5px; color: var(--muted); }
@@ -4195,3 +4195,5 @@ html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
 
 /* Tâche spéciale sans image : toujours la même icône « divers » (pas un carré vide). */
 .t-icon .misc-ico { width: 58%; height: 58%; margin: auto; fill: none; stroke: color-mix(in srgb, var(--pc, var(--accent)) 80%, var(--ink)); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.visual .misc-ico.big { display: block; width: 72px; height: 72px; margin: 18px auto; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.hg-fact.k-misc b { white-space: pre-line; } /* une tâche ajoutée par ligne */

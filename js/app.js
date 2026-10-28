@@ -2169,7 +2169,8 @@ function taskVisual(it) {
   if (it.deep || (it.zone && it.photo === 'miroirs')) {
     return `<figure class="visual map-visual"><figcaption class="block-label">${t('zoneMap')}</figcaption><div data-map></div></figure>`;
   }
-  return `<figure class="visual alive">${illustration(it.photo, it.title)}</figure>`;
+  const art = illustration(it.auto ? 'pointage' : it.photo, it.title) || (it.special || it.assigned ? HUB_ICO.misc.replace('<svg ', '<svg class="misc-ico big" ') : '');
+  return art ? `<figure class="visual alive">${art}</figure>` : ''; // pas de bande vide
 }
 
 function openTask(id) {
@@ -2178,8 +2179,8 @@ function openTask(id) {
   if (e.steps) e.steps = e.steps.filter((i) => i < it.steps.length); // étapes d'une ancienne version du manuel
   const extra = plan.overflow.includes(it);
   const pills = [
-    extra ? '' : `<span class="pill num">${f(it.start)} – ${f(it.end)}</span>`,
-    `<span class="pill num">${it.minutes} min</span>`,
+    extra ? '' : `<span class="pill num">${it.minutes ? `${f(it.start)} – ${f(it.end)}` : f(it.start)}</span>`,
+    it.minutes ? `<span class="pill num">${it.minutes} min</span>` : '', // le pointage : une heure, pas « 0 min »
     it.zone ? `<span class="pill">Zone ${it.zone}</span>` : '',
   ].join('');
   const tv = it.tvTable
@@ -5624,7 +5625,7 @@ function shiftFacts(tg) {
   const facts = [];
   if (tg.special) facts.push({ k: 'star', label: t('glSpecial'), value: tasks.map((x) => x.title).join(' + ') });
   const asg = tasks.filter((x) => x.assigned);
-  if (asg.length) facts.unshift({ k: 'misc', label: t('glAssigned'), value: asg.map((x) => `${x.title}${x.start ? ` · ${nb(f(x.start))}` : ''}`).join(' + '), sub: t('assignedBy', asg[0].by) });
+  if (asg.length) facts.unshift({ k: 'misc', label: t('glAssigned'), value: asg.map((x) => `${x.title}${x.start ? ` · ${nb(f(x.start))}` : ''}`).join('\n'), sub: t('assignedBy', [...new Set(asg.map((x) => x.by))].join(lang() === 'en' ? ' and ' : ' et ')) });
   const deep = find(/-profondeur$/);
   if (deep) {
     const z = dayInfo(tg.date).zones[shift];
