@@ -4192,3 +4192,6 @@ html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
 /* Le premier départ prend toute la largeur (le ✕ est au-dessus, dans le coin). */
 .sheet-head.ob-head { padding-right: 0; }
 .ob-head .eyebrow, .ob-head .ob-dots { padding-right: 52px; }
+
+/* Tâche spéciale sans image : toujours la même icône « divers » (pas un carré vide). */
+.t-icon .misc-ico { width: 58%; height: 58%; margin: auto; fill: none; stroke: color-mix(in srgb, var(--pc, var(--accent)) 80%, var(--ink)); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

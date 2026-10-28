@@ -1401,7 +1401,11 @@ function openChecklist() {
   // « Avec toi » dans la liste aussi : qui travaille en même temps (chargé une fois).
   if (session.user && accounts() && !boss.teamLoaded) loadTeamView(addDays(mondayOf(todayISO()), -7), addDays(mondayOf(todayISO()), 13)).then(() => { if (current === 'checklist') renderChecklist(); });
   plan = shiftPlan(state);
-  setTimeout(() => document.querySelector('#taskList .task.current, #taskList .task:not(.done)')?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }), current === 'checklist' ? 0 : 450);
+  setTimeout(() => { // seulement si la tâche est cachée plus bas : sinon le titre « Tes tâches » glisse sous l'en-tête
+    const el = document.querySelector('#taskList .task.current, #taskList .task:not(.done)');
+    const r = el?.getBoundingClientRect(), top = document.querySelector('#checklist .topbar')?.getBoundingClientRect().bottom || 0;
+    if (r && (r.bottom > innerHeight - 110 || r.top < top)) { el.style.scrollMarginTop = `${Math.round(top) + 56}px`; el.style.scrollMarginBottom = '120px'; el.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); }
+  }, current === 'checklist' ? 0 : 450);
   renderChecklist();
   show('checklist');
 }
@@ -1422,12 +1426,18 @@ function nowMinutes() {
 // Chaque type de tâche a la couleur d'un disque olympique (rouge, bleu, jaune, vert…).
 const PLATE = { accueil: 'r', fermeture: 'r', buanderie: 'b', spinning: 'b', dechets: 'y', gym: 'g', zone: 'g', surfaces: 'g', cardio: 'w', muscu: 'w', bureaux: 'k' };
 const plateOf = (it) => PLATE[it?.area] || 'k';
-const icon = (it) => `<span class="t-icon${state?.tasks?.[it.id]?.done ? '' : ' alive'}" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? illustration('pointage') : illustration(it.photo)}</span>`;
+const icon = (it) => `<span class="t-icon${state?.tasks?.[it.id]?.done ? '' : ' alive'}" data-plate="${plateOf(it)}" style="--pc:var(--plate-${plateOf(it)})" aria-hidden="true">${it.auto ? illustration('pointage') : illustration(it.photo) || (it.special || it.assigned ? HUB_ICO.misc.replace('<svg ', '<svg class="misc-ico" ') : '')}</span>`;
 
+// Une seule tâche « En cours » à la fois : la tâche du déroulement d'abord, une tâche spéciale seulement si rien d'autre.
+function nowTaskId(now) {
+  if (now === null) return null;
+  const hit = planTasks().filter((x) => x.start <= now && now < x.end);
+  return (hit.find((x) => !x.special && !x.assigned) || hit[0])?.id ?? null;
+}
 function taskRow(it, { extra = false } = {}) {
   const e = state.tasks[it.id] || {};
   const now = nowMinutes();
-  const isNow = !extra && now !== null && it.start <= now && now < it.end;
+  const isNow = !extra && it.id === nowTaskId(now);
   const punch = it.id === 'pointage';
   const cls = ['task', e.done && 'done', e.skipped && !e.done && 'skipped', isNow && 'current', punch && 'punch', punch && !e.done && 'alive', punch && justPunched && 'stamp'].filter(Boolean).join(' ');
   const tags = [];
