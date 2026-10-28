@@ -655,9 +655,10 @@ function nextShift() {
   if (!nx || !training() || bossWatching() || state?.date || (nx.date === todayISO() && nx.ready) || fictiveProgress().send) return nx;
   const now = new Date();
   const dur = (toMin(nx.end) - toMin(nx.start) + 1440) % 1440 || 480;
-  const start = Math.min(Math.floor((now.getHours() * 60 + now.getMinutes()) / 15) * 15, 1380); // tard le soir : un quart plus court, mais jamais déjà fini
+  const start = Math.floor((now.getHours() * 60 + now.getMinutes()) / 15) * 15;
+  const end = start + dur <= 1435 ? start + dur : start + 60 <= 1435 ? 1435 : (start + 60) % 1440; // tard le soir : plus court, jamais déjà fini
   const hh = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  return { ...nx, date: todayISO(), start: hh(start), end: hh(Math.min(start + dur, 1435)), special: '', changed: false, ready: true };
+  return { ...nx, date: todayISO(), start: hh(start), end: hh(end), special: '', changed: false, ready: true };
 }
 function plannedShift() {
   const sc = mySchedule() || {};
@@ -903,6 +904,7 @@ function maybeWelcome() {
   if (current !== 'auth') return;
   if (session.user.visitor) startTour();
   else if (FICTIVE) { if (prefs.onboard) openOnboarding({ after: startTour }); else startTour(); }
+  else if (session.user.avatar && Object.keys(mySchedule() || {}).length && !prefs.simNew) { prefs.welcomed = { ...(prefs.welcomed || {}), [key]: true }; savePrefs(); } // compte déjà prêt (nouveau téléphone)
   else openOnboarding({ real: true });
 }
 // ---------- Mode formation (ronde 9, Q81 / D10) ----------
@@ -963,7 +965,13 @@ function openOnboarding({ after = null, real = false } = {}) {
     delete prefs.onboard; savePrefs();
   };
   // Fermer la feuille (✕, fond, glisser) = « Plus tard » : on ne redemande pas, mais la visite part quand même.
-  const watch = setInterval(() => { if (!over && $('#sheet').hidden) { over = true; clearInterval(watch); mark(); const then = real ? startTour : after; if (then) setTimeout(then, 400); } }, 700);
+  // Vrai compte fermé avant d'avoir vu la formation (Retour, fond, glisser) : on la propose une fois, puis c'est fini.
+  let reoffered = false;
+  const watch = setInterval(() => {
+    if (over || !$('#sheet').hidden || $('#sheet').classList.contains('closing')) return;
+    if (real && steps[i] !== 'train' && !reoffered) { reoffered = true; i = steps.length - 1; paint(true); return; }
+    over = true; clearInterval(watch); mark(); const then = real ? startTour : after; if (then) setTimeout(then, 400);
+  }, 700);
   const finish = (then) => { if (over) return; over = true; clearInterval(watch); mark(); closeSheet(); if (then) setTimeout(then, 380); };
   const seg = (name, cur, opts, label) => `<div class="segmented ob-seg" role="radiogroup" aria-label="${esc(label)}">${opts.map(([k, l]) => `<button type="button" role="radio" data-ob="${name}" data-v="${k}" aria-checked="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
   const sw = (id, label, on, sub = '') => `<button type="button" class="pr-row" data-obsw="${id}" role="switch" aria-checked="${Boolean(on)}"><span><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><i class="switch" aria-hidden="true"></i></button>`;
@@ -1103,9 +1111,13 @@ function startTour() {
     box.classList.remove('on');
     setTimeout(() => box.remove(), 300);
     removeEventListener('resize', place);
+    removeEventListener('popstate', leave);
     if (sheetOpen()) closeSheet();
     if (then) setTimeout(then, 380);
   };
+  // Retour (Android) ou un lien : on quitte l'accueil, la visite s'arrête (pas de lumière sur un écran vide).
+  function leave() { setTimeout(() => { if (box.isConnected && current !== 'hub' && !sheetOpen()) end(); }, 80); }
+  addEventListener('popstate', leave);
   const hasSched = () => Boolean(mySchedule() && Object.keys(mySchedule()).length);
   const finish = (skipped = false) => {
     if (sheetOpen()) closeSheet();
@@ -1136,7 +1148,7 @@ function startTour() {
     const fits = below ? th <= roomBelow : th <= roomAbove;
     // Pas de place (petit écran, gros texte) : on remonte la cible en haut une fois, puis on replace la bulle.
     if (!fits && !place.lifted) { place.lifted = true; el.scrollIntoView({ block: 'start' }); requestAnimationFrame(place); return; }
-    tip.style.cssText = !fits ? (roomAbove > roomBelow && r.top > innerHeight / 2 ? 'top:12px' : 'bottom:12px') : below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
+    tip.style.cssText = !fits ? (roomAbove > roomBelow && r.top > innerHeight / 2 ? `top:${FICTIVE ? 64 : 12}px` : 'bottom:12px') : below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
     tip.dataset.side = !fits ? 'over' : below ? 'below' : 'above';
     const tr0 = tip.getBoundingClientRect(), tr = { left: tr0.left / z, width: tr0.width / z };
     tip.style.setProperty('--ax', `${Math.min(Math.max(r.left + r.width / 2 - tr.left - 8, 18), tr.width - 34)}px`); // la pointe de la bulle vise le bouton
@@ -1144,7 +1156,8 @@ function startTour() {
   const show = () => {
     if (prefs.simNew) { prefs.simNew.tourStep = i; savePrefs(); }
     if (i >= steps.length) { finish(); return; }
-    const [sel, k, inSheet] = steps[i];
+    const [sel, k0, inSheet] = steps[i];
+    const k = k0 === 'tourHubMain' && $('#hbMain')?.classList.contains('is-empty') ? 'tourHubMainNone' : k0; // pas encore d'horaire
     // Les étapes du compte : la feuille s'ouvre; revenir à l'accueil la referme.
     if (inSheet && !sheetOpen()) { openAccount(); box.classList.add('wait'); setTimeout(() => { box.classList.remove('wait'); show(); }, 480); return; }
     if (!inSheet && sheetOpen()) { closeSheet(); box.classList.add('wait'); setTimeout(() => { box.classList.remove('wait'); show(); }, 400); return; }
@@ -1166,7 +1179,7 @@ function startTour() {
     const go = e.target.closest('[data-tour-go]');
     if (go) { i = Number(go.dataset.tourGo); show(); return; } // sauter directement à une étape
     const b = e.target.closest('[data-tour]');
-    const act = b?.dataset.tour || (e.target === hole || e.target === box ? 'next' : '');
+    const act = b?.dataset.tour || ''; // toucher le fond sombre ne saute plus d'étape
     if (act === 'next') { i += 1; show(); }
     else if (act === 'skip') { i = steps.length; finish(true); }
     else if (act === 'pic') {
@@ -3188,7 +3201,8 @@ function statusIn(list, id) {
 }
 function stateLine(st) {
   if (st.kind === 'done') return `<span class="st ok">✓ ${esc(t('doneBy', st.by, st.at))}</span>`;
-  if (st.kind === 'notdone') return `<span class="st bad">✕ ${esc(t('notDoneBy', SKIP_REASONS[st.reason]?.[lang()] || st.by))}</span>`;
+  // Aider, pas surveiller : un collègue voit « Pas fait », jamais le nom de la personne (la raison va aux superviseurs).
+  if (st.kind === 'notdone') { const why = SKIP_REASONS[st.reason]?.[lang()] || (bossWatching() ? st.by : ''); return `<span class="st bad">✕ ${esc(why ? t('notDoneBy', why) : t('notDone'))}</span>`; }
   if (st.kind === 'unchecked') return `<span class="st warn">○ ${esc(t('notChecked'))}</span>`;
   return `<span class="st">${esc(t('planned'))}</span>`;
 }
