@@ -655,9 +655,9 @@ function nextShift() {
   if (!nx || !training() || bossWatching() || state?.date || (nx.date === todayISO() && nx.ready) || fictiveProgress().send) return nx;
   const now = new Date();
   const dur = (toMin(nx.end) - toMin(nx.start) + 1440) % 1440 || 480;
-  const start = Math.max(0, Math.min(Math.floor((now.getHours() * 60 + now.getMinutes()) / 15) * 15, 1435 - dur));
+  const start = Math.min(Math.floor((now.getHours() * 60 + now.getMinutes()) / 15) * 15, 1380); // tard le soir : un quart plus court, mais jamais déjà fini
   const hh = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  return { ...nx, date: todayISO(), start: hh(start), end: hh(start + dur), special: '', changed: false, ready: true };
+  return { ...nx, date: todayISO(), start: hh(start), end: hh(Math.min(start + dur, 1435)), special: '', changed: false, ready: true };
 }
 function plannedShift() {
   const sc = mySchedule() || {};
@@ -930,7 +930,8 @@ function trainingCard() {
   const n = list.filter(([k]) => done[k]).length;
   const all = n === list.length;
   // Une mission pas encore possible (envoyer avant de commencer) mène à la grande carte.
-  const route = (k, hub) => (!state?.date && (hub === 'tasks' || hub === 'finish') ? 'start' : hub);
+  const noShift = !bossWatching() && !state?.date && !nextShift();
+  const route = (k, hub) => (noShift && ['start', 'tasks', 'finish'].includes(hub) ? 'sched' : !state?.date && (hub === 'tasks' || hub === 'finish') ? 'start' : hub);
   if (all && !prefs.trainCheered) { prefs.trainCheered = true; savePrefs(); setTimeout(() => { celebrate(); sfx('full'); }, 400); }
   return `<section class="hb-train${all ? ' is-done' : ''}" aria-labelledby="trH">
     <div class="tn-head"><h2 id="trH">${hubIco('star')}<span>${esc(t(all ? 'trDoneTitle' : 'trTitle'))}</span></h2><span class="tn-count num">${esc(t('trCount', n, list.length))}</span></div>
@@ -943,6 +944,8 @@ function trainingCard() {
   </section>`;
 }
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-train="exit"]')) $('#fictExit')?.click(); });
+// « Mettre ma photo » au clavier : Entrée ou Espace ouvrent le choix de fichier.
+document.addEventListener('keydown', (ev) => { const l = ev.target.closest?.('.pic-upload'); if (l && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); l.querySelector('input')?.click(); } });
 
 // ---------- Le premier départ (ronde 9, Q97) ----------
 // Une seule fois par compte : la langue (français par défaut), la photo, le confort (taille du texte,
@@ -959,7 +962,8 @@ function openOnboarding({ after = null, real = false } = {}) {
     prefs.onboarded = { ...(prefs.onboarded || {}), [key]: true };
     delete prefs.onboard; savePrefs();
   };
-  const watch = setInterval(() => { if (!over && $('#sheet').hidden) { over = true; clearInterval(watch); mark(); } }, 700);
+  // Fermer la feuille (✕, fond, glisser) = « Plus tard » : on ne redemande pas, mais la visite part quand même.
+  const watch = setInterval(() => { if (!over && $('#sheet').hidden) { over = true; clearInterval(watch); mark(); const then = real ? startTour : after; if (then) setTimeout(then, 400); } }, 700);
   const finish = (then) => { if (over) return; over = true; clearInterval(watch); mark(); closeSheet(); if (then) setTimeout(then, 380); };
   const seg = (name, cur, opts, label) => `<div class="segmented ob-seg" role="radiogroup" aria-label="${esc(label)}">${opts.map(([k, l]) => `<button type="button" role="radio" data-ob="${name}" data-v="${k}" aria-checked="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
   const sw = (id, label, on, sub = '') => `<button type="button" class="pr-row" data-obsw="${id}" role="switch" aria-checked="${Boolean(on)}"><span><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><i class="switch" aria-hidden="true"></i></button>`;
@@ -971,7 +975,7 @@ function openOnboarding({ after = null, real = false } = {}) {
       const cur = (prefs.simNew ? prefs.simNew.avatar : session.user.avatar) || '';
       return `<h2>${esc(t('picTitle'))}</h2><p class="lede">${esc(t('obPicLede'))}</p>
         <div class="pic-grid ob-pics">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotImg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
-        <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="obFile" hidden></label></div>
+        <div class="acct-btns pic-more"><label class="btn ghost pic-upload" tabindex="0" role="button">${esc(t('picUpload'))}<input type="file" accept="image/*" id="obFile" hidden></label></div>
         <p class="section-note" id="obMsg" aria-live="polite"></p>`;
     }
     if (k === 'comfort') return `<h2>${esc(t('obComfortT'))}</h2><p class="lede">${esc(t('obComfortLede'))}</p>
@@ -981,10 +985,13 @@ function openOnboarding({ after = null, real = false } = {}) {
     if (k === 'notify') return `<h2>${esc(t('obNotifyT'))}</h2><p class="lede">${esc(t('obNotifyLede'))}</p>
       <button type="button" class="btn primary big ob-wide" id="obPush">${HUB_ICO.send}<span>${esc(t('obNotifyGo'))}</span></button><p class="section-note" id="obMsg" aria-live="polite"></p>`;
     return `<img class="tour-cheer ob-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2>${esc(t('obTrainT'))}</h2><p class="lede">${esc(t('obTrainLede'))}</p>
-      <button type="button" class="btn primary big ob-wide" id="obTrain" data-tap="big"><span>${esc(t('obTrainGo'))}</span>${HUB_ICO.go}</button><p class="section-note ob-time">${esc(t('obTrainTime'))}</p>`;
+      <button type="button" class="btn primary big ob-wide" id="obTrain" data-tap="big"><span>${esc(t('obTrainGo'))}</span>${HUB_ICO.go}</button>`;
   };
+  let shown = -1, paintedAt = 0;
   const paint = (focusFirst = false) => {
     const k = steps[i], last = i === steps.length - 1;
+    const keep = shown === i ? $('#sheetBody').scrollTop : 0; // même étape (un interrupteur) : on reste où on était
+    shown = i; paintedAt = Date.now();
     openSheet(`<div class="sheet-head ob-head"><p class="eyebrow num">${esc(t('obStep', i + 1, steps.length))}</p>
       <div class="tour-dots ob-dots" aria-hidden="true">${steps.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>${body(k)}</div>`, (root) => {
       root.querySelector('.ob-head').addEventListener('click', async (e) => {
@@ -1007,7 +1014,7 @@ function openOnboarding({ after = null, real = false } = {}) {
         if (pic) {
           const v = pic.dataset.pic;
           try { if (prefs.simNew) { prefs.simNew.avatar = v; savePrefs(); } else await updateMe('avatar', { avatar: v }); }
-          catch { $('#obMsg').textContent = t('adminCodesLater'); sfx('locked'); return; }
+          catch { $('#obMsg').textContent = t('netRetry'); sfx('locked'); return; }
           sfx('save'); buzz('tap'); paintFront();
           for (const b of root.querySelectorAll('.pic-opt')) { const on = b.dataset.pic === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }
           const m = MASCOTS[v.slice(2)];
@@ -1018,10 +1025,11 @@ function openOnboarding({ after = null, real = false } = {}) {
         if (e.target.closest('#obPush')) {
           const b = e.target.closest('#obPush'); b.disabled = true;
           try { const info = await request('push'); await turnPushOn(info.key); sfx('save'); toast(t('obNotifyOn'), 'ok'); i += 1; if (i >= steps.length) finish(after); else paint(true); }
-          catch { b.disabled = false; $('#obMsg').textContent = t('obNotifyNo'); sfx('locked'); }
+          catch { b.disabled = false; b.focus({ preventScroll: true }); $('#obMsg').textContent = t('obNotifyNo'); sfx('locked'); }
           return;
         }
-        if (e.target.closest('#obTrain')) finish(() => openFictive(isBoss() ? 'boss' : 'employee'));
+        // Directement dans la formation, comme une personne ordinaire de son rôle (pas de 2e premier départ).
+        if (e.target.closest('#obTrain')) finish(() => enterFictive(FICTIVE_PEOPLE.find((x) => x.role === (isBoss() ? 'boss' : 'employee') && !x.fresh).email));
       });
       root.querySelector('#obFile')?.addEventListener('change', async (e) => {
         const f = e.target.files?.[0]; if (!f) return;
@@ -1030,17 +1038,19 @@ function openOnboarding({ after = null, real = false } = {}) {
           if (prefs.simNew) { prefs.simNew.avatar = v; savePrefs(); } else await updateMe('avatar', { avatar: v });
           sfx('save'); paintFront(); $('#obMsg').textContent = t('picCheer'); $('#obMsg').classList.add('pic-cheer');
           for (const b of root.querySelectorAll('.pic-opt')) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }
-        } catch { $('#obMsg').textContent = t('picBad'); }
+        } catch (err) { $('#obMsg').textContent = t(err?.status !== undefined ? 'netRetry' : 'picBad'); }
       });
-      $('#obNext').onclick = () => { i += 1; if (i >= steps.length) finish(after); else { sfx('step'); paint(true); } };
-      $('#obSkip').onclick = () => finish(real ? startTour : after);
+      $('#obNext').onclick = () => { if (Date.now() - paintedAt < 450) return; i += 1; if (i >= steps.length) finish(after); else { sfx('step'); paint(true); } }; // un double toucher ne saute pas d'étape
+      // Vrai compte : « Passer » mène quand même à la dernière étape, la formation fortement conseillée.
+      $('#obSkip').onclick = () => { if (real && steps[i] !== 'train') { i = steps.length - 1; paint(true); } else finish(after); };
       if (focusFirst) requestAnimationFrame(() => root.querySelector('.ob-head h2')?.focus?.({ preventScroll: true }));
     }, k === 'train'
       ? `<button type="button" class="btn ghost" id="obSkip">${esc(t('obLater'))}</button><button type="button" class="btn ghost" id="obNext" hidden></button>`
-      : `<button type="button" class="btn ghost" id="obSkip">${esc(t('obSkip'))}</button><button type="button" class="btn primary" id="obNext">${esc(t(last ? 'obDone' : k === 'notify' ? 'obLater' : 'obNext'))}</button>`);
+      : `<button type="button" class="btn ghost" id="obSkip">${esc(t(real && steps.includes('train') ? 'obSkipRest' : 'obSkip'))}</button><button type="button" class="btn primary" id="obNext">${esc(t(last ? 'obDone' : k === 'notify' ? 'obLater' : 'obNext'))}</button>`);
     // « Plus tard » de la formation : la visite de l'accueil, comme avant.
     if (k === 'train') $('#obSkip').onclick = () => finish(startTour);
     const h = $('#sheetBody .ob-head h2'); if (h) h.tabIndex = -1;
+    if (keep) $('#sheetBody').scrollTop = keep;
   };
   paint();
 }
@@ -1056,8 +1066,8 @@ function startTour() {
   const home = (bossWatching() ? [
     ['#hbMain', 'tourHubProblems'],
     ['#hubBody .hb-today', 'tourHubToday'],
-    ['#hubBody .t-reports', 'tourHubReports'],
-    ['#hubBody .t-teamweek', 'tourHubTeam'],
+    ['#tabBar [data-tab="reports"]', 'tourHubReports'],
+    ['#tabBar [data-tab="team"]', 'tourHubTeam'],
     ['#hubBody .t-method', 'tourHubMethod'],
     ['#hubBody .t-access', 'tourHubAccess'],
   ] : [
@@ -1074,7 +1084,12 @@ function startTour() {
     ['#acPic', 'tourPic', true],
     ['#acTour', 'tourAgain', true],
   ];
-  const steps = [...home, ...inside];
+  // D10 : au plus 6 étapes. On enlève d'abord ce qui se répète (la photo déjà choisie, « Ton horaire »
+  // quand « Mon horaire » est déjà montré), puis le moins utile le premier jour.
+  let steps = [...home, ...inside];
+  const hasPic = Boolean(prefs.simNew ? prefs.simNew.avatar : session.user.avatar);
+  const drop = [...(hasPic ? ['#acPic'] : []), ...(steps.some(([x]) => x === '#hubBody .t-plan') ? ['#acSched'] : []), '#hubBody .t-method', '#hubBody .t-mine', '#hubBody .t-access', '#acWork', '#acSched', '#acPic', '#hubAccount'];
+  for (const sel of drop) { if (steps.length <= 6) break; steps = steps.filter(([x]) => x !== sel); }
   const box = document.createElement('div');
   box.id = 'tour';
   box.className = 'tour';
@@ -1092,32 +1107,38 @@ function startTour() {
     if (then) setTimeout(then, 380);
   };
   const hasSched = () => Boolean(mySchedule() && Object.keys(mySchedule()).length);
-  const finish = () => {
+  const finish = (skipped = false) => {
     if (sheetOpen()) closeSheet();
-    hole.style.cssText = `left:${innerWidth / 2}px;top:${innerHeight / 2}px;width:0;height:0`; // tout reste sombre derrière le bravo
+    { const z = Number(document.documentElement.style.zoom) || 1; hole.style.cssText = `left:${innerWidth / 2 / z}px;top:${innerHeight / 2 / z}px;width:0;height:0`; } // tout reste sombre derrière le bravo
     tip.className = 'tour-tip done';
     tip.style.cssText = '';
     const need = !hasSched() && !bossWatching();
     const train = training() && !need;
-    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t('tourDoneTitle'))}</h2><p>${esc(t(need ? 'tourDoneSched' : train ? 'tourDoneTrain' : 'tourDoneText'))}</p>
+    tip.innerHTML = `<img class="tour-cheer" src="icons/rabbit-cheer.svg" alt="" draggable="false"><h2 id="tourH">${esc(t(skipped ? 'tourSkipTitle' : 'tourDoneTitle'))}</h2><p>${esc(t(need ? 'tourDoneSched' : train ? 'tourDoneTrain' : 'tourDoneText'))}</p>
       <div class="tour-btns"><button type="button" class="btn primary" data-tour="${need ? 'sched' : train ? 'train' : 'end'}">${esc(t(need ? 'tourDoneSchedGo' : train ? 'tourDoneTrainGo' : 'tourDoneGo'))}</button></div>`;
-    celebrate(); sfx('full'); buzz('plate');
+    if (!skipped) { celebrate(); sfx('full'); buzz('plate'); }
     tip.querySelector('[data-tour]').focus({ preventScroll: true });
   };
   function place() {
     if (i >= steps.length) return;
     const el = $(steps[i][0]);
     if (!el) return;
-    const r = el.getBoundingClientRect(), pad = 8;
+    // Le texte « grande / très grande » zoome toute la page : on place la lumière et la bulle dans ces unités.
+    const z = Number(document.documentElement.style.zoom) || 1;
+    const r0 = el.getBoundingClientRect(), pad = 8;
+    const r = { left: r0.left / z, top: r0.top / z, width: r0.width / z, height: r0.height / z, bottom: r0.bottom / z };
+    const innerHeight = window.innerHeight / z;
     hole.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px;border-radius:${Math.min(28, r.height / 2 + pad)}px`;
     // La bulle va où il y a de la place (sous la carte, au-dessus, sinon collée en bas de l'écran).
     const th = tip.offsetHeight || 220;
     const roomBelow = innerHeight - r.bottom - pad - 24, roomAbove = r.top - pad - 24;
     const below = th <= roomBelow || (th > roomAbove && roomBelow >= roomAbove);
     const fits = below ? th <= roomBelow : th <= roomAbove;
-    tip.style.cssText = !fits ? 'bottom:12px' : below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
+    // Pas de place (petit écran, gros texte) : on remonte la cible en haut une fois, puis on replace la bulle.
+    if (!fits && !place.lifted) { place.lifted = true; el.scrollIntoView({ block: 'start' }); requestAnimationFrame(place); return; }
+    tip.style.cssText = !fits ? (roomAbove > roomBelow && r.top > innerHeight / 2 ? 'top:12px' : 'bottom:12px') : below ? `top:${r.bottom + pad + 14}px` : `bottom:${innerHeight - r.top + pad + 14}px`;
     tip.dataset.side = !fits ? 'over' : below ? 'below' : 'above';
-    const tr = tip.getBoundingClientRect();
+    const tr0 = tip.getBoundingClientRect(), tr = { left: tr0.left / z, width: tr0.width / z };
     tip.style.setProperty('--ax', `${Math.min(Math.max(r.left + r.width / 2 - tr.left - 8, 18), tr.width - 34)}px`); // la pointe de la bulle vise le bouton
   }
   const show = () => {
@@ -1130,6 +1151,7 @@ function startTour() {
     const target = $(sel);
     if (target) { const big = target.offsetHeight > innerHeight * 0.4; target.scrollIntoView({ block: big ? 'start' : 'center' }); if (big) window.scrollBy(0, -70); }
     tip.className = 'tour-tip';
+    place.lifted = false;
     tip.innerHTML = `<p class="tour-count">${i + 1} / ${steps.length}</p><h2 id="tourH">${esc(t(`${k}T`))}</h2><p>${esc(t(k))}</p>
       <div class="tour-btns">${k === 'tourPic' // la photo : on la choisit tout de suite, une peluche de préférence
         ? `<button type="button" class="link" data-tour="next">${esc(t('tourLater'))}</button><button type="button" class="btn primary" data-tour="pic">${esc(t('tourPicGo'))}</button>`
@@ -1146,7 +1168,7 @@ function startTour() {
     const b = e.target.closest('[data-tour]');
     const act = b?.dataset.tour || (e.target === hole || e.target === box ? 'next' : '');
     if (act === 'next') { i += 1; show(); }
-    else if (act === 'skip') { i = steps.length; finish(); }
+    else if (act === 'skip') { i = steps.length; finish(true); }
     else if (act === 'pic') {
       // Le tutoriel s'efface le temps de choisir, puis reprend à l'étape suivante.
       box.classList.add('away');
@@ -1199,7 +1221,7 @@ document.addEventListener('click', (ev) => {
 // Un quart d'aujourd'hui où rien n'est coché suit l'horaire : des heures restées d'avant
 // (ex. un soir choisi sur l'ancienne page) ne restent pas collées.
 function dropStaleShift() {
-  if (prefs.simShift) return;
+  if (prefs.simShift || training()) return; // formation : le quart commence « maintenant », pas à l'heure de l'horaire
   const tp = todaySched();
   if (!state || state.date !== todayISO() || !tp?.start) return;
   if (tp.start === state.start && tp.end === state.end && state.name === shiftName()) return;
@@ -2383,7 +2405,7 @@ function flagMailLine(fl, i) {
   if (flagNeedsWork(fl)) {
     return `<span class="mail-line bad">${ICON.mail}${esc(t(accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'))} <button type="button" class="link" data-retry-flag="${i}">${t('retryMail')}</button></span>`;
   }
-  if (fl.urgent) return `<span class="mail-line ok">${ICON.mail}${esc(session.mode === 'demo' ? t('flagDemo') : t('flagSent', sup))}</span>`;
+  if (fl.urgent) return `<span class="mail-line ok">${ICON.mail}${esc(FICTIVE ? t('flagTrain') : session.mode === 'demo' ? t('flagDemo') : t('flagSent', sup))}</span>`;
   return accounts() ? `<span class="mail-line ok">${esc(t('flagInBoss'))}</span>` : '';
 }
 
@@ -2407,7 +2429,7 @@ async function submitProblem(fl, s = state) {
       fl.emailed = true;
     }
     // Annuler : le signalement disparaît (le courriel urgent déjà parti, lui, ne revient pas).
-    toast(fl.urgent ? (session.mode === 'demo' ? t('flagDemo') : t('flagSent', alertNames())) : t(s.loose ? 'flagInBoss' : 'flagNoted'), 'ok', fl.id ? () => undoFlag(fl, s) : null);
+    toast(fl.urgent ? (FICTIVE ? t('flagTrain') : session.mode === 'demo' ? t('flagDemo') : t('flagSent', alertNames())) : t(s.loose ? 'flagInBoss' : 'flagNoted'), 'ok', fl.id ? () => undoFlag(fl, s) : null);
   } catch {
     toast(t(s.loose ? 'flagLater' : accounts() && !fl.id ? 'flagNotSaved' : 'flagMailFail'), 'bad');
   }
@@ -4724,7 +4746,7 @@ function openAvatarPicker({ after } = {}) {
   const cur = (prefs.simNew ? prefs.simNew.avatar : u.avatar) || '';
   openSheet(`<div class="sheet-head"><h2>${esc(t('picTitle'))}</h2><p class="lede">${esc(t('picLede'))}</p></div>
     <div class="pic-grid">${Object.entries(MASCOTS).map(([id, m]) => `<button type="button" class="pic-opt${cur === `m:${id}` ? ' on' : ''}" data-pic="m:${id}" aria-pressed="${cur === `m:${id}`}">${mascotImg(id)}<small>${esc(m[lang()] || m.fr)}</small></button>`).join('')}</div>
-    <div class="acct-btns pic-more"><label class="btn ghost pic-upload">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
+    <div class="acct-btns pic-more"><label class="btn ghost pic-upload" tabindex="0" role="button">${esc(t('picUpload'))}<input type="file" accept="image/*" id="picFile" hidden></label>${cur ? `<button type="button" class="btn ghost" data-pic="">${esc(t('picNone'))}</button>` : ''}</div>
     <p class="section-note" id="picMsg" aria-live="polite"></p>`, (root) => {
     const pick = async (v) => {
       try {
@@ -5666,7 +5688,12 @@ function renderHub({ animate = true } = {}) {
   $('#hubDoor').setAttribute('aria-label', t('frontDoor'));
   const body = $('#hubBody');
   body.className = `hub-body${adminHome() ? ' is-admin' : bossWatching() ? ' is-boss' : ''}${animate && !reducedMotion() ? ' cascade' : ''}`;
+  // Le tableau de bord se redessine toutes les 30 s : le clavier et le lecteur d'écran gardent leur place.
+  const had = body.contains(document.activeElement) ? document.activeElement : null;
+  const keyOf = (el) => (el.id ? `#${CSS.escape(el.id)}` : el.dataset.hub ? `${el.classList.contains('tn-row') ? '.tn-row' : ''}[data-hub="${el.dataset.hub}"]` : '');
+  const focusKey = had && keyOf(had), focusIdx = had ? [...body.querySelectorAll(focusKey || '_')].indexOf(had) : -1;
   body.innerHTML = adminHome() ? hubAdmin() : bossWatching() ? hubBoss() : hubEmployee();
+  if (focusKey) body.querySelectorAll(focusKey)[Math.max(0, focusIdx)]?.focus({ preventScroll: true });
   paintAdminTools();
   // La grande carte : des reflets d'eau (shader) et l'anneau qui se remplit avec un ressort.
   const main = $('#hbMain');
@@ -6887,7 +6914,7 @@ const PRIV_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 function openPrivacy() {
   const part = (k) => `<h3 class="priv-h">${esc(t(`priv${k}T`))}</h3><ul class="priv-list">${(t(`priv${k}`) || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
   openSheet(`<div class="sheet-head priv-head">${PRIV_ICO}<h2>${esc(t('privTitle'))}</h2><p class="lede">${esc(t('privLede'))}</p></div>
-    <div class="priv">${['Kept', 'See', 'Never', 'Phone', 'More'].map(part).join('')}<p class="section-note">${esc(t('privAsk'))}</p></div>`);
+    <div class="priv" tabindex="0" aria-label="${esc(t('privTitle'))}">${['Kept', 'See', 'Never', 'Phone', 'More'].map(part).join('')}<p class="section-note">${esc(t('privAsk'))}</p></div>`);
 }
 $('#prefsBody').addEventListener('input', (ev) => {
   if (ev.target.id !== 'prVol') return;
@@ -7277,11 +7304,11 @@ if ('serviceWorker' in navigator && isSecureContext) {
   let lastTouch = Date.now();
   for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { lastTouch = Date.now(); }, { capture: true, passive: true });
   const calm = () => $('#sheet').hidden && !$('#tour') && !document.activeElement?.matches?.('input, textarea, select') && Date.now() - lastTouch > 20000;
-  const reloadSoon = () => { if (document.hidden || calm()) location.reload(); else setTimeout(reloadSoon, 5000); };
+  const reloadSoon = () => { if ((document.hidden && $('#sheet').hidden && !$('#tour')) || calm()) location.reload(); else setTimeout(reloadSoon, 5000); };
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController || reloaded) return;
     reloaded = true;
-    addEventListener('visibilitychange', () => { if (document.hidden) location.reload(); });
+    addEventListener('visibilitychange', () => { if (document.hidden && $('#sheet').hidden && !$('#tour')) location.reload(); }); // un brouillon ouvert (signalement, photo) ne se perd pas
     reloadSoon();
   });
 }

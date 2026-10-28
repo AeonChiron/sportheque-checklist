@@ -259,6 +259,27 @@ test('Pas de surveillance : un quart en cours est caché aux autres, et l’heur
   assert.equal((await stores('board').get('2026-10-22', { type: 'json' }))[0].items[0].doneAt, undefined); // et rien n'est gardé
 });
 
+test('Vie privée (ronde 9) : les remarques d’un quart vont aux superviseurs seulement, pas aux collègues', async () => {
+  const stores = memoryStores();
+  const a = createApi({ getStore: stores, env: () => ({ TEAM_CODE: 'e', BOSS_CODE: 'p' }) });
+  const go = async (path, body, token) => { const r = await a(new Request(`http://x/api/${path}`, { method: body ? 'POST' : 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: body ? JSON.stringify(body) : undefined })); return { status: r.status, data: await r.json() }; };
+  const noah = (await go('auth', { action: 'signup', name: 'Noah', email: 'n@x.ca', password: 'secret1', code: 'e' })).data.token;
+  const lea = (await go('auth', { action: 'signup', name: 'Léa', email: 'l@x.ca', password: 'secret1', code: 'e' })).data.token;
+  const boss = (await go('auth', { action: 'signup', name: 'Daniel', email: 'd@x.ca', password: 'secret1', role: 'boss', code: 'p' })).data.token;
+  await go('board', { date: '2026-10-22', shift: 2, name: 'Noah', notes: 'Beaucoup de monde', handoff: 'Plus de savon', items: [{ id: 'a', status: 'notdone', reason: 'temps', remark: 'Pas eu le temps' }], flags: [] }, noah);
+  const peer = (await go('board?recent=5', null, lea)).data.days['2026-10-22'][0];
+  assert.equal(peer.notes, '');
+  assert.equal(peer.items[0].remark, '');
+  assert.equal(peer.items[0].reason, '');
+  assert.equal(peer.items[0].status, 'notdone'); // ce qui a été fait reste visible (le gym au complet)
+  assert.equal(peer.handoff, 'Plus de savon'); // le mot au prochain quart est fait pour l'équipe
+  const sup = (await go('board?recent=5', null, boss)).data.days['2026-10-22'][0];
+  assert.equal(sup.notes, 'Beaucoup de monde');
+  assert.equal(sup.items[0].remark, 'Pas eu le temps');
+  const own = (await go('board?recent=5', null, noah)).data.days['2026-10-22'][0];
+  assert.equal(own.items[0].remark, 'Pas eu le temps');
+});
+
 test('sw.js est à jour (empreintes Workbox) : lancer `npm run sw` après un changement', async () => {
   const { build } = await import('../scripts/sw-manifest.mjs');
   const { readFileSync } = await import('node:fs');

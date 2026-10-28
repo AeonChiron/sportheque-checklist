@@ -3265,13 +3265,11 @@ details.mt-card > summary:active { background: var(--sunk); }
 .pool-fict .pf-text { display: grid; gap: 3px; min-width: 0; }
 .pool-fict b { font: 700 15px/1.2 var(--font); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pool-fict small { font: 500 12.5px/1.25 var(--font); opacity: .9; }
-.pf-beta { display: inline-block; font: 800 10px/1 var(--font); font-style: normal; letter-spacing: .08em; text-transform: uppercase; padding: 4px 7px; border-radius: 99px; background: #ffd66b; color: #4a2600; }
 .pool-screen.inside .pool-fict { margin-top: 14px; }
 
 /* Le choix : deux grandes tuiles, puis les personnes */
-.fp-head .pf-beta { margin-bottom: 8px; }
 .fp-roles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 4px; }
-.fp-role { position: relative; display: grid; justify-items: start; gap: 4px; padding: 16px 14px 14px; border-radius: 20px; border: 2px solid var(--line, rgba(0,0,0,.1)); background: var(--card, #fff); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; transition: transform .18s, border-color .18s, box-shadow .18s; }
+.fp-role { position: relative; display: grid; justify-items: start; gap: 4px; padding: 16px 14px 14px; border-radius: 20px; border: 2px solid var(--line, rgba(0,0,0,.1)); background: var(--surface); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; transition: transform .18s, border-color .18s, box-shadow .18s; }
 .fp-role:active { transform: scale(.97); }
 .fp-role .fp-ico { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(145deg, #3d8bff, #1c5ee8); margin-bottom: 4px; box-shadow: 0 6px 16px rgba(30,100,240,.3); }
 .fp-role[data-fprole="boss"] .fp-ico { background: linear-gradient(145deg, #ffd66b, #e6a100); box-shadow: 0 6px 16px rgba(230,160,0,.35); }
@@ -3283,7 +3281,7 @@ details.mt-card > summary:active { background: var(--sunk); }
 .fp-role[data-fprole="boss"].on { border-color: #e6a100; box-shadow: 0 0 0 4px rgba(230,160,0,.18); }
 .fp-label { margin-top: 18px; scroll-margin-top: 12px; }
 .fp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.fp-person { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: var(--card, #fff); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; animation: fp-in .45s cubic-bezier(.2,.9,.3,1.15) both; animation-delay: calc(var(--i) * 40ms); transition: transform .16s, border-color .16s; }
+.fp-person { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: var(--surface); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; animation: fp-in .45s cubic-bezier(.2,.9,.3,1.15) both; animation-delay: calc(var(--i) * 40ms); transition: transform .16s, border-color .16s; }
 .fp-person:hover { border-color: #2f7bff; }
 .fp-grid.gold .fp-person:hover { border-color: #e6a100; }
 .fp-person:active, .fp-person.going { transform: scale(.97); }
@@ -4152,7 +4150,7 @@ html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
 .tn-exit { width: 100%; margin-top: 12px; }
 
 /* « Nouveau dans l'équipe » : une grande ligne au-dessus des deux tuiles. */
-.fp-new { display: flex; align-items: center; gap: 12px; width: 100%; margin: 6px 0 12px; padding: 14px; border-radius: 20px; border: 2px solid color-mix(in srgb, #1fae6a 45%, var(--line, rgba(0,0,0,.1))); background: var(--card, #fff); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; transition: transform .18s, box-shadow .18s; }
+.fp-new { display: flex; align-items: center; gap: 12px; width: 100%; margin: 6px 0 12px; padding: 14px; border-radius: 20px; border: 2px solid color-mix(in srgb, #1fae6a 45%, var(--line, rgba(0,0,0,.1))); background: var(--surface); color: var(--ink, #111); text-align: left; font: inherit; cursor: pointer; transition: transform .18s, box-shadow .18s; }
 .fp-new:active, .fp-new.going { transform: scale(.97); }
 .fp-new.going { box-shadow: 0 0 0 4px rgba(31,174,106,.2); }
 .fp-new .fp-ico { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(145deg, #3fd18b, #148a52); box-shadow: 0 6px 16px rgba(20,140,80,.3); }
@@ -4172,7 +4170,6 @@ html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
 .ob-wide { width: 100%; max-width: none; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
 .ob-wide svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .ob-cheer { display: block; width: 96px; height: auto; margin: 0 auto 6px; }
-.ob-time { text-align: center; margin-top: 8px; }
 
 /* Ta vie privée : des titres courts et des listes simples. */
 .priv-h { margin: 18px 0 8px; font: 750 17px/1.2 var(--serif); font-variation-settings: 'SOFT' 100; }
@@ -4192,3 +4189,6 @@ html[data-text="xl"] #auth:not(.inside) .pool-cheer span { display: none; }
 #sheet .sheet-foot #obNext { flex: 1; min-height: 54px; }
 #sheet .sheet-foot:has(#obNext[hidden]) #obSkip { flex: 1; }
 .priv-head > .ico { width: 40px; height: 40px; padding: 8px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 8px; }
+/* Le premier départ prend toute la largeur (le ✕ est au-dessus, dans le coin). */
+.sheet-head.ob-head { padding-right: 0; }
+.ob-head .eyebrow, .ob-head .ob-dots { padding-right: 52px; }

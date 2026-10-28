@@ -167,7 +167,8 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
   const mine = (s) => s.name.toLowerCase() === me.name.toLowerCase();
   // Comme le vrai serveur : un identifiant court par compte (uid) et « mine » pour mes quarts.
   const uidOf = (name) => (d.users[Object.keys(d.users).find((k) => d.users[k].name === name)]?.email || name).replace(/[^a-z0-9]/gi, '').slice(0, 12).padEnd(12, '0').toLowerCase().replace(/[^a-f0-9]/g, 'a');
-  const shown = (list) => (list || []).filter((s) => !s.open || mine(s)).map((s) => ({ ...s, uid: uidOf(s.name), mine: mine(s) }));
+  // Comme le vrai serveur : les remarques des autres vont aux superviseurs seulement.
+  const shown = (list) => (list || []).filter((s) => !s.open || mine(s)).map((s) => { const priv = !lead && !mine(s); return { ...s, ...(priv ? { notes: '' } : {}), uid: uidOf(s.name), mine: mine(s), items: priv ? (s.items || []).map((i) => ({ ...i, remark: '', reason: '' })) : s.items }; });
   await new Promise((r) => setTimeout(r, 60)); // un petit délai, comme un vrai réseau
   if (route === 'auth') {
     if (method === 'GET') return { user: pub(me) };

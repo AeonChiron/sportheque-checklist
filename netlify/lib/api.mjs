@@ -152,7 +152,8 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       if (password.length < 6 || password.length > 200) return json({ error: 'password' }, 400);
       // Mauvais code : 10 essais par jour par connexion (300 en tout) pour qu'un code court ne se devine pas.
       const day = localDay(new Date());
-      const ip = (req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || '?').split(',')[0].trim().slice(0, 60);
+      const rawIp = (req.headers.get('x-nf-client-connection-ip') || req.headers.get('x-forwarded-for') || '?').split(',')[0].trim().slice(0, 60);
+      const ip = createHash('sha256').update(`tries:${rawIp}`).digest('hex').slice(0, 16); // ronde 9 : l'adresse n'est jamais gardée telle quelle
       const tries = (await settings().get(`tries:${day}`, { type: 'json' })) || {};
       if ((tries[ip] || 0) >= 10 || (tries._all || 0) >= 2000) return json({ error: 'tries' }, 429); // par connexion; le plafond global est haut pour qu'une personne ne bloque pas toute l'équipe
       if (!sameText(String(b.code || '').trim().toLowerCase(), String(want).trim().toLowerCase())) {
@@ -328,8 +329,14 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const boss = lead(me);
     // Les quarts « fantômes » de l'admin (tests) : seul un admin les voit. Le courriel ne sort jamais :
     // chacun reçoit un identifiant court (uid) et « mine » pour reconnaître ses propres quarts.
+    // Ronde 9 (page « Ta vie privée ») : les remarques du quart et des tâches (et les raisons d'un « pas fait »)
+    // vont aux superviseurs seulement; un collègue voit ce qui a été fait, le mot au prochain quart et les problèmes.
     const shown = (list) => (list || []).filter((s) => (!s.open || mine(s)) && (!s.ghost || admin))
-      .map(({ byEmail, ...s }) => ({ ...s, uid: byEmail ? uidOf(byEmail) : '', mine: byEmail ? byEmail === me?.email : sameName(s), items: (s.items || []).map(({ doneAt, ...i }) => i) }));
+      .map(({ byEmail, ...s }) => {
+        const own = byEmail ? byEmail === me?.email : sameName(s);
+        const priv = !boss && !own;
+        return { ...s, ...(priv ? { notes: '' } : {}), uid: byEmail ? uidOf(byEmail) : '', mine: own, items: (s.items || []).map(({ doneAt, ...i }) => (priv ? { ...i, remark: '', reason: '' } : i)) };
+      });
     // Le quart visé par une action : par uid si donné (deux personnes du même nom), sinon le mien, sinon le nom.
     const target = (list, raw) => {
       const sh = Number(raw.shift), uid = String(raw.uid || '');
