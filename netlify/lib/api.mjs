@@ -28,7 +28,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', ...CORS } });
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+// Une vraie date (« 2026-13-40 » a la bonne forme mais n'existe pas).
+const DATE = { test: (d) => { const x = String(d); if (!/^\d{4}-\d{2}-\d{2}$/.test(x)) return false; const ms = Date.parse(`${x}T12:00:00Z`); return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === x; } };
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const SESSION_DAYS = 365;
 // Propriétaire (25 oct.) : un employé corrige ou efface son quart pendant 12 h après l'envoi;
@@ -267,6 +268,8 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const b = await body(req);
     const email = String(b.email || '').trim().toLowerCase();
     const u = await users().get(email, { type: 'json' });
+    // Le compte admin : seul l'admin y touche (un superviseur ne peut ni changer son mot de passe, ni le ramener…).
+    if (u?.role === 'admin' && me.role !== 'admin') return json({ error: 'user' }, 404);
     // Redonner l'accès à quelqu'un qui était parti (ou annuler un départ fait par erreur).
     if (b.action === 'restore') {
       if (!u?.removed || !u.hash) return json({ error: 'user' }, 404);
@@ -532,7 +535,10 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const rec = await pushes().get(email, { type: 'json' });
     if (!rec?.subs?.length) return 0;
     if (kind && rec[kind] === false) return 0;
-    if (kind && kind !== 'urgent' && rec.quiet !== false && quietNow(now)) return 0;
+    // Heures calmes : sauf l'urgent et le rappel du quart (il arrive 10 min avant un quart qui commence tôt).
+    if (kind && !['urgent', 'remind'].includes(kind) && rec.quiet !== false && quietNow(now)) return 0;
+    const who = await users().get(email, { type: 'json' });
+    if (who?.removed) return 0; // parti : plus d'avis
     const keys = await vapid();
     const payload = make(PUSH_TEXT[rec.lang] || PUSH_TEXT.fr);
     let sent = 0;
@@ -762,10 +768,12 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       if (b.repeat === 'weekly') {
         const list = (await plans().get('repeat', { type: 'json' })) || [];
         Object.assign(task, { repeat: 'weekly', until: b.until || '' });
-        await plans().setJSON('repeat', [...list, { id: task.id, title, time: task.time, minutes, who, wd: wdOf(date), from: date, until: b.until || '', skip: [], by: me.name, at: task.at }].slice(-80));
+        if (list.length >= 200) return json({ error: 'full' }, 409);
+        await plans().setJSON('repeat', [...list, { id: task.id, title, time: task.time, minutes, who, wd: wdOf(date), from: date, until: b.until || '', skip: [], by: me.name, at: task.at }]);
       } else {
         const list = (await plans().get(`tasks:${date}`, { type: 'json' })) || [];
-        await plans().setJSON(`tasks:${date}`, [...list, task].slice(0, 60));
+        if (list.length >= 60) return json({ error: 'full' }, 409);
+        await plans().setJSON(`tasks:${date}`, [...list, task]);
       }
       // Avertir : une personne, ou tous ceux qui travaillent ce jour-là (d'après leur horaire).
       let targets = [];
@@ -821,8 +829,11 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (!DATE.test(date) || date < localDay(clock())) return json({ error: 'invalid' }, 400);
     const span = b.to && DATE.test(String(b.to)) && b.to >= date ? datesIn(date, String(b.to), 62) : [date];
     const all = (await plans().get(`ov:${me.email}`, { type: 'json' })) || {};
-    if (b.clear) { for (const d of span) if (all[d]?.self) delete all[d]; }
-    else for (const d of span) if (!all[d]?.off || all[d].self) all[d] = { off: true, conge: true, self: true, by: me.name };
+    // Un quart reçu par échange : on ne le laisse pas tomber en silence (l'offrir à quelqu'un d'autre).
+    if (!b.clear && span.some((d) => all[d]?.swap && !all[d].off)) return json({ error: 'swapped' }, 409);
+    // Enlever son congé remet ce qui était là avant (par exemple des heures changées par un superviseur).
+    if (b.clear) { for (const d of span) if (all[d]?.self) { if (all[d].prev) all[d] = all[d].prev; else delete all[d]; } }
+    else for (const d of span) if (!all[d]?.off || all[d].self) all[d] = { off: true, conge: true, self: true, by: me.name, ...(all[d] && !all[d].self ? { prev: all[d] } : {}) };
     await plans().setJSON(`ov:${me.email}`, all);
     if (!b.clear && !b.quiet) {
       for (const u of (await activeUsers()).filter((x) => lead(x) && x.email !== me.email)) {
@@ -843,6 +854,9 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
   //             passed: [courriels qui ont dit non à une demande pour tous], taker, takerName, prev, at, doneAt }]
   const rosterId = (email) => createHash('sha256').update(`roster:${email}`).digest('hex').slice(0, 12);
   const UNDO_SWAP_MS = 15 * 60 * 1000;
+  // Encore à venir : un jour futur, ou aujourd'hui avant la fin du quart (heure de Montréal).
+  const torontoMin = (now) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value])); return Number(p.hour) * 60 + Number(p.minute); };
+  const ahead = (date, end, now = clock()) => { const today = localDay(now); if (date !== today) return date > today; const [h, m] = end.split(':').map(Number); return torontoMin(now) < h * 60 + m; };
   async function swapsApi(req, me) {
     const today = localDay(clock());
     let list = ((await plans().get('swaps', { type: 'json' })) || []).filter((s) => s.date >= plusDays(today, -14));
@@ -859,7 +873,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const date = String(b.date || '');
       if (!DATE.test(date) || date < today) return json({ error: 'invalid' }, 400);
       const slot = await plannedOn(me, date);
-      if (!slot) return json({ error: 'noshift' }, 400);
+      if (!slot || !ahead(date, slot.end)) return json({ error: 'noshift' }, 400);
       if (list.some((s) => s.from === me.email && s.date === date && s.status === 'open')) return json({ error: 'dup' }, 409);
       const team = (await activeUsers()).filter((u) => u.email !== me.email && (u.role !== 'admin' || u.workMode));
       let to = '*', toName = '';
@@ -882,7 +896,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       return json({ swap: view(s) });
     }
     if (b.action === 'reopen') { // Annuler un « retirer ma demande »
-      if (s.from !== me.email || s.status !== 'cancel' || s.date < today) return json({ error: 'state' }, 409);
+      if (s.from !== me.email || s.status !== 'cancel' || s.date < today || list.some((x) => x !== s && x.from === me.email && x.date === s.date && x.status === 'open')) return json({ error: 'state' }, 409);
       s.status = 'open'; await save();
       return json({ swap: view(s) });
     }
@@ -898,19 +912,25 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       return json({ swap: view(s) });
     }
     if (b.action === 'accept') {
-      if (!forMe(s)) return json({ error: 'state' }, 409);
+      if (!forMe(s) || !ahead(s.date, s.end)) return json({ error: 'state' }, 409);
       const owner = await users().get(s.from, { type: 'json' });
       const still = owner && !owner.removed ? await plannedOn(owner, s.date) : null;
       if (!still || still.start !== s.start || still.end !== s.end) { s.status = 'cancel'; await save(); return json({ error: 'gone' }, 409); }
       if (await plannedOn(me, s.date)) return json({ error: 'busy' }, 409);
+      // Juste avant d'écrire, on relit tout : deux personnes qui acceptent en même temps, un seul gagne.
+      // (Les blobs n'ont pas de verrou : ça réduit la fenêtre au minimum, sans la fermer tout à fait.)
+      list = ((await plans().get('swaps', { type: 'json' })) || []).filter((x) => x.date >= plusDays(today, -14));
+      const fresh = list.find((x) => x.id === s.id);
       const ovFrom = (await plans().get(`ov:${s.from}`, { type: 'json' })) || {};
       const ovMe = (await plans().get(`ov:${me.email}`, { type: 'json' })) || {};
+      if (!fresh || fresh.status !== 'open' || ovFrom[s.date]?.off) return json({ error: 'state' }, 409);
+      list[list.indexOf(fresh)] = Object.assign(s, fresh);
       s.prev = { from: ovFrom[s.date] || null, me: ovMe[s.date] || null };
       ovFrom[s.date] = { off: true, swap: s.id, by: me.name };
       ovMe[s.date] = { start: s.start, end: s.end, swap: s.id, by: s.fromName };
       await plans().setJSON(`ov:${s.from}`, ovFrom);
       await plans().setJSON(`ov:${me.email}`, ovMe);
-      Object.assign(s, { status: 'done', taker: me.email, takerName: me.name, doneAt: new Date().toISOString() });
+      Object.assign(s, { status: 'done', taker: me.email, takerName: me.name, doneAt: clock().toISOString() });
       await save();
       const W = await whenFor(s.from, s);
       try { await sendTo(s.from, (T) => ({ ...T.swapOk(me.name, W.when), tag: `sw-${s.id}`, url: './#horaire' }), 'sched'); } catch { /* ignore */ }
@@ -921,7 +941,10 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       return json({ swap: view(s) });
     }
     if (b.action === 'undo') { // celui qui a accepté (15 min) ou un superviseur : tout revient comme avant
-      if (s.status !== 'done' || !(lead(me) || (s.taker === me.email && Date.now() - Date.parse(s.doneAt) < UNDO_SWAP_MS))) return json({ error: 'state' }, 409);
+      if (s.status !== 'done' || !(lead(me) || (s.taker === me.email && clock().getTime() - Date.parse(s.doneAt) < UNDO_SWAP_MS))) return json({ error: 'state' }, 409);
+      // Rien n'a bougé depuis (pas d'autre échange, pas de congé, pas de changement du superviseur) : sinon, on ne défait rien.
+      const ovF = (await plans().get(`ov:${s.from}`, { type: 'json' })) || {}, ovT = (await plans().get(`ov:${s.taker}`, { type: 'json' })) || {};
+      if (ovF[s.date]?.swap !== s.id || ovT[s.date]?.swap !== s.id) return json({ error: 'changed' }, 409);
       const put = async (email, v) => { const all = (await plans().get(`ov:${email}`, { type: 'json' })) || {}; if (v) all[s.date] = v; else delete all[s.date]; await plans().setJSON(`ov:${email}`, all); };
       await put(s.from, s.prev?.from || null);
       await put(s.taker, s.prev?.me || null);
@@ -995,8 +1018,12 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       if (!text) return json({ error: 'invalid' }, 400);
       if (b.action === 'post' && !lead(me)) return json({ error: 'boss' }, 403);
       const about = b.about && ['task', 'gym'].includes(b.about.kind) ? { kind: b.about.kind, label: String(b.about.label || '').slice(0, 80) } : null;
+      // Pas plus de 20 idées ouvertes par personne : personne ne peut noyer le coin des superviseurs.
+      if (b.action === 'suggest' && all.filter((x) => x.kind === 'idea' && x.byEmail === me.email && x.status === 'open').length >= 20) return json({ error: 'limit' }, 429);
       const item = { id: randomBytes(5).toString('hex'), kind: b.action === 'post' ? 'post' : 'idea', text, about, by: me.name, byEmail: me.email, at: new Date().toISOString(), status: 'open', statusBy: '' };
-      await store.setJSON('all', [...all, item].slice(-300));
+      const next = [...all, item];
+      const keep = new Set([...next.filter((x) => x.kind === 'post').slice(-200), ...next.filter((x) => x.kind === 'idea').slice(-300)]);
+      await store.setJSON('all', next.filter((x) => keep.has(x)));
       return json({ idea: strip(item) });
     }
     const it = all.find((x) => x.id === b.id);

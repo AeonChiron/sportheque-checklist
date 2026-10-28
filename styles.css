@@ -3920,3 +3920,17 @@ body.calm :is(.pz-piece.land, .pz.just, .pz.just .pz-sheen, .pz-hole.next) { ani
 .eyebrow > .hb-ico { display: inline; background: none; width: auto; height: auto; }
 /* Une feuille ouverte passe devant la barre d'onglets (elle cachait le bouton Enregistrer). */
 body:has(#sheet.open) .tabbar { opacity: 0; pointer-events: none; transform: translate(-50%, 140%); transition: opacity .2s, transform .25s var(--ease); }
+/* Revue des experts (rondes 4-5) */
+.pf-acts .btn, .gt-acts .btn { flex: 1 1 auto; min-width: max-content; }
+.pf-note .link { min-width: 44px; min-height: 44px; top: 2px; right: 2px; }
+#sheet .sheet-foot:has(#lvGo) { gap: 10px; }
+#lvGo { background: var(--bad); border-color: var(--bad); color: #fff; }
+.tab-dot { background: var(--accent); }
+/* Un jour férié est une info amicale, pas une alerte : bleu, pas rouge. */
+.hol-note { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+.hol-note .hol-ico { background: var(--accent); }
+.hol-pill { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, transparent); }
+.wk-hol, .dw-hol { color: var(--accent); }
+/* Très grand texte : le volume sur sa propre ligne (il était écrasé). */
+html[data-text="xl"] .pr-vol { grid-template-columns: 1fr auto; }
+html[data-text="xl"] .pr-vol input { grid-column: 1 / -1; grid-row: 2; }

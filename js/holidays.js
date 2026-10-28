@@ -39,7 +39,8 @@ function yearList(y) {
     [iso(plus(e, 1))]: 'lundi',
     [iso(patriotes(y))]: 'patriotes',
     [`${y}-06-24`]: 'nationale',
-    [`${y}-07-01`]: 'canada',
+    // Le 1er juillet tombe un dimanche : congé le 2 juillet (Loi sur les normes du travail).
+    [new Date(Date.UTC(y, 6, 1)).getUTCDay() === 0 ? `${y}-07-02` : `${y}-07-01`]: 'canada',
     [iso(nthMonday(y, 9, 1))]: 'travail',
     [iso(nthMonday(y, 10, 2))]: 'grace',
     [`${y}-12-25`]: 'noel',

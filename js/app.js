@@ -382,7 +382,7 @@ function setTheme(next, from) {
   root.setProperty('--vt-y', `${y}px`);
   root.setProperty('--vt-r', `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
   document.documentElement.dataset.nav = 'theme';
-  document.startViewTransition(run).finished.finally(() => { delete document.documentElement.dataset.nav; });
+  document.startViewTransition(run).finished.catch(() => {}).finally(() => { delete document.documentElement.dataset.nav; });
 }
 darkMQ.addEventListener?.('change', () => { if (themePref() === 'auto') applyTheme(); });
 for (const b of document.querySelectorAll('[data-theme-btn]')) {
@@ -4992,6 +4992,7 @@ function applyTextSize() {
   const k = prefs.textSize || (prefs.large ? 'large' : 'normal');
   const z = Math.round(iosTextRatio() * ({ large: 1.15, xl: 1.3 }[k] || 1) * 100) / 100;
   document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  document.documentElement.dataset.text = k;
 }
 document.documentElement.classList.toggle('large', Boolean(prefs.large));
 applyTextSize();
@@ -6093,9 +6094,11 @@ function openReportPerson(u) {
     $('#rpSave').onclick = async () => {
       const text = root.querySelector('#rpText').value.trim();
       if (!cat && !text) { toast(t('pfReportNeed'), 'muted'); return; }
-      try { const r = await request('people', { method: 'POST', body: { action: 'add', email: u.email, kind: 'report', cat: cat || 'autre', text } }); pf.notes.unshift(r.note); }
+      let note;
+      try { const r = await request('people', { method: 'POST', body: { action: 'add', email: u.email, kind: 'report', cat: cat || 'autre', text } }); note = r.note; pf.notes.unshift(note); }
       catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
-      closeSheet(); sfx('save'); toast(t('pfReported'), 'ok'); coin.loaded = false;
+      closeSheet(); sfx('save'); coin.loaded = false;
+      toast(t('pfReported'), 'ok', async () => { try { await request('people', { method: 'POST', body: { action: 'del', email: u.email, id: note.id } }); pf.notes = pf.notes.filter((n) => n.id !== note.id); if (current === 'person') renderPerson(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
       if (current === 'person') renderPerson();
     };
   }, `<button type="button" class="btn primary" id="rpSave">${esc(t('pfReportSave'))}</button>`);
@@ -6166,13 +6169,12 @@ async function restoreUser(u) {
 
 // ---------- Le coin des superviseurs (un onglet de l'Espace superviseur) ----------
 async function loadCoin() {
-  const [ideas, reports, former] = await Promise.all([
+  // (Propriétaire : aider, pas surveiller. Les signalements d'un employé restent sur sa fiche; pas de liste à part.)
+  const [ideas, former] = await Promise.all([
     request('ideas').then((r) => r.ideas || []).catch(() => null),
-    request('people?reports=1').then((r) => r.reports || []).catch(() => null),
     request('users?former=1').then((r) => r.former || []).catch(() => null),
   ]);
   if (ideas) coin.ideas = ideas;
-  if (reports) coin.reports = reports;
   if (former) coin.former = former;
   coin.loaded = true;
 }
@@ -6196,10 +6198,7 @@ function coinPanel() {
     <p class="section-note">${esc(t('coinIdeasNote'))}</p>
     ${ideas.length ? `<ul class="cn-list">${ideas.map(ideaCard).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoIdeas'))}</p>`}
     <h2 class="cn-h">${esc(t('coinPosts'))}</h2>
-    ${posts.length ? `<ul class="cn-list">${posts.map(ideaCard).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoPosts'))}</p>`}
-    <h2 class="cn-h">${esc(t('coinReports'))}</h2>
-    <p class="section-note">${esc(t('coinReportsNote'))}</p>
-    ${coin.reports.length ? `<ul class="cn-list">${coin.reports.slice(0, 20).map((r) => `<li><button type="button" class="cn-card cn-report" data-pfopen="${esc(r.email)}"><div class="cn-head"><b>${esc(r.name)}</b><small>${esc(ago(r.at))}</small></div><span class="pf-cat">${esc(t(`noteCat_${r.cat || 'autre'}`))}</span>${r.text ? `<p>${esc(r.text)}</p>` : ''}<small class="cn-by">${esc(t('coinReportedBy', r.by))}</small></button></li>`).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoReports'))}</p>`}`;
+    ${posts.length ? `<ul class="cn-list">${posts.map(ideaCard).join('')}</ul>` : `<p class="hb-quiet">${esc(t('coinNoPosts'))}</p>`}`;
 }
 // La liste de l'équipe (onglet Équipe) : un toucher ouvre la fiche. Les anciens, plus bas.
 function teamPanel() {
@@ -6223,8 +6222,10 @@ document.addEventListener('click', async (ev) => {
   if (ev.target.closest('[data-cnpost]')) {
     const box = $('#cnText'), text = box.value.trim();
     if (!text) { box.focus(); return; }
-    try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text } }); coin.ideas.unshift(r.idea); } catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
-    sfx('save'); toast(t('coinPosted'), 'ok'); renderBoss({ animate: false });
+    let made;
+    try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text } }); made = r.idea; coin.ideas.unshift(made); } catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+    sfx('save'); renderBoss({ animate: false });
+    toast(t('coinPosted'), 'ok', () => undoPost(made));
     return;
   }
   const st = ev.target.closest('[data-idst]');
@@ -6246,6 +6247,11 @@ document.addEventListener('click', async (ev) => {
   }
 });
 // « Signaler cette tâche » (superviseur) : depuis la fiche d'une tâche, droit dans le coin.
+// Annuler un message qu'on vient de publier dans le coin.
+async function undoPost(it) {
+  try { await request('ideas', { method: 'POST', body: { action: 'del', id: it.id } }); coin.ideas = coin.ideas.filter((x) => x.id !== it.id); if (current === 'boss') renderBoss({ animate: false }); toast(t('undone'), 'muted'); }
+  catch { toast(t('editServer'), 'muted'); }
+}
 function openReportTask(title) {
   openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.flag}${esc(t('rtEyebrow'))}</p><h2>${esc(title)}</h2><p class="lede">${esc(t('rtLede'))}</p></div>
     <label class="field"><span>${esc(t('rtWhat'))}</span><textarea id="rtText" rows="3" maxlength="1500" placeholder="${esc(t('rtPh'))}"></textarea></label>`, (root) => {
@@ -6253,9 +6259,10 @@ function openReportTask(title) {
     $('#rtSave').onclick = async () => {
       const text = root.querySelector('#rtText').value.trim();
       if (!text) { root.querySelector('#rtText').focus(); return; }
-      try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text, about: { kind: 'task', label: title } } }); coin.ideas.unshift(r.idea); }
+      let made;
+      try { const r = await request('ideas', { method: 'POST', body: { action: 'post', text, about: { kind: 'task', label: title } } }); made = r.idea; coin.ideas.unshift(made); }
       catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
-      closeSheet(); sfx('save'); toast(t('rtDone'), 'ok');
+      closeSheet(); sfx('save'); toast(t('rtDone'), 'ok', () => undoPost(made));
     };
   }, `<button type="button" class="btn primary" id="rtSave">${esc(t('rtSave'))}</button>`);
 }
@@ -6280,7 +6287,7 @@ async function openIdeas() {
       const box = root.querySelector('#idText'), text = box.value.trim();
       if (!text) { box.focus(); return; }
       try { const r = await request('ideas', { method: 'POST', body: { action: 'suggest', text } }); mine.unshift(r.idea); }
-      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      catch (err) { toast(t(err.status === 429 ? 'ideaLimit' : 'editServer'), 'muted'); sfx('error'); return; }
       box.value = ''; paint(root); sfx('save'); toast(t('ideaSent'), 'ok');
     };
   }, `<button type="button" class="btn primary" id="idSend">${esc(t('ideaSend'))}</button>`);
@@ -6303,7 +6310,8 @@ function renderPrefs() {
   const lead = isBoss() && !isRealAdmin();
   const admin = isRealAdmin();
   const sw = (id, label, on, sub = '') => `<button type="button" class="pr-row" id="${id}" role="switch" aria-checked="${Boolean(on)}"><span><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><i class="switch" aria-hidden="true"></i></button>`;
-  const seg = (name, cur, opts) => `<div class="segmented tiny" role="radiogroup" aria-label="${esc(name)}">${opts.map(([k, l]) => `<button type="button" role="radio" data-pr="${name}" data-v="${k}" aria-checked="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
+  const SEG_LABEL = { lang: 'language', theme: 'theme', text: 'prTextSize', order: 'listOrder' };
+  const seg = (name, cur, opts) => `<div class="segmented tiny" role="radiogroup" aria-label="${esc(t(SEG_LABEL[name] || name))}">${opts.map(([k, l]) => `<button type="button" role="radio" data-pr="${name}" data-v="${k}" aria-checked="${cur === k}">${esc(l)}</button>`).join('')}</div>`;
   const P = pushInfo;
   const kinds = [['remind', t('prRemind'), t('prRemindSub')], ['sched', t('prSched'), t('prSchedSub')], ['task', t('prTask'), t('prTaskSub')], ...(isBoss() ? [['urgent', t('prUrgent'), t('prUrgentSub')], ['weekly', t('prWeekly'), t('prWeeklySub')]] : [])];
   const vol = Math.round((prefs.volume ?? 0.7) * 100);
@@ -6444,7 +6452,9 @@ function rerenderMine() {
   if (current === 'teamweek') renderTeamWeek({ animate: false });
 }
 function openOwnConge(pre = '') {
-  const d0 = pre || todayISO();
+  const tdy = mySched(todayISO());
+  const overToday = !tdy || toMin(tdy.end) <= new Date().getHours() * 60 + new Date().getMinutes();
+  const d0 = pre || (overToday ? addDays(todayISO(), 1) : todayISO());
   openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.plan}${esc(t('congeEyebrow'))}</p><h2>${esc(t('myCongeTitle'))}</h2><p class="lede">${esc(t('myCongeLede'))}</p></div>
     <div class="row2"><label class="field"><span>${esc(t('congeFrom'))}</span><input type="date" id="ocFrom" value="${d0}" min="${todayISO()}"></label>
     <label class="field"><span>${esc(t('congeTo'))}</span><input type="date" id="ocTo" value="${d0}" min="${d0}"></label></div>
@@ -6453,7 +6463,7 @@ function openOwnConge(pre = '') {
     const paint = () => {
       if (to.value < from.value) to.value = from.value;
       to.min = from.value;
-      let n = 0; for (let d = from.value; d && d <= to.value && n < 70; d = addDays(d, 1)) if (mySched(d)) n += 1;
+      let n = 0; for (let d = from.value; d && d <= to.value && n < 70; d = addDays(d, 1)) if (mySched(d) && !(d === todayISO() && overToday)) n += 1;
       note.textContent = from.value ? t(n ? 'myCongeShifts' : 'myCongeNoShift', n) : '';
     };
     paint();
@@ -6461,9 +6471,13 @@ function openOwnConge(pre = '') {
     $('#ocSave').onclick = async () => {
       const a = from.value, b = to.value < a ? a : to.value;
       if (!a) return;
-      try { await saveOwnConge(a, b); } catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      const had = new Set(Object.entries(extras.overrides || {}).filter(([, v]) => v.off && v.conge).map(([d]) => d));
+      try { await saveOwnConge(a, b); } catch (err) { toast(t((err.data?.error || err.message) === 'swapped' ? 'myCongeSwapped' : 'editServer'), 'muted'); sfx('error'); return; }
       closeSheet(); sfx('save');
-      toast(t('myCongeDone'), 'ok', async () => { try { await saveOwnConge(a, b, { clear: true }); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
+      // Annuler n'enlève que les jours que ce congé a ajoutés (pas ceux qui étaient déjà en congé).
+      const added = []; for (let d = a; d <= b && added.length < 70; d = addDays(d, 1)) if (!had.has(d)) added.push(d);
+      const runs = []; for (const d of added) { const last = runs.at(-1); if (last && addDays(last[1], 1) === d) last[1] = d; else runs.push([d, d]); }
+      toast(t('myCongeDone'), 'ok', async () => { try { for (const [x, y] of runs) await saveOwnConge(x, y, { clear: true }); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
     };
   }, `<button type="button" class="btn primary" id="ocSave">${esc(t('congeSave'))}</button>`);
 }
@@ -6493,7 +6507,7 @@ function mySwapRows() {
   const list = swp.list.filter((s) => (s.mine || s.took) && s.status !== 'cancel' && s.status !== 'expired' && s.date >= todayISO());
   if (!list.length) return '';
   const st = (s) => (s.took ? t('swYouTook', s.fromName) : s.status === 'done' ? t('swTakenBy', s.takerName) : s.status === 'no' ? t('swDeclined', s.toName) : s.all ? t('swWaitingAll') : t('swWaiting', s.toName));
-  return `<div class="sw-mine">${list.map((s) => `<div class="sw-row s-${s.status}${s.took ? ' took' : ''}"><span class="sw-dot" aria-hidden="true"></span><span><b class="num">${esc(swWhen(s))}</b><small>${esc(st(s))}</small></span>${s.mine && s.status === 'open' ? `<button type="button" class="link" data-swcancel="${esc(s.id)}">${esc(t('swCancel'))}</button>` : ''}${s.took && Date.now() - Date.parse(s.doneAt || 0) < 15 * 6e4 ? `<button type="button" class="link" data-swundo="${esc(s.id)}">${esc(t('undo'))}</button>` : ''}</div>`).join('')}</div>`;
+  return `<div class="sw-mine">${list.map((s) => `<div class="sw-row s-${s.status}${s.took ? ' took' : ''}"><span class="sw-dot" aria-hidden="true"></span><span><b class="num">${esc(swWhen(s))}</b><small>${esc(st(s))}</small></span>${s.mine && s.status === 'open' ? `<button type="button" class="link" data-swcancel="${esc(s.id)}" aria-label="${esc(`${t('swCancel')} · ${swWhen(s)}`)}">${esc(t('swCancel'))}</button>` : ''}${s.took && Date.now() - Date.parse(s.doneAt || 0) < 15 * 6e4 ? `<button type="button" class="link" data-swundo="${esc(s.id)}" aria-label="${esc(`${t('undo')} · ${swWhen(s)}`)}">${esc(t('undo'))}</button>` : ''}</div>`).join('')}</div>`;
 }
 async function swapAction(action, id, extra = {}) {
   const r = await request('swaps', { method: 'POST', body: { action, id, ...extra } });
@@ -6543,7 +6557,10 @@ document.addEventListener('click', async (e) => {
     toast(t('myCongeRemoved'), 'ok', async () => { try { await saveOwnConge(a, b, { quiet: true }); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
     return;
   }
-  const id = (acc || no || cancel || undo).dataset[acc ? 'swacc' : no ? 'swno' : cancel ? 'swcancel' : 'swundo'];
+  const btn = acc || no || cancel || undo;
+  if (btn.disabled) return;
+  btn.disabled = true; // un double toucher n'envoie qu'une fois
+  const id = btn.dataset[acc ? 'swacc' : no ? 'swno' : cancel ? 'swcancel' : 'swundo'];
   const s = swp.list.find((x) => x.id === id);
   try {
     if (acc) {
@@ -6559,7 +6576,8 @@ document.addEventListener('click', async (e) => {
       await swapAction('undo', id); rerenderMine(); toast(t('undone'), 'muted');
     }
   } catch (err) {
-    toast(t(err.status === 409 ? ((err.data?.error || err.message) === 'busy' ? 'swBusy' : (err.data?.error || err.message) === 'gone' ? 'swGone' : 'swState') : 'editServer'), 'muted'); sfx('error');
+    btn.disabled = false;
+    toast(t(err.status === 409 ? ((err.data?.error || err.message) === 'busy' ? 'swBusy' : (err.data?.error || err.message) === 'gone' ? 'swGone' : (err.data?.error || err.message) === 'changed' ? 'swChanged' : 'swState') : 'editServer'), 'muted'); sfx('error');
     loadSwaps();
   }
 });
@@ -6573,7 +6591,7 @@ function planExtras() {
   const ranges = myCongeRanges();
   const cg = `<section class="d-card plan-off"><div class="d-head"><h2>${hubIco('plan')}${esc(t('myCongeCard'))}</h2></div>
     <p>${esc(t('myCongeText'))}</p>
-    ${ranges.length ? `<div class="cg-list">${ranges.map((r) => `<div class="cg-row"><span><b>${esc(rangeText(r))}</b><small>${esc(r.self ? t('myCongeMine') : t('myCongeBy', r.by))}</small></span>${r.self ? `<button type="button" class="link danger" data-uncg="${r.from}|${r.to}">${esc(t('remove'))}</button>` : ''}</div>`).join('')}</div>` : ''}
+    ${ranges.length ? `<div class="cg-list">${ranges.map((r) => `<div class="cg-row"><span><b>${esc(rangeText(r))}</b><small>${esc(r.self ? t('myCongeMine') : t('myCongeBy', r.by))}</small></span>${r.self ? `<button type="button" class="link danger" data-uncg="${r.from}|${r.to}" aria-label="${esc(`${t('remove')} · ${rangeText(r)}`)}">${esc(t('remove'))}</button>` : ''}</div>`).join('')}</div>` : ''}
     <button type="button" class="btn ghost" data-mycg>${esc(t('myCongeBtn'))}</button></section>`;
   const sw = `<section class="d-card plan-swap"><div class="d-head"><h2>${hubIco('team')}${esc(t('swCard'))}</h2></div>
     <p>${esc(t('swCardText'))}</p>${swapOffers()}${mySwapRows()}

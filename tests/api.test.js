@@ -694,3 +694,52 @@ test('Rappel du quart : pas de rappel un jour de congé; horaire vide → un pet
   await a.remindDue(new Date('2026-11-02T10:10:00-05:00'));
   assert.equal(sent.filter((x) => /vide/.test(x.title)).length, 1);
 });
+
+// ---------- Revue des experts (rondes 4 et 5) ----------
+test('Revue : l’admin protégé, vraies dates, rappel tôt le matin, idées plafonnées', async () => {
+  const { a, go, sign, sent } = kit();
+  const admin = await sign('Esteban', 'admin'), boss = await sign('Martine', 'boss'), noah = await sign('Noah');
+  assert.equal((await go('users', { action: 'reset', email: 'esteban@x.ca', password: 'pirate1' }, boss)).status, 404); // un superviseur ne prend pas le compte admin
+  assert.equal((await go('users', { action: 'schedule', email: 'esteban@x.ca', schedule: {} }, boss)).status, 404);
+  assert.equal((await go('users', { action: 'reset', email: 'noah@x.ca', password: 'nouveau1' }, admin)).status, 200);
+  assert.equal((await go('plan', { action: 'conge', date: '2026-13-40' }, noah)).status, 400);
+  assert.equal((await go('plan', { action: 'task', date: '2026-02-30', title: 'x', who: '*' }, boss)).status, 400);
+  // un quart à 6 h 05 : le rappel de 5 h 55 passe malgré les heures calmes
+  await go('push', { action: 'subscribe', sub: { endpoint: 'https://p/noah', keys: { p256dh: 'k', auth: 'a' } } }, noah);
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '06:05', end: '11:00' } } }, noah);
+  await a.remindDue(new Date('2026-10-29T05:55:00-04:00'));
+  assert.ok(sent.some((x) => x.to === 'https://p/noah' && /bientôt/.test(x.title)));
+  for (let i = 0; i < 20; i++) await go('ideas', { action: 'suggest', text: `idée ${i}` }, noah);
+  assert.equal((await go('ideas', { action: 'suggest', text: 'une de trop' }, noah)).status, 429);
+});
+
+test('Revue : échanges solides (un seul preneur, pas d’annulation après un autre changement, congé)', async () => {
+  const { go, sign, setNow } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah'), lea = await sign('Lea'), zoe = await sign('Zoe');
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '16:30', end: '23:00' } } }, noah);
+  const s1 = (await go('swaps', { action: 'ask', date: '2026-10-29', to: '*' }, noah)).data.swap;
+  assert.equal((await go('swaps', { action: 'accept', id: s1.id }, lea)).status, 200);
+  assert.equal((await go('swaps', { action: 'accept', id: s1.id }, zoe)).status, 409); // déjà pris
+  // Léa ne peut pas « prendre congé » d'un quart reçu par échange
+  assert.equal((await go('plan', { action: 'conge', date: '2026-10-29' }, lea)).status, 409);
+  // Léa le repasse à Zoé, puis veut défaire le premier échange : refusé (sinon Noah et Zoé travailleraient tous les deux)
+  const s2 = (await go('swaps', { action: 'ask', date: '2026-10-29', to: '*' }, lea)).data.swap;
+  await go('swaps', { action: 'accept', id: s2.id }, zoe);
+  assert.equal((await go('swaps', { action: 'undo', id: s1.id }, lea)).status, 409);
+  const ppl = (await go('roster?from=2026-10-29&to=2026-10-29', null, boss)).data.people;
+  assert.equal(ppl.filter((p) => p.overrides['2026-10-29']?.start).map((p) => p.name).join(), 'Zoe'); // une seule personne travaille
+  // un quart déjà fini aujourd'hui ne s'offre plus
+  setNow(new Date('2026-10-29T23:30:00-04:00'));
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '08:00', end: '10:00' } } }, boss);
+  assert.equal((await go('swaps', { action: 'ask', date: '2026-10-29' }, boss)).status, 400);
+});
+
+test('Revue : enlever son congé remet les heures que le superviseur avait mises', async () => {
+  const { go, sign } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah');
+  await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-11-03', start: '12:00', end: '20:00' }, boss);
+  await go('plan', { action: 'conge', date: '2026-11-03' }, noah);
+  await go('plan', { action: 'conge', date: '2026-11-03', clear: true }, noah);
+  const ov = (await go('plan?from=2026-11-03&to=2026-11-03', null, noah)).data.overrides['noah@x.ca']['2026-11-03'];
+  assert.equal(ov.start, '12:00'); assert.equal(ov.by, 'Martine');
+});
