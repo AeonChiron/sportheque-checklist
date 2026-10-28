@@ -47,7 +47,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"js/fx.js","revision":"f190e8799384"},
   {"url":"js/gym3d.js","revision":"613145263544"},
   {"url":"js/holidays.js","revision":"b3a52a4f2385"},
-  {"url":"js/i18n.js","revision":"f9a8b3df6acb"},
+  {"url":"js/i18n.js","revision":"45ea8ad2ebec"},
   {"url":"js/illustrations.js","revision":"c6c8e281c2b5"},
   {"url":"js/keep.js","revision":"7c020b6864e5"},
   {"url":"js/manual.js","revision":"af0d644cfa96"},
