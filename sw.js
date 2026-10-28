@@ -34,7 +34,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"icons/rabbit-rest.svg","revision":"38b94e634be1"},
   {"url":"icons/rabbit.svg","revision":"e23c8e5bcb2a"},
   {"url":"index.html","revision":"c5bf52a7620a"},
-  {"url":"js/app.js","revision":"11de02f2293c"},
+  {"url":"js/app.js","revision":"d5d6ab0f6886"},
   {"url":"js/auth.js","revision":"30affe1946a9"},
   {"url":"js/avatars.js","revision":"6a1e3a290665"},
   {"url":"js/board-shape.js","revision":"e8d853425827"},
@@ -44,7 +44,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"js/config.js","revision":"b6f2e28fde88"},
   {"url":"js/fictive.js","revision":"1dfa6f93918c"},
   {"url":"js/floor-layout.js","revision":"929d6d428978"},
-  {"url":"js/fx.js","revision":"f71d8f3b94fc"},
+  {"url":"js/fx.js","revision":"33d93128488e"},
   {"url":"js/gym3d.js","revision":"613145263544"},
   {"url":"js/holidays.js","revision":"b3a52a4f2385"},
   {"url":"js/i18n.js","revision":"427f9be4fda9"},
@@ -99,7 +99,7 @@ self.addEventListener('push', (e) => {
     list.forEach((c) => c.postMessage({ type: 'push', tag: d.tag || '', bell: Boolean(d.bell) }));
     const seen = list.some((c) => c.visibilityState === 'visible');
     return self.registration.showNotification(d.title || 'Sporthèque', {
-      body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag) && !seen, silent: seen,
+      body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag) && !(seen && d.bell), silent: seen && Boolean(d.bell), // seulement la tâche ajoutée : l'app ouverte sonne sa cloche
       icon: 'icons/icon-180.png', badge: 'icons/icon-180.png', data: { url: d.url || './' },
     });
   }));

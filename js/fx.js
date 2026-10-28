@@ -273,7 +273,7 @@ const SOUNDS = {
   // Le toucher d'un bouton suit son importance (propriétaire, Q75 : « ça dépend de l'importance », −30 %) :
   tap(t) { click(t, { gain: 0.14 }); }, // un bouton ordinaire : un vrai clic
   tapSoft(t) { click(t, { gain: 0.09, kind: 'soft', verb: 0.08 }); }, // un lien, un onglet, un petit bouton : à peine
-  tapBig(t) { click(t, { gain: 0.15 }); tok(t + 0.004, 493.88, 0.04); }, // l'action principale : un clic avec un petit bloc de bois chaud (Si, dans la gamme)
+  tapBig(t) { click(t, { gain: 0.15 }); tok(t + 0.004, 493.88, 0.03); }, // l'action principale : un clic avec un petit bloc de bois chaud (Si, dans la gamme)
   tick(t) { click(t, { gain: 0.11, kind: 'tick', pan: -0.1 }); click(t + 0.032, { gain: 0.07, kind: 'tick', pan: 0.1 }); }, // interrupteur, onglet : « tic-tic »
   open(t) { whoosh(t, { up: true }); click(t + 0.12, { gain: 0.09, kind: 'soft', verb: 0.25 }); }, // une feuille monte et se pose
   close(t) { whoosh(t, { up: false, gain: 0.06, dur: 0.2 }); click(t + 0.1, { gain: 0.06, kind: 'soft', verb: 0.2 }); },
@@ -472,7 +472,12 @@ export function fxSound(name, opts = {}) {
     const c = A();
     const now = performance.now();
     if (key === 'notify' && now - lastAt < 350) return; // un message qui suit un autre son : pas de doublon
-    if (key === 'bell' && c.state !== 'running') return; // pas encore touché l'écran : la cloche partirait en retard, avec le prochain toucher
+    // La cloche, seulement si le son peut partir tout de suite (sinon elle sonnerait plus tard, sur le prochain toucher).
+    if (key === 'bell' && c.state !== 'running') {
+      const asked = performance.now();
+      c.resume?.().then(() => { if (c.state === 'running' && performance.now() - asked < 1000) fn(c.currentTime + 0.01, opts); }).catch(() => {});
+      return;
+    }
     lastAt = now;
     fn(c.currentTime + 0.01, { ...opts, level: name === 'punch' ? 0.2 : opts.level });
   } catch { /* pas de son ici : tant pis */ }

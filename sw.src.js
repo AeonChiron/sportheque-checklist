@@ -41,7 +41,7 @@ self.addEventListener('push', (e) => {
     list.forEach((c) => c.postMessage({ type: 'push', tag: d.tag || '', bell: Boolean(d.bell) }));
     const seen = list.some((c) => c.visibilityState === 'visible');
     return self.registration.showNotification(d.title || 'Sporthèque', {
-      body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag) && !seen, silent: seen,
+      body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag) && !(seen && d.bell), silent: seen && Boolean(d.bell), // seulement la tâche ajoutée : l'app ouverte sonne sa cloche
       icon: 'icons/icon-180.png', badge: 'icons/icon-180.png', data: { url: d.url || './' },
     });
   }));

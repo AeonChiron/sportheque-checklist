@@ -204,8 +204,15 @@ function toast(msg, tone = 'ok', onUndo = null) {
   el.classList.add('in');
   if (onUndo) el.querySelector('button').onclick = () => { el.hidden = true; onUndo(); };
   clearTimeout(toast.timer);
-  // Assez longtemps pour lire (personnel plus âgé) : selon la longueur du message, de 1,9 à 6 secondes.
-  toast.timer = setTimeout(() => { el.hidden = true; }, Math.max(onUndo ? 4500 : 1900, Math.min(6000, 900 + String(msg).length * 55)));
+  toast.timer = setTimeout(() => { el.hidden = true; }, toastMs(msg, onUndo));
+}
+// Assez longtemps pour lire (personnel plus âgé) : selon la longueur du message, de 1,9 à 6 secondes.
+function toastMs(msg, undo = false) { return Math.max(undo ? 4500 : 1900, Math.min(6000, 900 + String(msg).length * 55)); }
+// Un message qui n'est pas urgent attend qu'un « Annuler » à l'écran soit parti (3 essais au plus).
+function toastWhenFree(fn, tries = 3) {
+  const el = $('#toast');
+  if (tries > 0 && el && !el.hidden && el.classList.contains('has-undo')) setTimeout(() => toastWhenFree(fn, tries - 1), 1500);
+  else fn();
 }
 
 // Petite fête quand tout est coché (rien si « réduire les animations »).
@@ -590,10 +597,15 @@ async function refreshExtras() {
   const today = todayISO();
   try {
     const r = await request(`plan?from=${addDays(today, -2)}&to=${addDays(today, 28)}`);
-    const next = { overrides: r.overrides?.[myEmail()] || {}, tasks: r.tasks || [] };
+    const next = { overrides: r.overrides?.[myEmail()] || {}, tasks: r.tasks || [], owner: myEmail() };
     loadSwaps();
+    // Un autre compte sur ce téléphone : on repart à neuf, sans sonner pour ses vieilles tâches.
+    if (extras.owner && extras.owner !== myEmail()) extras = { overrides: {}, tasks: [] };
+    const lastCheck = extras.checkedAt || '';
+    const checkedAt = new Date().toISOString();
     if (JSON.stringify([next.overrides, next.tasks]) === JSON.stringify([extras.overrides, extras.tasks])) {
-      if (!extras.seen) { extras.seen = true; write(EXTRAS, extras); } // plan vide au départ : la première tâche ajoutée sonnera
+      // Plan vide au départ : la première tâche ajoutée sonnera. L'heure de la vérification avance toujours.
+      Object.assign(extras, { seen: true, owner: myEmail(), checkedAt }); write(EXTRAS, extras);
       return;
     }
     // Propriétaire (Q48) : l'horaire est toujours en direct; un changement fait par quelqu'un d'autre se dit.
@@ -604,13 +616,22 @@ async function refreshExtras() {
     if (news.length && extras.seen) setTimeout(() => toast(news.length === 1 ? say(news[0]) : t('ovChangedN', news.length), 'ok'), 900);
     // Une tâche qu'un superviseur vient de m'ajouter (Q76) : une cloche douce et un message, une seule fois.
     // Par id (une tâche de chaque semaine garde le même id; une tâche remise avec « Annuler » aussi) : jamais deux fois.
-    const had = new Set([...(extras.tasks || []).map((x) => x.id), ...(extras.rung || [])]);
-    const added = next.tasks.filter((x) => x.date >= today && x.by && x.by !== meName && !had.has(x.id) && (x.who !== '*' || mySched(x.date)));
+    // Et seulement si elle a été ajoutée depuis la dernière vérification (10 min de marge pour l'horloge) : une
+    // vieille tâche qui entre dans la fenêtre des 28 jours ne sonne pas. Même titre, même jour (un « Annuler ») non plus.
+    const keyOf = (x) => `${x.title}|${x.date}`;
+    const had = new Set([...(extras.tasks || []).flatMap((x) => [x.id, keyOf(x)]), ...(extras.rung || [])]);
+    const since = lastCheck ? Date.parse(lastCheck) - 600000 : 0;
+    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+    const stillToday = (x) => { const s = mySched(x.date); return !s || toMin(s.end) <= toMin(s.start) || nowMin < toMin(s.end); }; // aujourd'hui, quart fini : trop tard
+    const eligible = (x) => x.who !== '*' || mySched(x.date); // « tout le monde » : seulement si je travaille ce jour-là
+    const added = next.tasks.filter((x) => x.date >= today && x.by && x.by !== meName && !had.has(x.id) && !had.has(keyOf(x)) && eligible(x)
+      && Date.parse(x.at || 0) > since && (x.date !== today || stillToday(x)));
     const firstOf = [...new Map(added.map((x) => [x.id, x])).values()];
-    next.rung = [...new Set([...had, ...next.tasks.map((x) => x.id)])].slice(-300);
+    next.rung = [...new Set([...had, ...next.tasks.filter(eligible).flatMap((x) => [x.id, keyOf(x)])])].slice(-400);
     const oneBy = new Set(firstOf.map((x) => x.by)).size === 1; // plusieurs superviseurs : on ne prête pas tout au premier
-    if (firstOf.length && extras.seen) setTimeout(() => { sfx('bell'); toast(firstOf.length === 1 ? t('taskNewFor', firstOf[0].by, firstOf[0].title, dayInSentence(firstOf[0].date)) : oneBy ? t('taskNewForN', firstOf[0].by, firstOf.length) : t('taskNewN', firstOf.length), 'ok'); }, news.length ? 3200 : 900);
-    next.seen = true;
+    const ring = () => { sfx('bell'); toast(firstOf.length === 1 ? t('taskNewFor', firstOf[0].by, firstOf[0].title, dayInSentence(firstOf[0].date)) : oneBy ? t('taskNewForN', firstOf[0].by, firstOf.length) : t('taskNewN', firstOf.length), 'ok'); };
+    if (firstOf.length && extras.seen) setTimeout(() => toastWhenFree(ring), news.length ? 900 + toastMs(say(news[0])) + 300 : 900);
+    next.seen = true; next.checkedAt = checkedAt;
     extras = next; write(EXTRAS, extras);
     refreshScheduleStatus();
     if (state) { plan = shiftPlan(state); if (current === 'checklist') renderChecklist(); }
