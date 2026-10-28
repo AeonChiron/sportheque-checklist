@@ -3,6 +3,34 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-28-reports',
+    date: '2026-10-28',
+    fr: {
+      title: 'Des rapports beaux et utiles',
+      items: [
+        'Rapports des superviseurs : trois chiffres en haut, une courbe du ménage fait, et des filtres simples (AM, PM, avec signalement, pas fini).',
+        'Le résumé du mois, fait tout seul le 1er : le % du gym, ce qui manque le plus souvent, les problèmes réglés et les idées qui ont marché.',
+        'Une notification le 1er du mois à 9 h pour les superviseurs.',
+        'Exporter un mois en fichier Excel, seulement si tu le veux.',
+        'La semaine remonte 4 semaines, avec une petite icône les jours de tâches spéciales.',
+        'Toucher une personne dans une journée passée ouvre son rapport (superviseurs seulement).',
+        'Ce qui a été fait est rangé par zone : A, B, C, puis le reste du gym.',
+      ],
+    },
+    en: {
+      title: 'Lovely, useful reports',
+      items: [
+        'Supervisor reports: three numbers on top, a chart of the cleaning done, and simple filters (AM, PM, with a problem, not finished).',
+        'The monthly summary, made by itself on the 1st: the gym %, what gets missed most, problems fixed and ideas that worked.',
+        'A notification on the 1st at 9 am for supervisors.',
+        'Export a month as an Excel file, only if you want to.',
+        'The week goes back 4 weeks, with a small icon on days with special tasks.',
+        'Tapping a person on a past day opens their report (supervisors only).',
+        'What got done is grouped by zone: A, B, C, then the rest of the gym.',
+      ],
+    },
+  },
+  {
     id: '2026-10-28-sched',
     date: '2026-10-28',
     fr: {

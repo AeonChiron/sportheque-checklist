@@ -220,6 +220,11 @@ test('Historique : l’admin et les superviseurs corrigent n’importe quel quar
   const s = (await stores('board').get('2026-10-20', { type: 'json' }))[0];
   assert.equal(s.done, 3); // le pointage (absent de l'éditeur) reste
   assert.equal(s.editedBy, 'Seed');
+  // Critique ronde 6 : une tâche « en plus » déjà faite ne gonfle ni le compte ni le total.
+  await stores('board').setJSON('2026-10-21', [{ date: '2026-10-21', shift: 1, name: 'Léa', done: 2, total: 4, items: [{ id: 'pointage', status: 'done' }, { id: 'a', status: 'done' }, { id: 'b', status: 'unchecked' }, { id: 'c', status: 'unchecked' }, { id: 'x1', status: 'done' }, { id: 'x2', status: 'done' }], flags: [], savedOn: '2026-10-21' }]);
+  await go('board', { action: 'edit', date: '2026-10-21', shift: 1, name: 'Léa', items: [{ id: 'c', status: 'done' }] }, boss);
+  const s2 = (await stores('board').get('2026-10-21', { type: 'json' }))[0];
+  assert.deepEqual([s2.done, s2.total], [3, 4]);
 });
 
 test('Un quart enregistré se modifie pendant 12 h, puis il est verrouillé', async () => {

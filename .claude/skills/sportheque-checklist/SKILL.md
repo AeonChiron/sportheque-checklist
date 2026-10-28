@@ -219,3 +219,10 @@ Plain static site + one serverless function. No build step.
 - Holidays: `js/holidays.js` (fixed rules, Easter computed). Show both Good Friday and Easter Monday with the "employer picks one" note; never claim gym hours, only "may change, check with your supervisor".
 - `plannedOn(u, date)` (server) = override else schedule; use it for anything that asks "does this person work that day" (reminders, swaps).
 - Sheets hide the bottom tab bar while open (`body:has(#sheet.open) .tabbar`).
+
+## Reports (loop round 6)
+- One % everywhere: tasks done / tasks planned per shift (`metrics` → `pctOf`); the server's `shiftCount` matches it. Never show two numbers that can contradict (the analysis card no longer repeats the %).
+- Arrows only on the % (a rate), never on counts of an unfinished period; show what it compares to.
+- Filters are never per person (help, not watch). The CSV keeps done/planned per shift but no % column.
+- Month boundaries use gym time (America/Toronto), not UTC.
+- Monthly push: 1st 09:00, leads, under the 'weekly' toggle; skip empty months.

@@ -44,7 +44,7 @@ const MAX_PHOTO_BYTES = 900_000;
 // (sans le pointage ni les tâches « en plus » qui débordent du quart).
 function shiftCount(s) {
   const items = s.items || [], pt = items.find((i) => i.id === 'pointage');
-  if (Number.isFinite(s.total) && Number.isFinite(s.done) && s.total >= (pt ? 1 : 0)) return { done: Math.max(0, s.done - (pt?.status === 'done' ? 1 : 0)), total: s.total - (pt ? 1 : 0) };
+  if (Number.isFinite(s.total) && Number.isFinite(s.done) && s.total >= (pt ? 1 : 0)) { const total = s.total - (pt ? 1 : 0); return { done: Math.max(0, Math.min(total, s.done - (pt?.status === 'done' ? 1 : 0))), total }; }
   const it = items.filter((i) => i.id !== 'pointage');
   return { done: it.filter((i) => i.status === 'done').length, total: it.length };
 }
@@ -398,8 +398,10 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       });
       const seen = new Set(edited.map((i) => i.id));
       s.items = [...(s.items || []).filter((i) => !seen.has(i.id)), ...edited].slice(0, 40); // le pointage et le reste restent tels quels
-      s.done = s.items.filter((i) => i.status === 'done').length;
-      s.total = Math.max(s.total || 0, s.items.length);
+      // done/total gardent le compte des tâches du plan (sans les « en plus ») : on ajuste par différence.
+      const delta = edited.reduce((a, i) => a + (i.status === 'done' ? 1 : 0) - (prev.get(i.id)?.status === 'done' ? 1 : 0), 0);
+      if (Number.isFinite(s.total) && Number.isFinite(s.done)) s.done = Math.max(0, Math.min(s.total, s.done + delta));
+      else { s.done = s.items.filter((i) => i.status === 'done').length; s.total = s.items.length; }
       if (!own) { s.editedBy = me.name || ''; s.editedAt = new Date().toISOString(); } // sa propre correction : pas d'étiquette
       await store.setJSON(raw.date, list);
       const { byEmail, ...pub } = s;
