@@ -260,8 +260,9 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
       if (body.date < d.today) throw err(400, 'invalid');
       const all = (d.overrides[me.email] ||= {});
       const span = []; for (let x = body.date; x <= (body.to && body.to >= body.date ? body.to : body.date) && span.length < 62; x = addDays(x, 1)) span.push(x);
-      if (!body.clear && span.some((x) => all[x]?.swap && !all[x].off)) throw err(409, 'swapped');
-      if (body.clear) { for (const x of span) if (all[x]?.self) { if (all[x].prev) all[x] = all[x].prev; else delete all[x]; } } else for (const x of span) if (!all[x]?.off || all[x].self) all[x] = { off: true, conge: true, self: true, by: me.name, ...(all[x] && !all[x].self ? { prev: all[x] } : {}) };
+      const swappedDay = !body.clear && span.find((x) => all[x]?.swap && !all[x].off);
+      if (swappedDay) throw Object.assign(err(409, 'swapped'), { data: { error: 'swapped', day: swappedDay } });
+      if (body.clear) { for (const x of span) if (all[x]?.self) { if (all[x].prev) all[x] = all[x].prev; else delete all[x]; } } else for (const x of span) if (!all[x]?.off || all[x].self) all[x] = { off: true, conge: true, self: true, by: me.name, ...(all[x]?.self ? (all[x].prev ? { prev: all[x].prev } : {}) : all[x] ? { prev: all[x] } : {}) };
       persist(); return { ok: true, overrides: Object.fromEntries(Object.entries(all).filter(([k]) => k >= d.today)) };
     }
     if (!lead) throw err(403, 'boss');
@@ -273,6 +274,7 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
     }
     if (body.action === 'task') {
       const task = { id: Math.random().toString(16).slice(2, 12), date: body.date, title: String(body.title || '').slice(0, 80), time: body.time || '', minutes: Number(body.minutes) || 15, who: body.who, by: me.name, at: new Date().toISOString() };
+      if (body.repeat === 'weekly' ? d.repeat.length >= 200 : d.tasks.filter((x) => x.date === body.date).length >= 60) throw err(409, 'full');
       if (body.repeat === 'weekly') { Object.assign(task, { repeat: 'weekly', until: body.until || '' }); d.repeat.push({ id: task.id, title: task.title, time: task.time, minutes: task.minutes, who: task.who, wd: dow(body.date), from: body.date, until: body.until || '', skip: [], by: me.name, at: task.at }); }
       else d.tasks.push(task);
       persist(); return { task };
@@ -288,7 +290,7 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
   }
   if (route === 'people') { // la fiche d'un employé : superviseurs seulement
     if (!lead) throw err(403, 'boss');
-    if (method === 'GET' && P.has('reports')) return { reports: Object.entries(d.notes).flatMap(([email, list]) => list.filter((n) => n.kind === 'report').map((n) => ({ ...n, email, name: d.users[email]?.name || '' }))).sort((a, b) => b.at.localeCompare(a.at)) };
+    // (pas de liste de tous les signalements : aider, pas surveiller)
     if (method === 'GET') return { notes: (d.notes[String(P.get('email') || '').toLowerCase()] || []).slice().reverse() };
     const email = String(body?.email || '').toLowerCase();
     const list = (d.notes[email] ||= []);
@@ -330,7 +332,8 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
       if (!forMe(s)) throw err(409, 'state');
       const still = planned(d.users[s.from] || {}, s.date);
       if (!still || still.start !== s.start || still.end !== s.end) { s.status = 'cancel'; persist(); throw err(409, 'gone'); }
-      if (planned(me, s.date)) throw err(409, 'busy');
+      const mine = d.overrides[me.email]?.[s.date];
+      if (planned(me, s.date) || (mine && !(mine.off && mine.swap))) throw err(409, 'busy');
       const of = (d.overrides[s.from] ||= {}), om = (d.overrides[me.email] ||= {});
       s.prev = { from: of[s.date] || null, me: om[s.date] || null };
       of[s.date] = { off: true, swap: s.id, by: me.name }; om[s.date] = { start: s.start, end: s.end, swap: s.id, by: s.fromName };

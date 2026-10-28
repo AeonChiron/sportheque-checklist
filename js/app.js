@@ -5868,7 +5868,7 @@ function openTaskSheet(date, preWho = '') {
       let made = null;
       const until = repeat === 'weekly' ? root.querySelector('#tkUntil').value || '' : '';
       try { made = (await request('plan', { method: 'POST', body: { action: 'task', date, title, time: root.querySelector('#tkTime').value || '', minutes: mins, who, ...(repeat === 'weekly' ? { repeat, until } : {}) } })).task; }
-      catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      catch (err) { toast(t((err.data?.error || err.message) === 'full' ? 'taskFull' : 'editServer'), 'muted'); sfx('error'); return; }
       closeSheet(); sfx('save');
       toast(t(repeat === 'weekly' ? 'taskAddedWeekly' : 'taskAdded'), 'ok', made?.id ? async () => { try { await request('plan', { method: 'POST', body: { action: 'deltask', date, id: made.id, all: true } }); await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13)); rerenderBossViews(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } } : null);
       await refreshTeamPlan(teamPlan.from || mondayOf(todayISO()), teamPlan.to || addDays(mondayOf(todayISO()), 13));
@@ -6472,7 +6472,7 @@ function openOwnConge(pre = '') {
       const a = from.value, b = to.value < a ? a : to.value;
       if (!a) return;
       const had = new Set(Object.entries(extras.overrides || {}).filter(([, v]) => v.off && v.conge).map(([d]) => d));
-      try { await saveOwnConge(a, b); } catch (err) { toast(t((err.data?.error || err.message) === 'swapped' ? 'myCongeSwapped' : 'editServer'), 'muted'); sfx('error'); return; }
+      try { await saveOwnConge(a, b); } catch (err) { const e = err.data?.error || err.message; toast(e === 'swapped' ? t('myCongeSwapped', dayWord(err.data?.day || a).toLowerCase()) : t('editServer'), 'muted'); sfx('error'); return; }
       closeSheet(); sfx('save');
       // Annuler n'enlève que les jours que ce congé a ajoutés (pas ceux qui étaient déjà en congé).
       const added = []; for (let d = a; d <= b && added.length < 70; d = addDays(d, 1)) if (!had.has(d)) added.push(d);

@@ -268,8 +268,9 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const b = await body(req);
     const email = String(b.email || '').trim().toLowerCase();
     const u = await users().get(email, { type: 'json' });
-    // Le compte admin : seul l'admin y touche (un superviseur ne peut ni changer son mot de passe, ni le ramener…).
-    if (u?.role === 'admin' && me.role !== 'admin') return json({ error: 'user' }, 404);
+    // Le compte admin : seul l'admin touche à son compte (mot de passe, départ, retour). En « Mode employé »,
+    // l'équipe le voit comme un employé ordinaire : un superviseur peut alors changer son horaire, comme pour les autres.
+    if (u?.role === 'admin' && me.role !== 'admin' && !(b.action === 'schedule' && u.workMode)) return json({ error: 'user' }, 404);
     // Redonner l'accès à quelqu'un qui était parti (ou annuler un départ fait par erreur).
     if (b.action === 'restore') {
       if (!u?.removed || !u.hash) return json({ error: 'user' }, 404);
@@ -830,10 +831,11 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     const span = b.to && DATE.test(String(b.to)) && b.to >= date ? datesIn(date, String(b.to), 62) : [date];
     const all = (await plans().get(`ov:${me.email}`, { type: 'json' })) || {};
     // Un quart reçu par échange : on ne le laisse pas tomber en silence (l'offrir à quelqu'un d'autre).
-    if (!b.clear && span.some((d) => all[d]?.swap && !all[d].off)) return json({ error: 'swapped' }, 409);
+    const swappedDay = !b.clear && span.find((d) => all[d]?.swap && !all[d].off);
+    if (swappedDay) return json({ error: 'swapped', day: swappedDay }, 409);
     // Enlever son congé remet ce qui était là avant (par exemple des heures changées par un superviseur).
     if (b.clear) { for (const d of span) if (all[d]?.self) { if (all[d].prev) all[d] = all[d].prev; else delete all[d]; } }
-    else for (const d of span) if (!all[d]?.off || all[d].self) all[d] = { off: true, conge: true, self: true, by: me.name, ...(all[d] && !all[d].self ? { prev: all[d] } : {}) };
+    else for (const d of span) if (!all[d]?.off || all[d].self) all[d] = { off: true, conge: true, self: true, by: me.name, ...(all[d]?.self ? (all[d].prev ? { prev: all[d].prev } : {}) : all[d] ? { prev: all[d] } : {}) };
     await plans().setJSON(`ov:${me.email}`, all);
     if (!b.clear && !b.quiet) {
       for (const u of (await activeUsers()).filter((x) => lead(x) && x.email !== me.email)) {
@@ -856,7 +858,8 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
   const UNDO_SWAP_MS = 15 * 60 * 1000;
   // Encore à venir : un jour futur, ou aujourd'hui avant la fin du quart (heure de Montréal).
   const torontoMin = (now) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value])); return Number(p.hour) * 60 + Number(p.minute); };
-  const ahead = (date, end, now = clock()) => { const today = localDay(now); if (date !== today) return date > today; const [h, m] = end.split(':').map(Number); return torontoMin(now) < h * 60 + m; };
+  const hm2min = (x) => { const [h, m] = x.split(':').map(Number); return h * 60 + m; };
+  const ahead = (date, start, end, now = clock()) => { const today = localDay(now); if (date !== today) return date > today; const e = hm2min(end) + (hm2min(end) <= hm2min(start) ? 1440 : 0); return torontoMin(now) < e; };
   async function swapsApi(req, me) {
     const today = localDay(clock());
     let list = ((await plans().get('swaps', { type: 'json' })) || []).filter((s) => s.date >= plusDays(today, -14));
@@ -873,7 +876,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const date = String(b.date || '');
       if (!DATE.test(date) || date < today) return json({ error: 'invalid' }, 400);
       const slot = await plannedOn(me, date);
-      if (!slot || !ahead(date, slot.end)) return json({ error: 'noshift' }, 400);
+      if (!slot || !ahead(date, slot.start, slot.end)) return json({ error: 'noshift' }, 400);
       if (list.some((s) => s.from === me.email && s.date === date && s.status === 'open')) return json({ error: 'dup' }, 409);
       const team = (await activeUsers()).filter((u) => u.email !== me.email && (u.role !== 'admin' || u.workMode));
       let to = '*', toName = '';
@@ -912,7 +915,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       return json({ swap: view(s) });
     }
     if (b.action === 'accept') {
-      if (!forMe(s) || !ahead(s.date, s.end)) return json({ error: 'state' }, 409);
+      if (!forMe(s) || !ahead(s.date, s.start, s.end)) return json({ error: 'state' }, 409);
       const owner = await users().get(s.from, { type: 'json' });
       const still = owner && !owner.removed ? await plannedOn(owner, s.date) : null;
       if (!still || still.start !== s.start || still.end !== s.end) { s.status = 'cancel'; await save(); return json({ error: 'gone' }, 409); }
@@ -924,7 +927,14 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       const ovFrom = (await plans().get(`ov:${s.from}`, { type: 'json' })) || {};
       const ovMe = (await plans().get(`ov:${me.email}`, { type: 'json' })) || {};
       if (!fresh || fresh.status !== 'open' || ovFrom[s.date]?.off) return json({ error: 'state' }, 409);
-      list[list.indexOf(fresh)] = Object.assign(s, fresh);
+      // Un congé (même mis par un superviseur) ou d'autres heures ce jour-là : on ne l'écrase pas.
+      if (ovMe[s.date] && !(ovMe[s.date].off && ovMe[s.date].swap)) return json({ error: 'busy' }, 409);
+      // Réserver d'abord, relire ensuite : si quelqu'un d'autre a réservé en même temps, il garde le quart.
+      // (Toujours pas atomique — les blobs n'ont pas de verrou — mais la fenêtre devient minuscule.)
+      list[list.indexOf(fresh)] = Object.assign(s, fresh, { status: 'done', taker: me.email, takerName: me.name, doneAt: clock().toISOString() });
+      await save();
+      const check = ((await plans().get('swaps', { type: 'json' })) || []).find((x) => x.id === s.id);
+      if (check?.taker !== me.email) return json({ error: 'state' }, 409);
       s.prev = { from: ovFrom[s.date] || null, me: ovMe[s.date] || null };
       ovFrom[s.date] = { off: true, swap: s.id, by: me.name };
       ovMe[s.date] = { start: s.start, end: s.end, swap: s.id, by: s.fromName };
@@ -965,15 +975,6 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (!lead(me)) return json({ error: 'boss' }, 403);
     const params = new URL(req.url).searchParams;
     if (req.method === 'GET') {
-      if (params.has('reports')) {
-        const { blobs } = await people().list();
-        const out = [];
-        for (const { key } of blobs.filter((x) => x.key.startsWith('notes:'))) {
-          const u = await users().get(key.slice(6), { type: 'json' });
-          for (const n of (await people().get(key, { type: 'json' })) || []) if (n.kind === 'report') out.push({ ...n, email: key.slice(6), name: u?.name || '' });
-        }
-        return json({ reports: out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60) });
-      }
       const email = String(params.get('email') || '').trim().toLowerCase();
       if (!EMAIL.test(email)) return json({ error: 'invalid' }, 400);
       return json({ notes: ((await people().get(`notes:${email}`, { type: 'json' })) || []).slice().reverse() });

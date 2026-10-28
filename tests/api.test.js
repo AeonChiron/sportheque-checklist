@@ -512,8 +512,7 @@ test('Fiche d’un employé : notes privées et « Signaler » — superviseurs 
   const notes = (await go('people?email=noah@x.ca', null, boss)).data.notes;
   assert.deepEqual(notes.map((n) => n.kind), ['report', 'note']); // plus récent d'abord
   assert.equal(notes[1].by, 'Martine');
-  const all = (await go('people?reports=1', null, boss)).data.reports;
-  assert.equal(all.length, 1); assert.equal(all[0].name, 'Noah');
+  assert.equal((await go('people?reports=1', null, boss)).status, 400); // pas de liste de tous les signalements (aider, pas surveiller)
   await go('people', { action: 'del', email: 'noah@x.ca', id: notes[1].id }, boss);
   assert.equal((await go('people?email=noah@x.ca', null, boss)).data.notes.length, 1);
   // l'employé n'a aucune route pour les voir
@@ -742,4 +741,26 @@ test('Revue : enlever son congé remet les heures que le superviseur avait mises
   await go('plan', { action: 'conge', date: '2026-11-03', clear: true }, noah);
   const ov = (await go('plan?from=2026-11-03&to=2026-11-03', null, noah)).data.overrides['noah@x.ca']['2026-11-03'];
   assert.equal(ov.start, '12:00'); assert.equal(ov.by, 'Martine');
+});
+
+test('Critique : un seul preneur même en même temps, un congé n’est jamais écrasé, l’heure prévue se garde', async () => {
+  const { go, sign } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah'), lea = await sign('Lea'), omar = await sign('Omar');
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '09:00', end: '17:00' } } }, noah);
+  const s1 = (await go('swaps', { action: 'ask', date: '2026-10-29', to: '*' }, noah)).data.swap;
+  const both = await Promise.all([go('swaps', { action: 'accept', id: s1.id }, lea), go('swaps', { action: 'accept', id: s1.id }, omar)]);
+  assert.deepEqual(both.map((r) => r.status).sort(), [200, 409]);
+  const working = (await go('roster?from=2026-10-29&to=2026-10-29', null, boss)).data.people.filter((p) => p.overrides['2026-10-29']?.start).map((p) => p.name);
+  assert.equal(working.length, 1);
+  // Léa a un congé (mis par le superviseur) le 5 nov. : elle ne peut pas prendre un quart ce jour-là
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '09:00', end: '17:00' } } }, omar);
+  await go('plan', { action: 'override', email: 'lea@x.ca', date: '2026-11-05', conge: true }, boss);
+  const s2 = (await go('swaps', { action: 'ask', date: '2026-11-05', to: '*' }, omar)).data.swap;
+  assert.equal((await go('swaps', { action: 'accept', id: s2.id }, lea)).status, 409);
+  // heures du superviseur → congé → congé plus long → Retirer : les heures reviennent
+  await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-10-30', start: '10:00', end: '14:00' }, boss);
+  await go('plan', { action: 'conge', date: '2026-10-30' }, noah);
+  await go('plan', { action: 'conge', date: '2026-10-30', to: '2026-10-31' }, noah);
+  await go('plan', { action: 'conge', date: '2026-10-30', to: '2026-10-31', clear: true }, noah);
+  assert.equal((await go('plan?from=2026-10-30&to=2026-10-30', null, noah)).data.overrides['noah@x.ca']['2026-10-30'].start, '10:00');
 });
