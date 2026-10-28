@@ -204,7 +204,8 @@ function toast(msg, tone = 'ok', onUndo = null) {
   el.classList.add('in');
   if (onUndo) el.querySelector('button').onclick = () => { el.hidden = true; onUndo(); };
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { el.hidden = true; }, onUndo ? 4500 : 1900);
+  // Assez longtemps pour lire (personnel plus âgé) : selon la longueur du message, de 1,9 à 6 secondes.
+  toast.timer = setTimeout(() => { el.hidden = true; }, Math.max(onUndo ? 4500 : 1900, Math.min(6000, 900 + String(msg).length * 55)));
 }
 
 // Petite fête quand tout est coché (rien si « réduire les animations »).
@@ -591,7 +592,10 @@ async function refreshExtras() {
     const r = await request(`plan?from=${addDays(today, -2)}&to=${addDays(today, 28)}`);
     const next = { overrides: r.overrides?.[myEmail()] || {}, tasks: r.tasks || [] };
     loadSwaps();
-    if (JSON.stringify([next.overrides, next.tasks]) === JSON.stringify([extras.overrides, extras.tasks])) return;
+    if (JSON.stringify([next.overrides, next.tasks]) === JSON.stringify([extras.overrides, extras.tasks])) {
+      if (!extras.seen) { extras.seen = true; write(EXTRAS, extras); } // plan vide au départ : la première tâche ajoutée sonnera
+      return;
+    }
     // Propriétaire (Q48) : l'horaire est toujours en direct; un changement fait par quelqu'un d'autre se dit.
     const meName = session.user?.name || '';
     // (Un quart que je viens d'accepter ne se répète pas; un quart à moi pris par un collègue se dit clairement.)
@@ -599,10 +603,13 @@ async function refreshExtras() {
     const say = ([d, v]) => t(v.swap ? 'ovSwapTaken' : 'ovChanged', v.by, dayInSentence(d));
     if (news.length && extras.seen) setTimeout(() => toast(news.length === 1 ? say(news[0]) : t('ovChangedN', news.length), 'ok'), 900);
     // Une tâche qu'un superviseur vient de m'ajouter (Q76) : une cloche douce et un message, une seule fois.
-    const had = new Set((extras.tasks || []).map((x) => `${x.id}|${x.date}`));
-    const added = next.tasks.filter((x) => x.date >= today && x.by && x.by !== meName && !had.has(`${x.id}|${x.date}`));
-    const firstOf = [...new Map(added.map((x) => [x.id, x])).values()]; // une tâche qui revient chaque semaine compte une fois
-    if (firstOf.length && extras.seen) setTimeout(() => { sfx('bell'); toast(firstOf.length === 1 ? t('taskNewFor', firstOf[0].by, firstOf[0].title, dayInSentence(firstOf[0].date)) : t('taskNewForN', firstOf[0].by, firstOf.length), 'ok'); }, news.length ? 3200 : 900);
+    // Par id (une tâche de chaque semaine garde le même id; une tâche remise avec « Annuler » aussi) : jamais deux fois.
+    const had = new Set([...(extras.tasks || []).map((x) => x.id), ...(extras.rung || [])]);
+    const added = next.tasks.filter((x) => x.date >= today && x.by && x.by !== meName && !had.has(x.id) && (x.who !== '*' || mySched(x.date)));
+    const firstOf = [...new Map(added.map((x) => [x.id, x])).values()];
+    next.rung = [...new Set([...had, ...next.tasks.map((x) => x.id)])].slice(-300);
+    const oneBy = new Set(firstOf.map((x) => x.by)).size === 1; // plusieurs superviseurs : on ne prête pas tout au premier
+    if (firstOf.length && extras.seen) setTimeout(() => { sfx('bell'); toast(firstOf.length === 1 ? t('taskNewFor', firstOf[0].by, firstOf[0].title, dayInSentence(firstOf[0].date)) : oneBy ? t('taskNewForN', firstOf[0].by, firstOf.length) : t('taskNewN', firstOf.length), 'ok'); }, news.length ? 3200 : 900);
     next.seen = true;
     extras = next; write(EXTRAS, extras);
     refreshScheduleStatus();
@@ -1255,8 +1262,8 @@ const taskPuzzle = (it, done, land = -1) => puzzleHTML({ uid: it.id, art: illust
 const soundOn = () => prefs.sound !== false && !prefs.calm; // le mode calme coupe tous les sons
 const sfx = (name, opts) => { if (soundOn()) fxSound(name, opts); };
 // Le son d'un toucher suit l'importance du bouton : l'action principale sonne plus riche, un lien ou un onglet à peine.
-const TAP_BIG = '.btn.primary, .pool-cta, .gl-cta, .hb-tile, [data-tap="big"]';
-const TAP_SOFT = 'a[href], summary, .link, .chip, [role="tab"], [role="switch"], [aria-pressed], .btn.small, .icon-btn, [data-tap="soft"]';
+const TAP_BIG = ':is(.btn.primary, .pool-cta, .gl-cta, .hb-cta, [data-tap="big"]):not([data-close-sheet], .danger)'; // fermer ou effacer : jamais le gros son
+const TAP_SOFT = 'a[href], summary, .link, .chip, [role="tab"], .tb-item, [role="switch"], [aria-pressed], .btn.small, .icon-btn, [data-tap="soft"]';
 document.addEventListener('click', (ev) => {
   const el = soundOn() && ev.target.closest('button, [role="button"], a[href], summary, [data-act]');
   if (el) clickTap(soundOn, el.matches(TAP_BIG) ? 'tapBig' : el.matches(TAP_SOFT) ? 'tapSoft' : 'tap');
@@ -7056,6 +7063,6 @@ if ('serviceWorker' in navigator && isSecureContext) {
   // Une nouvelle version vient de s'installer : on recharge une fois (le quart en cours est déjà enregistré).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloaded = false;
-  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'push') refreshExtras(); }); // un avis arrive, l'app ouverte se met à jour
+  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'push' && !document.hidden) refreshExtras(); }); // un avis arrive, l'app à l'écran se met à jour (cachée : au retour)
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }

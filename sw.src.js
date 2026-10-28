@@ -36,11 +36,15 @@ self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data?.text() }; }
   // L'app est ouverte : elle se met à jour tout de suite (et sonne la cloche douce pour une tâche ajoutée, Q76).
-  const tell = self.clients.matchAll({ type: 'window' }).then((list) => list.forEach((c) => c.postMessage({ type: 'push', tag: d.tag || '', bell: Boolean(d.bell) })));
-  e.waitUntil(Promise.all([tell, self.registration.showNotification(d.title || 'Sporthèque', {
-    body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag),
-    icon: 'icons/icon-180.png', badge: 'icons/icon-180.png', data: { url: d.url || './' },
-  })]));
+  // L'avis du téléphone reste, mais en silence quand l'app est à l'écran (sa propre cloche suffit).
+  e.waitUntil(self.clients.matchAll({ type: 'window' }).then((list) => {
+    list.forEach((c) => c.postMessage({ type: 'push', tag: d.tag || '', bell: Boolean(d.bell) }));
+    const seen = list.some((c) => c.visibilityState === 'visible');
+    return self.registration.showNotification(d.title || 'Sporthèque', {
+      body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag) && !seen, silent: seen,
+      icon: 'icons/icon-180.png', badge: 'icons/icon-180.png', data: { url: d.url || './' },
+    });
+  }));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();

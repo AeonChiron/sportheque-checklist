@@ -273,8 +273,8 @@ const SOUNDS = {
   // Le toucher d'un bouton suit son importance (propriétaire, Q75 : « ça dépend de l'importance », −30 %) :
   tap(t) { click(t, { gain: 0.14 }); }, // un bouton ordinaire : un vrai clic
   tapSoft(t) { click(t, { gain: 0.09, kind: 'soft', verb: 0.08 }); }, // un lien, un onglet, un petit bouton : à peine
-  tapBig(t) { click(t, { gain: 0.15 }); tok(t + 0.004, 523.25, 0.1); }, // l'action principale : un clic avec un petit bloc de bois chaud
-  tick(t) { click(t, { gain: 0.16, kind: 'tick', pan: -0.1 }); click(t + 0.032, { gain: 0.1, kind: 'tick', pan: 0.1 }); }, // interrupteur, onglet : « tic-tic »
+  tapBig(t) { click(t, { gain: 0.15 }); tok(t + 0.004, 493.88, 0.04); }, // l'action principale : un clic avec un petit bloc de bois chaud (Si, dans la gamme)
+  tick(t) { click(t, { gain: 0.11, kind: 'tick', pan: -0.1 }); click(t + 0.032, { gain: 0.07, kind: 'tick', pan: 0.1 }); }, // interrupteur, onglet : « tic-tic »
   open(t) { whoosh(t, { up: true }); click(t + 0.12, { gain: 0.09, kind: 'soft', verb: 0.25 }); }, // une feuille monte et se pose
   close(t) { whoosh(t, { up: false, gain: 0.06, dur: 0.2 }); click(t + 0.1, { gain: 0.06, kind: 'soft', verb: 0.2 }); },
   // ---------- Niveau 2 ----------
@@ -359,8 +359,8 @@ const SOUNDS = {
   // Un superviseur t'a ajouté une tâche (Q76) : une cloche douce, deux notes qui montent, dans le médium
   // (jamais aiguë), plus calme que « urgent ».
   bell(t) {
-    bell(PENTA[5], t, { gain: 0.09, dur: 1.8, ratio: 2, index: 1.4, pan: -0.12, verb: 0.6 });
-    bell(PENTA[7], t + 0.16, { gain: 0.07, dur: 2.2, ratio: 2, index: 1.2, pan: 0.12, verb: 0.65 });
+    bell(PENTA[3], t, { gain: 0.08, dur: 1.8, ratio: 2.76, index: 1.1, pan: -0.12, verb: 0.6 });
+    bell(PENTA[5], t + 0.3, { gain: 0.065, dur: 2.2, ratio: 2.76, index: 1, pan: 0.12, verb: 0.65 });
   },
   urgent(t) {
     thump(90, t, 0.25, 0.25);
@@ -472,6 +472,7 @@ export function fxSound(name, opts = {}) {
     const c = A();
     const now = performance.now();
     if (key === 'notify' && now - lastAt < 350) return; // un message qui suit un autre son : pas de doublon
+    if (key === 'bell' && c.state !== 'running') return; // pas encore touché l'écran : la cloche partirait en retard, avec le prochain toucher
     lastAt = now;
     fn(c.currentTime + 0.01, { ...opts, level: name === 'punch' ? 0.2 : opts.level });
   } catch { /* pas de son ici : tant pis */ }
