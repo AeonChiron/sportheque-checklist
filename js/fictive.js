@@ -126,7 +126,12 @@ function generate(today) {
     { id: 'fi5', kind: 'idea', text: 'Des gants plus petits dans le local d’entretien.', about: null, by: 'Félix', byEmail: mailOf('Félix'), at: ago(1, '22:10'), status: 'open', statusBy: '' },
   ];
   const notes = { [mailOf('Samuel')]: [{ id: 'fn1', kind: 'note', cat: '', text: 'Préfère les quarts courts. Très bon avec la buanderie.', by: 'Martine', at: ago(12) }], [mailOf('Thomas')]: [{ id: 'fn2', kind: 'report', cat: 'retard', text: 'Arrivé 20 min en retard, sans prévenir.', by: 'Patrick', at: ago(6, '08:20') }] };
-  return { today, users: Object.fromEntries(FICTIVE_PEOPLE.map((p) => [p.email, { ...p }])), board, problems: problems.reverse(), tasks, overrides, repeat, ideas, notes, former: [] };
+  // Un échange de quart en attente : Félix offre son prochain quart à toute l'équipe.
+  const felix = FICTIVE_PEOPLE.find((p) => p.name === 'Félix');
+  let swapDay = ''; for (let i = 2; i < 9 && !swapDay; i++) if (felix?.schedule?.[dow(addDays(today, i))]) swapDay = addDays(today, i);
+  const fs = swapDay && felix.schedule[dow(swapDay)];
+  const swaps = fs ? [{ id: 'fs1', date: swapDay, start: fs.start, end: fs.end, from: felix.email, fromName: 'Félix', to: '*', toName: '', status: 'open', passed: [], at: ago(0, '09:00') }] : [];
+  return { swaps, today, users: Object.fromEntries(FICTIVE_PEOPLE.map((p) => [p.email, { ...p }])), board, problems: problems.reverse(), tasks, overrides, repeat, ideas, notes, former: [] };
 }
 
 let db = null;
@@ -135,7 +140,7 @@ function load() {
   const today = iso(new Date());
   try { db = JSON.parse(sessionStorage.getItem(DB)); } catch { db = null; }
   if (!db || db.today !== today) { db = generate(today); persist(); }
-  db.repeat ||= []; db.ideas ||= []; db.notes ||= {}; db.former ||= [];
+  db.repeat ||= []; db.ideas ||= []; db.notes ||= {}; db.former ||= []; db.swaps ||= [];
   return db;
 }
 function persist() { try { sessionStorage.setItem(DB, JSON.stringify(db)); } catch { /* trop gros : on garde en mémoire */ } }
@@ -236,7 +241,7 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
   }
   if (route === 'roster') { // l'horaire de toute l'équipe, pour tout le monde
     const from = P.get('from') || d.today, to = P.get('to') || from;
-    const people = Object.values(d.users).map((u) => ({ id: u.email.split('@')[0], name: u.name, role: u.role, avatar: u.avatar || '', ...(lead ? { email: u.email } : {}), schedule: u.schedule || {}, overrides: Object.fromEntries(Object.entries(d.overrides[u.email] || {}).filter(([k]) => k >= from && k <= to).map(([k, v]) => [k, v.off ? { off: true, ...(v.conge ? { conge: true } : {}) } : { start: v.start, end: v.end }])), ...(u.email === me.email ? { me: true } : {}) }));
+    const people = Object.values(d.users).map((u) => ({ id: u.email.split('@')[0], name: u.name, role: u.role, avatar: u.avatar || '', ...(lead ? { email: u.email } : {}), schedule: u.schedule || {}, overrides: Object.fromEntries(Object.entries(d.overrides[u.email] || {}).filter(([k]) => k >= from && k <= to).map(([k, v]) => [k, v.off ? { off: true, ...(v.conge ? { conge: true } : {}), ...(v.swap ? { swap: true } : {}) } : { start: v.start, end: v.end, ...(v.swap ? { swap: true } : {}) }])), ...(u.email === me.email ? { me: true } : {}) }));
     return { people: people.sort((a, b) => a.name.localeCompare(b.name)) };
   }
   if (route === 'alerts') return { to: Object.values(d.users).filter((u) => u.role === 'boss').slice(0, 1).map((u) => ({ name: u.name, email: '' })) };
@@ -250,6 +255,13 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
       const pick = (all) => Object.fromEntries(Object.entries(all || {}).filter(([k]) => k >= from && k <= to));
       const overrides = team ? Object.fromEntries(Object.entries(d.overrides).map(([e, all]) => [e, pick(all)])) : { [me.email]: pick(d.overrides[me.email]) };
       return { overrides, tasks };
+    }
+    if (body.action === 'conge') { // l'employé met (ou enlève) lui-même ses congés
+      if (body.date < d.today) throw err(400, 'invalid');
+      const all = (d.overrides[me.email] ||= {});
+      const span = []; for (let x = body.date; x <= (body.to && body.to >= body.date ? body.to : body.date) && span.length < 62; x = addDays(x, 1)) span.push(x);
+      if (body.clear) { for (const x of span) if (all[x]?.self) delete all[x]; } else for (const x of span) if (!all[x]?.off || all[x].self) all[x] = { off: true, conge: true, self: true, by: me.name };
+      persist(); return { ok: true, overrides: Object.fromEntries(Object.entries(all).filter(([k]) => k >= d.today)) };
     }
     if (!lead) throw err(403, 'boss');
     if (body.action === 'override') {
@@ -293,6 +305,39 @@ export async function fakeRequest(path, { method = 'GET', body } = {}) {
     const it = d.ideas.find((x) => x.id === body.id); if (!it) throw err(404, 'missing');
     if (body.action === 'status') { if (!lead) throw err(403, 'boss'); Object.assign(it, { status: body.status, statusBy: body.status === 'open' ? '' : me.name, statusAt: new Date().toISOString() }); persist(); return { idea: strip(it) }; }
     if (body.action === 'del') { d.ideas = d.ideas.filter((x) => x !== it); persist(); return { ok: true }; }
+  }
+  if (route === 'swaps') { // les échanges de quarts, comme le vrai serveur
+    const planned = (u, x) => { const ov = d.overrides[u.email]?.[x]; if (ov) return ov.off ? null : { start: ov.start, end: ov.end }; const v = (u.schedule || {})[dow(x)]; return v?.start ? { start: v.start, end: v.end } : null; };
+    const forMe = (s) => s.status === 'open' && s.date >= d.today && s.from !== me.email && (s.to === me.email || (s.to === '*' && !(s.passed || []).includes(me.email)));
+    const view = (s) => ({ id: s.id, date: s.date, start: s.start, end: s.end, fromName: s.fromName, toName: s.toName || '', all: s.to === '*', status: s.status === 'open' && s.date < d.today ? 'expired' : s.status, takerName: s.takerName || '', at: s.at, doneAt: s.doneAt || '', mine: s.from === me.email, forMe: forMe(s), took: s.taker === me.email });
+    if (method === 'GET') return { swaps: d.swaps.filter((s) => lead || s.from === me.email || s.taker === me.email || forMe(s)).sort((a, b) => a.date.localeCompare(b.date)).map(view) };
+    if (body.action === 'ask') {
+      const slot = planned(me, body.date);
+      if (body.date < d.today || !slot) throw err(400, 'noshift');
+      if (d.swaps.some((s) => s.from === me.email && s.date === body.date && s.status === 'open')) throw err(409, 'dup');
+      const u = body.to && body.to !== '*' ? Object.values(d.users).find((x) => x.email.split('@')[0] === body.to) : null;
+      const s = { id: Math.random().toString(16).slice(2, 12), date: body.date, start: slot.start, end: slot.end, from: me.email, fromName: me.name, to: u ? u.email : '*', toName: u ? u.name : '', status: 'open', passed: [], at: new Date().toISOString() };
+      d.swaps.push(s); persist(); return { swap: view(s) };
+    }
+    const s = d.swaps.find((x) => x.id === body.id);
+    if (!s) throw err(404, 'missing');
+    if (body.action === 'cancel') { if (s.from !== me.email) throw err(409, 'state'); s.status = 'cancel'; }
+    else if (body.action === 'reopen') { if (s.from !== me.email) throw err(409, 'state'); s.status = 'open'; }
+    else if (body.action === 'decline') { if (!forMe(s)) throw err(409, 'state'); if (s.to === '*') s.passed = [...(s.passed || []), me.email]; else s.status = 'no'; }
+    else if (body.action === 'accept') {
+      if (!forMe(s)) throw err(409, 'state');
+      if (planned(me, s.date)) throw err(409, 'busy');
+      const of = (d.overrides[s.from] ||= {}), om = (d.overrides[me.email] ||= {});
+      s.prev = { from: of[s.date] || null, me: om[s.date] || null };
+      of[s.date] = { off: true, swap: s.id, by: me.name }; om[s.date] = { start: s.start, end: s.end, swap: s.id, by: s.fromName };
+      Object.assign(s, { status: 'done', taker: me.email, takerName: me.name, doneAt: new Date().toISOString() });
+    } else if (body.action === 'undo') {
+      if (s.status !== 'done') throw err(409, 'state');
+      const put = (email, v) => { const all = (d.overrides[email] ||= {}); if (v) all[s.date] = v; else delete all[s.date]; };
+      put(s.from, s.prev?.from); put(s.taker, s.prev?.me);
+      Object.assign(s, { status: 'open', taker: '', takerName: '', doneAt: '', prev: null });
+    } else throw err(400, 'action');
+    persist(); return { swap: view(s) };
   }
   throw err(404, 'route'); // notifications, avis… : pas dans l'équipe fictive
 }

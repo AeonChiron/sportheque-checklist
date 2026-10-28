@@ -5,6 +5,7 @@ import { UI } from './i18n.js';
 import { SHIFTS, AREAS, TV_CHANNELS, MANUAL_VERSION, PRIORITY_ORDER, TECHNIQUES, WEEKLY_Q1, WEEKLY_Q2, WALL_TECHNIQUE, FLOOR, GUIDE, guideKey, WEEKDAYS, ZONES } from './manual.js';
 import { METHOD } from './method.js';
 import { UPDATES } from './updates.js';
+import { holidayOf, holidayBetween } from './holidays.js';
 import { buildPlan, detectShift, dayInfo, fmt, fmtDuration, toMin } from './planner.js';
 import { SKIP_REASONS, decodeReport, REVIEW, reportLabels } from './report.js';
 import { putPhoto, getPhoto, deletePhoto, clearPhotos, shrink } from './photos.js';
@@ -589,7 +590,15 @@ async function refreshExtras() {
   try {
     const r = await request(`plan?from=${addDays(today, -2)}&to=${addDays(today, 28)}`);
     const next = { overrides: r.overrides?.[myEmail()] || {}, tasks: r.tasks || [] };
-    if (JSON.stringify(next) === JSON.stringify(extras)) return;
+    loadSwaps();
+    if (JSON.stringify([next.overrides, next.tasks]) === JSON.stringify([extras.overrides, extras.tasks])) return;
+    // Propriétaire (Q48) : l'horaire est toujours en direct; un changement fait par quelqu'un d'autre se dit.
+    const meName = session.user?.name || '';
+    // (Un quart que je viens d'accepter ne se répète pas; un quart à moi pris par un collègue se dit clairement.)
+    const news = Object.entries(next.overrides).filter(([d, v]) => d >= today && v.by && v.by !== meName && !v.self && !(v.swap && !v.off) && JSON.stringify(extras.overrides?.[d]) !== JSON.stringify(v));
+    const say = ([d, v]) => t(v.swap ? 'ovSwapTaken' : 'ovChanged', v.by, dayWord(d).toLowerCase());
+    if (news.length && extras.seen) setTimeout(() => toast(news.length === 1 ? say(news[0]) : t('ovChangedN', news.length), 'ok'), 900);
+    next.seen = true;
     extras = next; write(EXTRAS, extras);
     refreshScheduleStatus();
     if (state) { plan = shiftPlan(state); if (current === 'checklist') renderChecklist(); }
@@ -3536,9 +3545,10 @@ function dashWeek() {
     const d = addDays(mon, i);
     const p = mySched(d);
     const done = doneDays.has(d);
-    const cls = ['dw-day', d === today && 'today', p && 'on', done && 'done', d < today && 'past'].filter(Boolean).join(' ');
-    const label = `${cap(names[i])}${p ? ` ${f(toMin(p.start))} – ${f(toMin(p.end))}` : ` ${t('schedOff')}`}${done ? ` ✓` : ''}`;
-    return `<li class="${cls}" aria-label="${esc(label)}"><span class="dw-name" aria-hidden="true">${esc(cap(names[i]).slice(0, 3))}</span><span class="dw-dot" aria-hidden="true">${done ? '✓' : new Date(`${d}T12:00:00`).getDate()}</span><span class="dw-time num" aria-hidden="true">${p ? esc(f(toMin(p.start)).replace(/\s/g, '')) : '—'}</span></li>`;
+    const off = !p && extras.overrides?.[d]?.conge, hol = holi(d);
+    const cls = ['dw-day', d === today && 'today', p && 'on', done && 'done', d < today && 'past', off && 'conge', hol && 'hol'].filter(Boolean).join(' ');
+    const label = `${cap(names[i])}${p ? ` ${f(toMin(p.start))} – ${f(toMin(p.end))}` : ` ${t(off ? 'congeShort' : 'schedOff')}`}${done ? ` ✓` : ''}${hol ? ` · ${t('holTitle', hol.name)}` : ''}`;
+    return `<li class="${cls}" aria-label="${esc(label)}"><span class="dw-name" aria-hidden="true">${esc(cap(names[i]).slice(0, 3))}</span><span class="dw-dot" aria-hidden="true">${done ? '✓' : new Date(`${d}T12:00:00`).getDate()}</span><span class="dw-time num" aria-hidden="true">${p ? esc(f(toMin(p.start)).replace(/\s/g, '')) : off ? esc(t('congeShort')) : '—'}</span>${hol ? `<span class="dw-hol" aria-hidden="true">${HOL_ICO}</span>` : ''}</li>`;
   }).join('')}</ol>`;
 }
 document.addEventListener('click', (ev) => {
@@ -5062,7 +5072,7 @@ function teamTarget(u, date) {
   const p = ov ? { start: ov.start, end: ov.end } : presetOf(v);
   if (!p?.start) return null;
   const sp = SPECIALS.find((x) => x.names?.includes(firstName(u.name)) && x.weekday === dowOf(date));
-  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, avatar: u.avatar || '', lead: isLeadUser(u), changed: Boolean(ov), by: ov?.by || '' };
+  return { date, start: p.start, end: p.end, special: sp?.id || '', name: (u.name || '').split(' ')[0], email: u.email, avatar: u.avatar || '', lead: isLeadUser(u), changed: Boolean(ov), swap: Boolean(ov?.swap), by: ov?.by || '' };
 }
 // Tout le monde voit l'horaire de l'équipe (propriétaire, 23 oct.). Le superviseur a la liste complète;
 // l'employé reçoit seulement les noms, photos, rôles et heures (le serveur cache les courriels).
@@ -5259,13 +5269,15 @@ function weekCard() {
     const on = peopleOn(d);
     const people = on.lead.length + on.emp.length;
     const mine = !lead && mySched(d);
+    const off = !lead && !mine && extras.overrides?.[d]?.conge;
+    const hol = holi(d);
     const dg = past || today ? dayDigest(d) : null;
     const mark = dg && dg.tot ? wkRing(dg.pct, dg.pct >= 90 ? ' ok' : dg.pct >= 60 ? ' mid' : ' low')
       : past ? `<span class="wk-none">${loaded ? '–' : '·'}</span>`
       : `<span class="wk-ppl">${HUB_ICO.team}<b class="num">${people}</b></span>`;
     const dn = dateOf(d).toLocaleDateString(locale(), { weekday: 'short' }).replace('.', '');
-    return `<button type="button" class="wk-day${past ? ' past' : ''}${today ? ' today' : ''}${mine ? ' mine' : ''}" data-wk-day="${d}" aria-label="${esc(longDay(d))}">
-      <span class="wk-dn">${esc(dn)}</span><b class="wk-dd num">${dateOf(d).getDate()}</b>${mark}${mine ? `<span class="wk-mine num">${esc(hm(mine.start).replace(/\s/g, ' '))}</span>` : '<span class="wk-mine none"></span>'}</button>`;
+    return `<button type="button" class="wk-day${past ? ' past' : ''}${today ? ' today' : ''}${mine ? ' mine' : ''}${hol ? ' hol' : ''}" data-wk-day="${d}" aria-label="${esc([longDay(d), hol && t('holTitle', hol.name), off && t('congeShort')].filter(Boolean).join(' · '))}">
+      ${hol ? `<span class="wk-hol" aria-hidden="true">${HOL_ICO}</span>` : ''}<span class="wk-dn">${esc(dn)}</span><b class="wk-dd num">${dateOf(d).getDate()}</b>${mark}${mine ? `<span class="wk-mine num">${esc(hm(mine.start).replace(/\s/g, ' '))}</span>` : off ? `<span class="wk-mine off">${esc(t('congeShort'))}</span>` : '<span class="wk-mine none"></span>'}</button>`;
   }).join('');
   return `<section class="hb-week" id="hbWeek">
     <div class="wk-head"><h2>${hubIco('week')}${esc(t(lead ? 'wkTitleBoss' : 'wkTitle'))}</h2>
@@ -5303,9 +5315,9 @@ async function openDaySheet(d) {
   const flags = dg?.flags.length ? `<p class="block-label">${esc(t('wkFlags'))} <span class="num">${dg.flags.length}</span></p><div class="dy-flags">${dg.flags.map((fl) => `<span class="pb-mini${fl.urgent ? ' urgent' : ''}">${catIcon(fl.category)}<span><b>${esc(catName(fl.category))}</b><small>${esc(fl.location || fl.text || '')}</small></span></span>`).join('')}</div>` : '';
   const notes = dg?.notes.length ? `<p class="block-label">${esc(t('wkNotes'))}</p>${dg.notes.map((x) => `<blockquote class="dy-note">« ${esc(x.text)} »<cite>${esc(x.name)}</cite></blockquote>`).join('')}` : '';
   const tasks = (teamPlan.tasks || []).concat(extras.tasks || []).filter((x, i, a) => x.date === d && a.findIndex((y) => y.id === x.id) === i && (bossWatching() || x.who === '*' || x.who === myEmail()));
-  const special = tasks.length ? `<p class="block-label">${esc(t('wkSpecial'))}</p><div class="dy-chips star">${tasks.map((x) => `<span>${HUB_ICO.star}${esc(x.title)}${x.time ? ` · ${hm(x.time)}` : ''}</span>`).join('')}</div>` : '';
+  const special = tasks.length ? `<p class="block-label">${esc(t('wkSpecial'))}</p><div class="dy-chips star">${tasks.map((x) => `<span>${HUB_ICO.misc}${esc(x.title)}${x.time ? ` · ${hm(x.time)}` : ''}</span>`).join('')}</div>` : '';
   openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.week.replace('<svg ', '<svg class="ico" aria-hidden="true" ')}${esc(t(past ? 'wkEyebrowPast' : 'wkEyebrowDay'))}</p><h2>${esc(longDay(d))}</h2>${status}</div>
-    ${myCard}${summary}
+    ${holi(d) ? holidayNotice(d, 0) : ''}${myCard}${summary}${congeLine(d)}
     ${leads ? `<p class="block-label">${esc(t('grpLead'))} <span class="num">${on.lead.length}</span></p><div class="dy-people">${leads}</div>` : ''}
     ${worked ? `<p class="block-label">${esc(t(past || (dg && dg.shifts.length) ? 'wkWorked' : 'wkWorking'))} <span class="num">${dg && dg.shifts.length ? dg.shifts.length : on.emp.length}</span></p><div class="dy-people">${worked}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
     ${dg ? list('wkWhatDone', dg.done, 'ok') + list(past ? 'wkNotDone' : 'wkWhatLeft', dg.left, 'left') : ''}
@@ -5326,7 +5338,7 @@ function hubEmployee() {
   const tg = myShiftTarget();
   const fixable = (hist.recent || []).filter((s) => !s.open && ownFixable(s)).length;
   // Propriétaire : la semaine vit dans l'onglet « Historique »; le manuel reste là, plus petit.
-  return `${hubMainCard(tg)}${tg ? glanceCard(tg) : ''}
+  return `${holidayNotice()}${hubMainCard(tg)}${swapOffers()}${tg ? glanceCard(tg) : ''}
     <nav class="hb-tiles" aria-label="${esc(t('hubAsk'))}">
       ${tile('plan', 'plan', t('tPlan'), t('tPlanSub'))}
       ${tile('flag', 'flag', t('tFlag'), t('tFlagSub'))}
@@ -5481,7 +5493,7 @@ function hubBoss() {
     ${!boss.teamLoaded ? '<div class="hi-skel" aria-hidden="true"><i></i></div>'
       : `<div class="hb-grps">${groupTile('lead', on.lead)}${groupTile('emp', on.emp)}</div>`}
   </section>`;
-  return `${main}${todayCard}${weekCard()}
+  return `${holidayNotice()}${main}${todayCard}${weekCard()}
     <nav class="hb-tiles">
       ${tile('myhours', 'plan', t('tMyHours'), t('tMyHoursSub'))}
       ${tile('access', 'access', t('tAccess'), t('tAccessSub'))}
@@ -5564,7 +5576,7 @@ function personRow(tg) {
   const F = shiftFacts(tg);
   const chips = F.facts.filter((x) => ['star', 'misc', 'zone', 'mirror', 'week'].includes(x.k)).map((x) => `<span class="tw-chip k-${x.k}">${esc(x.k === 'zone' ? x.value : x.k === 'week' ? x.value.split(/[.;]/)[0] : x.value)}</span>`).join('');
   const nTask = assignedFor(tg.date, tg.email).length;
-  const extra = `${tg.changed ? `<span class="tw-chip k-changed">${esc(t('twChanged'))}</span>` : ''}${nTask ? `<span class="tw-chip k-task">${esc(t('twTasks', nTask))}</span>` : ''}`;
+  const extra = `${tg.swap ? `<span class="tw-chip k-swap">${esc(t('twSwap', tg.by))}</span>` : tg.changed ? `<span class="tw-chip k-changed">${esc(t('twChanged'))}</span>` : ''}${nTask ? `<span class="tw-chip k-task">${esc(t('twTasks', nTask))}</span>` : ''}`;
   const { avatar, ...plain } = tg; // la photo reste hors de l'attribut (une photo peut peser 10 ko)
   return `<button type="button" class="tw-person" data-glance="${esc(JSON.stringify(plain))}">
     <span class="tw-av${avatar ? ' has-pic' : ''}" aria-hidden="true">${avatarOf({ avatar }, esc((tg.name[0] || '?').toUpperCase()))}</span>
@@ -5667,6 +5679,7 @@ function openPlan({ keep = false } = {}) {
   paintStatic();
   renderPlan({ animate: !keep });
   show('plan');
+  loadSwaps();
 }
 function renderPlan({ animate = true } = {}) {
   $('#planEyebrow').textContent = [CONFIG.gymName, shiftName()].filter(Boolean).join(' · ');
@@ -5675,6 +5688,7 @@ function renderPlan({ animate = true } = {}) {
     <section class="d-card d-week"><div class="d-head"><h2>${esc(t('planWeek'))}</h2></div>${dashWeek()}</section>
     ${dashUpcoming('').replace('class="d-card d-up"', 'class="d-card d-up plan-up"')}
     <button type="button" class="btn ghost big plan-edit" data-hub="sched">${HUB_ICO.plan}<span>${esc(t('planEdit'))}</span></button>
+    ${session.mode === 'accounts' && !isVisitor() && !isLeadUser(session.user) ? planExtras() : ''}
     <section class="d-card plan-custom"><div class="d-head"><h2>${hubIco('star')}${esc(t('customActTitle'))}</h2></div><p>${esc(t('customActText'))}</p>
       <button type="button" class="btn primary" data-hub="custom">${esc(t('customActBtn'))}</button></section>
   </div>`;
@@ -5757,8 +5771,8 @@ function renderTeamWeek({ animate = true } = {}) {
   const days = ahead.map((d, i) => {
     const on = peopleOn(d);
     return `<section class="tw-dayc${d === todayISO() ? ' today' : ''}" style="--k:${i}">
-      <h3><span>${dayName(d)}</span><small class="num">${dayDate(d)}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}</h3>
-      ${dayBody(d, on)}
+      <h3><span>${dayName(d)}</span><small class="num">${dayDate(d)}</small>${d === todayISO() ? `<span class="pill is-live">${esc(t('today'))}</span>` : ''}${holPill(d)}</h3>
+      ${dayBody(d, on)}${congeLine(d)}
       ${!isBoss() ? '' : `<div class="tw-acts"><button type="button" class="btn ghost small" data-addperson="${d}">+ ${esc(t('twAddPerson'))}</button><button type="button" class="btn ghost small" data-addtask="${d}">+ ${esc(t('twAddTask'))}</button></div>`}</section>`;
   }).join('');
   const doneDays = gone.map((d) => {
@@ -6389,6 +6403,183 @@ function setCalm(on) {
 }
 document.documentElement.classList.toggle('calm-mode', Boolean(prefs.calm));
 setVolume(prefs.volume ?? 0.7);
+
+// ---------- Ronde 5 : congés, échanges de quarts, jours fériés ----------
+// Propriétaire : l'employé marque ses congés dans Mon horaire (Q43); il peut offrir un quart à un
+// collègue : dès que quelqu'un accepte, c'est fait et les superviseurs sont avertis (C4). Les jours
+// fériés du Québec ont un avis spécial (Q49), calculés dans js/holidays.js (pas besoin d'internet).
+const HOL_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2.5 4L16 12H5"/></svg>';
+const holi = (d) => holidayOf(d, lang());
+// Un avis pour le prochain jour férié (aujourd'hui à 6 jours plus loin), ou rien.
+function holidayNotice(from = todayISO(), days = 6) {
+  const h = holidayBetween(from, addDays(from, days), lang());
+  if (!h) return '';
+  const when = h.date === todayISO() ? t('today') : cap(dayWord(h.date));
+  return `<section class="hol-note" role="note"><span class="hol-ico">${HOL_ICO}</span><span><b>${esc(t('holTitle', h.name))}</b><small>${esc([`${when}${h.date > addDays(todayISO(), 1) ? ` · ${dayMonth(h.date)}` : ''}`, t(bossWatching() ? 'holSubBoss' : 'holSubEmp')].join(' · '))}${h.easter ? ` ${esc(t('holEaster'))}` : ''}</small></span></section>`;
+}
+const holPill = (d) => { const h = holi(d); return h ? `<span class="pill hol-pill" title="${esc(h.name)}">${HOL_ICO}${esc(t('holShort'))}</span>` : ''; };
+
+// Mes congés (à partir d'aujourd'hui), regroupés en périodes : [{ from, to, self, by }]
+function myCongeRanges() {
+  const days = Object.entries(extras.overrides || {}).filter(([d, v]) => d >= todayISO() && v.off && v.conge).sort(([a], [b]) => a.localeCompare(b));
+  const out = [];
+  for (const [d, v] of days) {
+    const last = out.at(-1);
+    if (last && addDays(last.to, 1) === d && last.self === Boolean(v.self) && last.by === (v.by || '')) last.to = d;
+    else out.push({ from: d, to: d, self: Boolean(v.self), by: v.by || '' });
+  }
+  return out;
+}
+const rangeText = (r) => (r.from === r.to ? longDay(r.from) : t('rangeFromTo', dayMonth(r.from), dayMonth(r.to)));
+async function saveOwnConge(from, to, { clear = false, quiet = false } = {}) {
+  const r = await request('plan', { method: 'POST', body: { action: 'conge', date: from, to, ...(clear ? { clear: true } : {}), ...(quiet ? { quiet: true } : {}) } });
+  if (r?.overrides) { extras = { ...extras, overrides: { ...Object.fromEntries(Object.entries(extras.overrides || {}).filter(([d]) => d < todayISO())), ...r.overrides } }; write(EXTRAS, extras); }
+  refreshScheduleStatus();
+  rerenderMine();
+}
+function rerenderMine() {
+  if (current === 'plan') renderPlan({ animate: false });
+  if (current === 'hub') renderHub({ animate: false });
+  if (current === 'auth') paintFront();
+  if (current === 'teamweek') renderTeamWeek({ animate: false });
+}
+function openOwnConge(pre = '') {
+  const d0 = pre || todayISO();
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.plan}${esc(t('congeEyebrow'))}</p><h2>${esc(t('myCongeTitle'))}</h2><p class="lede">${esc(t('myCongeLede'))}</p></div>
+    <div class="row2"><label class="field"><span>${esc(t('congeFrom'))}</span><input type="date" id="ocFrom" value="${d0}" min="${todayISO()}"></label>
+    <label class="field"><span>${esc(t('congeTo'))}</span><input type="date" id="ocTo" value="${d0}" min="${d0}"></label></div>
+    <p class="section-note" id="ocNote"></p>`, (root) => {
+    const from = root.querySelector('#ocFrom'), to = root.querySelector('#ocTo'), note = root.querySelector('#ocNote');
+    const paint = () => {
+      if (to.value < from.value) to.value = from.value;
+      to.min = from.value;
+      let n = 0; for (let d = from.value; d && d <= to.value && n < 70; d = addDays(d, 1)) if (mySched(d)) n += 1;
+      note.textContent = from.value ? t(n ? 'myCongeShifts' : 'myCongeNoShift', n) : '';
+    };
+    paint();
+    from.addEventListener('change', paint); to.addEventListener('change', paint);
+    $('#ocSave').onclick = async () => {
+      const a = from.value, b = to.value < a ? a : to.value;
+      if (!a) return;
+      try { await saveOwnConge(a, b); } catch { toast(t('editServer'), 'muted'); sfx('error'); return; }
+      closeSheet(); sfx('save');
+      toast(t('myCongeDone'), 'ok', async () => { try { await saveOwnConge(a, b, { clear: true }); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
+    };
+  }, `<button type="button" class="btn primary" id="ocSave">${esc(t('congeSave'))}</button>`);
+}
+
+// Les échanges : ce qu'on m'offre, ce que j'ai offert.
+const swp = { list: [], loaded: false };
+async function loadSwaps() {
+  if (session.mode !== 'accounts' || !session.token || prefs.simNew || prefs.simShift || isVisitor()) return;
+  try {
+    const r = await request('swaps');
+    const next = r.swaps || [];
+    const changed = JSON.stringify(next) !== JSON.stringify(swp.list);
+    swp.list = next; swp.loaded = true;
+    if (changed) { if (current === 'hub' && !bossWatching()) renderHub({ animate: false }); if (current === 'plan') renderPlan({ animate: false }); }
+  } catch { /* serveur pas à jour ou hors ligne */ }
+}
+const swWhen = (s) => `${cap(dayWord(s.date))}${s.date > addDays(todayISO(), 1) ? ` · ${dayMonth(s.date)}` : ''} · ${hm(s.start)} – ${hm(s.end)}`;
+// Sur le tableau de bord et dans Mon horaire : « Léa cherche quelqu'un ».
+function swapOffers() {
+  const mine = swp.list.filter((s) => s.forMe);
+  return mine.map((s) => `<section class="sw-card for-me" data-swid="${esc(s.id)}">
+      <p class="sw-eyebrow">${HUB_ICO.team}<span>${esc(t(s.all ? 'swAskAll' : 'swAskYou', s.fromName))}</span></p>
+      <p class="sw-when num">${esc(swWhen(s))}</p>
+      <div class="sw-acts"><button type="button" class="btn primary small" data-swacc="${esc(s.id)}">${esc(t('swTake'))}</button><button type="button" class="btn ghost small" data-swno="${esc(s.id)}">${esc(t('swNo'))}</button></div></section>`).join('');
+}
+function mySwapRows() {
+  const list = swp.list.filter((s) => (s.mine || s.took) && s.status !== 'cancel' && s.status !== 'expired' && s.date >= todayISO());
+  if (!list.length) return '';
+  const st = (s) => (s.took ? t('swYouTook', s.fromName) : s.status === 'done' ? t('swTakenBy', s.takerName) : s.status === 'no' ? t('swDeclined', s.toName) : s.all ? t('swWaitingAll') : t('swWaiting', s.toName));
+  return `<div class="sw-mine">${list.map((s) => `<div class="sw-row s-${s.status}${s.took ? ' took' : ''}"><span class="sw-dot" aria-hidden="true"></span><span><b class="num">${esc(swWhen(s))}</b><small>${esc(st(s))}</small></span>${s.mine && s.status === 'open' ? `<button type="button" class="link" data-swcancel="${esc(s.id)}">${esc(t('swCancel'))}</button>` : ''}${s.took && Date.now() - Date.parse(s.doneAt || 0) < 15 * 6e4 ? `<button type="button" class="link" data-swundo="${esc(s.id)}">${esc(t('undo'))}</button>` : ''}</div>`).join('')}</div>`;
+}
+async function swapAction(action, id, extra = {}) {
+  const r = await request('swaps', { method: 'POST', body: { action, id, ...extra } });
+  await Promise.all([loadSwaps(), refreshExtras()]);
+  return r;
+}
+async function openSwapAsk() {
+  const shifts = upcomingShifts('', 6).filter((p) => p.date <= addDays(todayISO(), 27) && !(p.date === todayISO() && state?.date === p.date));
+  if (!shifts.length) { toast(t('swNoShift'), 'muted'); return; }
+  let date = shifts[0].date, to = '*';
+  await loadTeamView(todayISO(), addDays(todayISO(), 27));
+  const people = (d) => (boss.team || []).filter((u) => !u.removed && u.email !== myEmail() && !isLeadUser(u) && !teamTarget(u, d));
+  const pick = (d) => `<div class="sw-people" role="radiogroup" aria-label="${esc(t('swWho'))}">
+      <button type="button" class="sw-person all" role="radio" data-swto="*" aria-checked="${to === '*'}"><span class="tw-av mini">${HUB_ICO.team}</span><span><b>${esc(t('swEveryone'))}</b><small>${esc(t('swEveryoneSub'))}</small></span></button>
+      ${people(d).map((u) => `<button type="button" class="sw-person" role="radio" data-swto="${esc(u.email.replace(/^id:/, ''))}" aria-checked="${to === u.email.replace(/^id:/, '')}"><span class="tw-av mini${u.avatar ? ' has-pic' : ''}">${avatarOf({ avatar: u.avatar }, esc((u.name[0] || '?').toUpperCase()))}</span><span><b>${esc(firstOf(u.name))}</b><small>${esc(t('swFree'))}</small></span></button>`).join('')}
+    </div>`;
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.team}${esc(t('swEyebrow'))}</p><h2>${esc(t('swAskTitle'))}</h2><p class="lede">${esc(t('swAskLede'))}</p></div>
+    <p class="block-label">${esc(t('swWhich'))}</p>
+    <div class="sw-shifts" role="radiogroup" aria-label="${esc(t('swWhich'))}">${shifts.map((p) => `<button type="button" class="sw-shift" role="radio" data-swday="${p.date}" aria-checked="${p.date === date}">${dDate(p.date)}<span><b class="num">${hm(p.start)} – ${hm(p.end)}</b><small>${esc(cap(dayWord(p.date)))}</small></span></button>`).join('')}</div>
+    <p class="block-label">${esc(t('swWho'))}</p><div id="swPick">${pick(date)}</div>`, (root) => {
+    root.addEventListener('click', (e) => {
+      const d = e.target.closest('[data-swday]');
+      if (d) { date = d.dataset.swday; to = '*'; for (const b of root.querySelectorAll('[data-swday]')) b.setAttribute('aria-checked', String(b === d)); root.querySelector('#swPick').innerHTML = pick(date); sfx('tap'); return; }
+      const p = e.target.closest('[data-swto]');
+      if (p) { to = p.dataset.swto; for (const b of root.querySelectorAll('[data-swto]')) b.setAttribute('aria-checked', String(b === p)); sfx('tap'); }
+    });
+    $('#swSend').onclick = async () => {
+      let r;
+      try { r = await request('swaps', { method: 'POST', body: { action: 'ask', date, to } }); }
+      catch (err) { toast(t(err.status === 409 ? 'swDup' : 'editServer'), 'muted'); sfx('error'); return; }
+      closeSheet(); sfx('send');
+      await loadSwaps(); rerenderMine();
+      toast(t('swSent'), 'ok', async () => { try { await swapAction('cancel', r.swap.id); rerenderMine(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
+    };
+  }, `<button type="button" class="btn primary" id="swSend">${esc(t('swSend'))}</button>`);
+}
+document.addEventListener('click', async (e) => {
+  const acc = e.target.closest('[data-swacc]'), no = e.target.closest('[data-swno]'), cancel = e.target.closest('[data-swcancel]'), undo = e.target.closest('[data-swundo]');
+  const conge = e.target.closest('[data-mycg]'), uncg = e.target.closest('[data-uncg]'), ask = e.target.closest('[data-swask]');
+  if (!(acc || no || cancel || undo || conge || uncg || ask)) return;
+  if (conge) { openOwnConge(); return; }
+  if (ask) { openSwapAsk(); return; }
+  if (uncg) {
+    const [a, b] = uncg.dataset.uncg.split('|');
+    try { await saveOwnConge(a, b, { clear: true }); } catch { toast(t('editServer'), 'muted'); return; }
+    sfx('toggle');
+    toast(t('myCongeRemoved'), 'ok', async () => { try { await saveOwnConge(a, b, { quiet: true }); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
+    return;
+  }
+  const id = (acc || no || cancel || undo).dataset[acc ? 'swacc' : no ? 'swno' : cancel ? 'swcancel' : 'swundo'];
+  const s = swp.list.find((x) => x.id === id);
+  try {
+    if (acc) {
+      await swapAction('accept', id);
+      sfx('save'); rerenderMine();
+      toast(t('swTook', s?.fromName || ''), 'ok', async () => { try { await swapAction('undo', id); rerenderMine(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
+    } else if (no) {
+      await swapAction('decline', id); sfx('toggle'); rerenderMine(); toast(t('swNoDone'), 'muted');
+    } else if (cancel) {
+      await swapAction('cancel', id); sfx('toggle'); rerenderMine();
+      toast(t('swCancelled'), 'ok', async () => { try { await swapAction('reopen', id); rerenderMine(); toast(t('undone'), 'muted'); } catch { toast(t('editServer'), 'muted'); } });
+    } else {
+      await swapAction('undo', id); rerenderMine(); toast(t('undone'), 'muted');
+    }
+  } catch (err) {
+    toast(t(err.status === 409 ? ((err.data?.error || err.message) === 'busy' ? 'swBusy' : (err.data?.error || err.message) === 'gone' ? 'swGone' : 'swState') : 'editServer'), 'muted'); sfx('error');
+    loadSwaps();
+  }
+});
+// Qui est en congé ce jour-là (superviseurs et employés le voient dans la semaine de l'équipe).
+function congeLine(d) {
+  const names = Object.entries(teamPlan.overrides || {}).filter(([, ov]) => ov?.[d]?.off && ov[d].conge).map(([email]) => (boss.team || []).find((u) => u.email === email && !u.removed)).filter(Boolean).map((u) => firstOf(u.name));
+  return names.length ? `<p class="cg-line">${HUB_ICO.plan}<span><b>${esc(t('congeOnDay'))}</b> ${esc(names.join(', '))}</span></p>` : '';
+}
+// Mon horaire : les cartes Congés et Échanges (employés).
+function planExtras() {
+  const ranges = myCongeRanges();
+  const cg = `<section class="d-card plan-off"><div class="d-head"><h2>${hubIco('plan')}${esc(t('myCongeCard'))}</h2></div>
+    <p>${esc(t('myCongeText'))}</p>
+    ${ranges.length ? `<div class="cg-list">${ranges.map((r) => `<div class="cg-row"><span><b>${esc(rangeText(r))}</b><small>${esc(r.self ? t('myCongeMine') : t('myCongeBy', r.by))}</small></span>${r.self ? `<button type="button" class="link danger" data-uncg="${r.from}|${r.to}">${esc(t('remove'))}</button>` : ''}</div>`).join('')}</div>` : ''}
+    <button type="button" class="btn ghost" data-mycg>${esc(t('myCongeBtn'))}</button></section>`;
+  const sw = `<section class="d-card plan-swap"><div class="d-head"><h2>${hubIco('team')}${esc(t('swCard'))}</h2></div>
+    <p>${esc(t('swCardText'))}</p>${swapOffers()}${mySwapRows()}
+    <button type="button" class="btn ghost" data-swask>${esc(t('swAskBtn'))}</button></section>`;
+  return cg + sw;
+}
 
 // ---------- Les actions du tableau de bord ----------
 document.addEventListener('click', (ev) => {

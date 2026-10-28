@@ -613,3 +613,84 @@ test('Notifications : un choix par type, heures calmes 23 h – 6 h sauf l’urg
   await a.remindDue(new Date('2026-11-01T21:10:00-05:00'));
   assert.equal(sent.filter((x) => /semaine/.test(x.title)).length, 1);
 });
+
+// ---------- Ronde 5 (horaires) ----------
+test('Congé : l’employé le met lui-même, les superviseurs sont avertis; il ne peut pas enlever celui d’un superviseur', async () => {
+  const { go, sign, sent } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah');
+  const sub = (who) => ({ action: 'subscribe', sub: { endpoint: `https://p/${who}`, keys: { p256dh: 'k', auth: 'a' } } });
+  await go('push', sub('martine'), boss);
+  assert.equal((await go('plan', { action: 'conge', date: '2026-10-20' }, noah)).status, 400); // pas dans le passé
+  const r = await go('plan', { action: 'conge', date: '2026-11-02', to: '2026-11-03' }, noah);
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.data.overrides), ['2026-11-02', '2026-11-03']);
+  assert.ok(sent.some((x) => x.to === 'https://p/martine' && /Noah prend congé/.test(x.title)));
+  const seen = (await go('plan?team=1&from=2026-11-01&to=2026-11-08', null, boss)).data.overrides['noah@x.ca'];
+  assert.equal(seen['2026-11-02'].conge, true); assert.equal(seen['2026-11-02'].by, 'Noah');
+  // un congé mis par le superviseur reste
+  await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-11-05', conge: true }, boss);
+  await go('plan', { action: 'conge', date: '2026-11-02', to: '2026-11-05', clear: true }, noah);
+  const left = (await go('plan?from=2026-11-01&to=2026-11-08', null, noah)).data.overrides['noah@x.ca'];
+  assert.deepEqual(Object.keys(left), ['2026-11-05']);
+  assert.equal((await go('plan', { action: 'override', email: 'noah@x.ca', date: '2026-11-06', off: true }, noah)).status, 403); // le reste : superviseurs
+});
+
+test('Échange de quart (C4) : un collègue accepte, l’échange se fait, les superviseurs sont avertis, on peut annuler', async () => {
+  const { a, go, sign, sent } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah'), lea = await sign('Lea'), zoe = await sign('Zoe');
+  const sub = (who, tk) => go('push', { action: 'subscribe', sub: { endpoint: `https://p/${who}`, keys: { p256dh: 'k', auth: 'a' } } }, tk);
+  await sub('martine', boss); await sub('noah', noah); await sub('lea', lea); await sub('zoe', zoe);
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '16:30', end: '23:00' } } }, noah); // jeudi
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '07:30', end: '15:30' } } }, zoe); // Zoé travaille jeudi
+  assert.equal((await go('swaps', { action: 'ask', date: '2026-10-30' }, noah)).status, 400); // vendredi : pas de quart
+  const ids = Object.fromEntries((await go('roster?from=2026-10-29&to=2026-10-29', null, noah)).data.people.map((p) => [p.name, p.id]));
+  const ask = await go('swaps', { action: 'ask', date: '2026-10-29', to: ids.Lea }, noah);
+  assert.equal(ask.status, 200); assert.equal(ask.data.swap.start, '16:30'); assert.equal(ask.data.swap.toName, 'Lea');
+  assert.equal((await go('swaps', { action: 'ask', date: '2026-10-29' }, noah)).status, 409); // une demande à la fois
+  assert.ok(sent.some((x) => x.to === 'https://p/lea' && /Noah cherche/.test(x.title)));
+  assert.ok(!sent.some((x) => x.to === 'https://p/zoe' && /cherche/.test(x.title))); // demandé à Léa seulement
+  assert.equal((await go('swaps', null, zoe)).data.swaps.length, 0);
+  const forLea = (await go('swaps', null, lea)).data.swaps[0];
+  assert.equal(forLea.forMe, true); assert.ok(!JSON.stringify(forLea).includes('@x.ca'));
+  assert.equal((await go('swaps', { action: 'accept', id: forLea.id }, zoe)).status, 409); // pas pour Zoé
+  const ok = await go('swaps', { action: 'accept', id: forLea.id }, lea);
+  assert.equal(ok.data.swap.status, 'done');
+  const ppl = (await go('roster?from=2026-10-29&to=2026-10-29', null, boss)).data.people;
+  assert.equal(ppl.find((p) => p.name === 'Noah').overrides['2026-10-29'].off, true);
+  assert.equal(ppl.find((p) => p.name === 'Lea').overrides['2026-10-29'].start, '16:30');
+  assert.ok(sent.some((x) => x.to === 'https://p/noah' && /pris/.test(x.title)));
+  assert.ok(sent.some((x) => x.to === 'https://p/martine' && /Lea prend le quart de Noah/.test(x.body))); // superviseur averti, sans approbation
+  // le rappel de jeudi suit l'échange : Léa à 16 h 30, pas Noah
+  const n0 = sent.length;
+  await a.remindDue(new Date('2026-10-29T16:22:00-04:00'));
+  assert.deepEqual(sent.slice(n0).map((x) => x.to), ['https://p/lea']);
+  // Léa annule (15 min) : tout revient
+  await go('swaps', { action: 'undo', id: forLea.id }, lea);
+  const back = (await go('roster?from=2026-10-29&to=2026-10-29', null, boss)).data.people;
+  assert.equal(back.find((p) => p.name === 'Noah').overrides['2026-10-29'], undefined);
+  assert.equal(back.find((p) => p.name === 'Lea').overrides['2026-10-29'], undefined);
+  // à toute l'équipe : Zoé travaille déjà ce jour-là → « busy »; Léa dit non (seulement pour elle)
+  await go('swaps', { action: 'cancel', id: forLea.id }, noah);
+  const all = (await go('swaps', { action: 'ask', date: '2026-10-29', to: '*' }, noah)).data.swap;
+  assert.equal((await go('swaps', { action: 'accept', id: all.id }, zoe)).status, 409);
+  await go('swaps', { action: 'decline', id: all.id }, lea);
+  assert.equal((await go('swaps', null, lea)).data.swaps.filter((s) => s.forMe).length, 0);
+  assert.equal((await go('swaps', null, noah)).data.swaps.find((s) => s.id === all.id).status, 'open');
+  assert.equal((await go('swaps', null, boss)).data.swaps.length, 2); // les superviseurs voient tout
+});
+
+test('Rappel du quart : pas de rappel un jour de congé; horaire vide → un petit rappel le lundi', async () => {
+  const { a, go, sign, sent } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah'), lea = await sign('Lea');
+  for (const [w, tk] of [['noah', noah], ['lea', lea], ['martine', boss]]) await go('push', { action: 'subscribe', sub: { endpoint: `https://p/${w}`, keys: { p256dh: 'k', auth: 'a' } } }, tk);
+  await go('auth', { action: 'schedule', schedule: { 3: { start: '16:30', end: '23:00' } } }, noah);
+  await go('plan', { action: 'conge', date: '2026-10-29' }, noah);
+  const n0 = sent.length;
+  await a.remindDue(new Date('2026-10-29T16:22:00-04:00'));
+  assert.equal(sent.slice(n0).length, 0);
+  await a.remindDue(new Date('2026-11-02T10:05:00-05:00')); // lundi 10 h
+  const nudges = sent.filter((x) => /vide/.test(x.title)).map((x) => x.to);
+  assert.deepEqual(nudges, ['https://p/lea']); // pas Noah (horaire), pas le superviseur
+  await a.remindDue(new Date('2026-11-02T10:10:00-05:00'));
+  assert.equal(sent.filter((x) => /vide/.test(x.title)).length, 1);
+});

@@ -3,6 +3,30 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-28-sched',
+    date: '2026-10-28',
+    fr: {
+      title: 'Congés, échanges et jours fériés',
+      items: [
+        'Mon horaire : « Prendre congé » en deux touchers. Les superviseurs le voient tout de suite.',
+        'Échanger un quart : offre-le à un collègue ou à toute l’équipe. Dès que quelqu’un accepte, c’est fait.',
+        'Jours fériés du Québec : un avis sur le tableau de bord et un petit drapeau dans la semaine.',
+        'Un changement d’horaire fait par quelqu’un d’autre s’affiche tout de suite.',
+        'Pas de rappel de quart un jour de congé.',
+      ],
+    },
+    en: {
+      title: 'Time off, swaps and holidays',
+      items: [
+        'My schedule: “Take time off” in two taps. Supervisors see it right away.',
+        'Swap a shift: offer it to a coworker or the whole team. As soon as someone accepts, it’s done.',
+        'Québec holidays: a notice on the dashboard and a small flag in the week.',
+        'A schedule change made by someone else shows up right away.',
+        'No shift reminder on a day off.',
+      ],
+    },
+  },
+  {
     id: '2026-10-27-motion',
     date: '2026-10-27',
     fr: {

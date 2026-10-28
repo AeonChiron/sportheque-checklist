@@ -212,3 +212,10 @@ Plain static site + one serverless function. No build step.
 - Fin de quart (27 oct.) : « photo du quart » imprimée (mosaïque des tâches faites, pas le lapin), arrive en ressort, penche en 3D au doigt et revient, paillettes, reflet; toucher la photo annule le retour automatique.
 - Étapes d'une tâche (27 oct.) : casse-tête (js/puzzle.js) — UNE image (la scène de la tâche) découpée en un morceau par étape; chaque étape pose son morceau; complet = joints effacés + reflet. Remplace l'haltère.
 - Changer de langue redessine tout de suite la page ouverte (accueil, historique, horaire, coup d'œil, méthode, équipe, fiche, réglages, barre du bas) — plus besoin de recharger (27 oct.).
+
+## Schedules (loop round 5)
+- Own congé: `plan {action:'conge'}` (any signed-in user, own only, from today). Override `{off, conge, self, by}`; a supervisor's congé can't be cleared by the employee. Leads get a 'sched' push.
+- Swaps (C4): `swaps` route. Offer to a roster id or '*'; accept applies overrides `{off, swap}` / `{start, end, swap}` immediately, no approval, leads notified. Taker can `undo` for 15 min; requester `cancel`/`reopen`. Never offered to supervisors (they don't clean). Emails never returned.
+- Holidays: `js/holidays.js` (fixed rules, Easter computed). Show both Good Friday and Easter Monday with the "employer picks one" note; never claim gym hours, only "may change, check with your supervisor".
+- `plannedOn(u, date)` (server) = override else schedule; use it for anything that asks "does this person work that day" (reminders, swaps).
+- Sheets hide the bottom tab bar while open (`body:has(#sheet.open) .tabbar`).

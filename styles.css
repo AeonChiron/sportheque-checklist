@@ -3867,3 +3867,56 @@ body.calm :is(.pz-piece.land, .pz.just, .pz.just .pz-sheen, .pz-hole.next) { ani
 /* Safari (iPad) : « overflow: hidden » + coins arrondis ne coupe pas un calque mélangé (mix-blend);
    on découpe donc les reflets eux-mêmes aux coins de la carte (sinon un coin carré dépasse). */
 .fx-caustics { clip-path: inset(0 round 30px); -webkit-clip-path: inset(0 round 30px); }
+
+/* ---------- Ronde 5 : congés, échanges de quarts, jours fériés ---------- */
+.hol-note { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; margin-bottom: 14px; border-radius: 16px; background: color-mix(in srgb, #d6402f 9%, var(--surface)); border: 1px solid color-mix(in srgb, #d6402f 30%, transparent); }
+.hol-note .hol-ico { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #d6402f; color: #fff; }
+.hol-note .hol-ico svg { width: 18px; height: 18px; }
+.hol-note b { display: block; font: 750 15px/1.25 var(--font); color: var(--ink); }
+.hol-note small { display: block; margin-top: 3px; font: 500 13.5px/1.4 var(--font); color: var(--muted); }
+.sheet .hol-note { margin: 0 0 12px; }
+.hol-pill { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, #d6402f 12%, var(--surface)); color: #b3321f; border: 1px solid color-mix(in srgb, #d6402f 35%, transparent); }
+.hol-pill svg { width: 12px; height: 12px; }
+.wk-day.hol { position: relative; }
+.wk-hol { position: absolute; top: 3px; right: 3px; width: 14px; height: 14px; color: #d6402f; }
+.wk-hol svg { width: 100%; height: 100%; }
+.wk-mine.off { background: var(--sunk); color: var(--muted); }
+.dw-day { position: relative; }
+.dw-day.conge .dw-time { color: var(--muted); font-weight: 750; }
+.dw-hol { position: absolute; top: 0; right: 2px; width: 12px; height: 12px; color: #d6402f; }
+.dw-hol svg { width: 100%; height: 100%; }
+.cg-line { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; padding: 8px 10px; border-radius: 12px; background: var(--sunk); font: 500 14px/1.35 var(--font); color: var(--ink); }
+.cg-line svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.cg-list { display: grid; gap: 8px; margin: 10px 0 12px; }
+.cg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+.cg-row b { display: block; font: 700 15px/1.25 var(--font); }
+.cg-row small { display: block; font: 500 13px/1.3 var(--font); color: var(--muted); }
+.plan-off p, .plan-swap p { margin: 0 0 12px; color: var(--muted); font: 500 15px/1.45 var(--font); }
+.plan-off .btn, .plan-swap .btn { width: 100%; }
+.sw-card { margin: 0 0 14px; padding: 14px 16px; border-radius: 18px; background: var(--surface); border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 10px 28px -22px rgba(26, 28, 25, .45); }
+.plan-swap .sw-card { margin: 0 0 12px; box-shadow: none; }
+.sw-eyebrow { display: flex; gap: 8px; align-items: center; margin: 0; font: 700 14px/1.3 var(--font); color: var(--accent); }
+.sw-eyebrow svg { width: 18px; height: 18px; flex: none; }
+.sw-when { margin: 6px 0 12px; font: 750 19px/1.25 var(--font); color: var(--ink); }
+.sw-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.sw-acts .btn { flex: 1 1 140px; }
+.sw-mine { display: grid; gap: 8px; margin: 0 0 12px; }
+.sw-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); }
+.sw-row > span:nth-child(2) { flex: 1; min-width: 0; }
+.sw-row b { display: block; font: 700 14.5px/1.25 var(--font); }
+.sw-row small { display: block; font: 500 13px/1.3 var(--font); color: var(--muted); }
+.sw-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--warn); }
+.sw-row.s-done .sw-dot, .sw-row.took .sw-dot { background: var(--ok); }
+.sw-row.s-no .sw-dot { background: var(--bad); }
+.sw-shifts, .sw-people { display: grid; gap: 8px; margin-bottom: 14px; }
+.sw-shift, .sw-person { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.sw-shift[aria-checked="true"], .sw-person[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.sw-shift b, .sw-person b { display: block; font: 700 15px/1.25 var(--font); }
+.sw-shift small, .sw-person small { display: block; font: 500 13px/1.3 var(--font); color: var(--muted); }
+.sw-person.all .tw-av svg { width: 16px; height: 16px; }
+.tw-chip.k-swap { border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--accent); }
+/* Une icône sans classe dans le petit titre d'une feuille garde la taille du texte (avant : énorme). */
+.eyebrow > svg:not(.ico), .eyebrow > .hb-ico svg { width: 15px; height: 15px; margin-right: 5px; vertical-align: -2px; }
+.eyebrow > .hb-ico { display: inline; background: none; width: auto; height: auto; }
+/* Une feuille ouverte passe devant la barre d'onglets (elle cachait le bouton Enregistrer). */
+body:has(#sheet.open) .tabbar { opacity: 0; pointer-events: none; transform: translate(-50%, 140%); transition: opacity .2s, transform .25s var(--ease); }
