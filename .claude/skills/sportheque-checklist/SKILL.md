@@ -232,3 +232,8 @@ Plain static site + one serverless function. No build step.
 - "Pourquoi" in a task comes only from La méthode (`whyOf`), hidden when untrue for that day (`noWhy` from the planner) or already in the tips. Never invent a reason.
 - Mini maps only where the place is certain (`spotOf`: zone, cardio → A, spinning → room 4); the target pops, the rest fades.
 - Big text zooms `<html>`: anything full-screen or measured in screen pixels must divide by `--zoom`.
+
+## Sound (loop round 8)
+- Tap level follows importance (TAP_BIG / TAP_SOFT in app.js): big only for main actions, never for close/danger; keep big at or below the old tap loudness.
+- New sounds: mid register, nothing harsh above 4 kHz (owner hates high-pitched); measure peak/LAF offline before shipping.
+- The task bell rings once per task, only for tasks added since the last check, only when audio can play now.

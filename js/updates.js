@@ -3,6 +3,28 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-28-sound',
+    date: '2026-10-28',
+    fr: {
+      title: 'Des sons plus doux',
+      items: [
+        'Le son d’un bouton dépend de son importance : plus riche pour les actions principales, à peine pour un lien ou un onglet.',
+        'Les touchers sont 30 % plus doux.',
+        'Une petite cloche quand un superviseur t’ajoute une tâche (quand l’app est ouverte).',
+        'Les messages restent assez longtemps pour les lire.',
+      ],
+    },
+    en: {
+      title: 'Softer sounds',
+      items: [
+        'A button’s sound depends on how important it is: richer for main actions, barely there for a link or a tab.',
+        'Taps are 30% softer.',
+        'A little bell when a supervisor adds a task for you (when the app is open).',
+        'Messages stay long enough to read.',
+      ],
+    },
+  },
+  {
     id: '2026-10-28-visuals',
     date: '2026-10-28',
     fr: {
