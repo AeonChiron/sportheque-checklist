@@ -999,7 +999,8 @@ function openOnboarding({ after = null, real = false } = {}) {
   const paint = (focusFirst = false) => {
     const k = steps[i], last = i === steps.length - 1;
     const keep = shown === i ? $('#sheetBody').scrollTop : 0; // même étape (un interrupteur) : on reste où on était
-    shown = i; paintedAt = Date.now();
+    if (shown !== i) paintedAt = Date.now(); // le garde double toucher ne vaut qu'au changement d'étape
+    shown = i;
     openSheet(`<div class="sheet-head ob-head"><p class="eyebrow num">${esc(t('obStep', i + 1, steps.length))}</p>
       <div class="tour-dots ob-dots" aria-hidden="true">${steps.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>${body(k)}</div>`, (root) => {
       root.querySelector('.ob-head').addEventListener('click', async (e) => {
@@ -1116,7 +1117,8 @@ function startTour() {
     if (then) setTimeout(then, 380);
   };
   // Retour (Android) ou un lien : on quitte l'accueil, la visite s'arrête (pas de lumière sur un écran vide).
-  function leave() { setTimeout(() => { if (box.isConnected && current !== 'hub' && !sheetOpen()) end(); }, 80); }
+  // Retour sur une étape du compte : la feuille se ferme, la visite aussi (pas de bulle qui pointe dans le vide).
+  function leave() { setTimeout(() => { if (box.isConnected && !$('#sheet').classList.contains('open') && (current !== 'hub' || (steps[i]?.[2] && !box.classList.contains('wait')))) end(); }, 80); }
   addEventListener('popstate', leave);
   const hasSched = () => Boolean(mySchedule() && Object.keys(mySchedule()).length);
   const finish = (skipped = false) => {

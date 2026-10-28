@@ -237,3 +237,8 @@ Plain static site + one serverless function. No build step.
 - Tap level follows importance (TAP_BIG / TAP_SOFT in app.js): big only for main actions, never for close/danger; keep big at or below the old tap loudness.
 - New sounds: mid register, nothing harsh above 4 kHz (owner hates high-pitched); measure peak/LAF offline before shipping.
 - The task bell rings once per task, only for tasks added since the last check, only when audio can play now.
+## Training and onboarding (loop round 9)
+- The pretend team is "Mode formation". Exercises come from what the person really did since entering (`fictiveProgress`), never a score; 4 per role.
+- The tour stays ≤6 steps (D10): drop repeats first (photo already set, "Ton horaire" after "Mon horaire").
+- First login on a real account: settings first, then a strong (not forced) push to formation; closing counts as "Plus tard", re-offered once.
+- Privacy page sentences must each be true in netlify/lib/api.mjs; a coworker never receives another person's remarks or sees who didn't do a task.

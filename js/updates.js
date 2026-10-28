@@ -3,6 +3,32 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-28-training',
+    date: '2026-10-28',
+    fr: {
+      title: 'Mode formation et premier départ',
+      items: [
+        'L’équipe fictive devient le **Mode formation** : la visite du rôle part toute seule, puis 4 exercices sur l’accueil (différents pour l’employé et le superviseur), cochés quand c’est fait.',
+        '« Nouveau dans l’équipe » : on vit la première journée d’Alex, du profil jusqu’aux exercices.',
+        'Première connexion : la langue (français d’office), la photo, le confort et les rappels, puis on conseille fortement la formation.',
+        '**Ta vie privée** dans Préférences : ce que l’app garde, qui le voit, en mots simples.',
+        'Tes collègues ne reçoivent plus tes remarques de quart; ils voient « Pas pu faire », jamais ton nom.',
+        'Les mises à jour s’installent sans couper un geste. Ici, l’admin voit les 5 dernières.',
+      ],
+    },
+    en: {
+      title: 'Training mode and first start',
+      items: [
+        'The pretend team becomes **Training mode**: the role’s tour starts by itself, then 4 exercises on the home screen (different for employees and supervisors), checked off when done.',
+        '“New on the team”: live Alex’s first day, from the profile to the exercises.',
+        'First login: language (French by default), picture, comfort and reminders, then a strong suggestion to try training.',
+        '**Your privacy** in Preferences: what the app keeps and who sees it, in plain words.',
+        'Coworkers no longer receive your shift remarks; they see “Couldn’t do it”, never your name.',
+        'Updates install without interrupting you. Here, the admin sees the last 5.',
+      ],
+    },
+  },
+  {
     id: '2026-10-28-sound',
     date: '2026-10-28',
     fr: {
