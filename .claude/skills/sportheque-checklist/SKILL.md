@@ -242,3 +242,11 @@ Plain static site + one serverless function. No build step.
 - The tour stays ≤6 steps (D10): drop repeats first (photo already set, "Ton horaire" after "Mon horaire").
 - First login on a real account: settings first, then a strong (not forced) push to formation; closing counts as "Plus tard", re-offered once.
 - Privacy page sentences must each be true in netlify/lib/api.mjs; a coworker never receives another person's remarks or sees who didn't do a task.
+
+## Final pass of the loop (blind comparison)
+- Only one task row is "En cours": `nowTaskId()` picks the plan task whose window holds now, preferring regular tasks over special/assigned ones.
+- Special and assigned tasks without an illustration show `HUB_ICO.misc` (`.misc-ico`), in the row and as the task sheet picture; `taskVisual` returns nothing rather than an empty strip; the punch-in sheet shows one time and no "0 min".
+- The checklist auto-scroll only runs when the current task is hidden (below the fold or under the topbar) and uses `block: 'nearest'` with scroll margins, so "Tes tâches" stays visible.
+- English tabs: Problems (signalements) and Reports (rapports). Never use "Reports" for problems in English.
+- Blind comparison kit (scratchpad, not in the repo): `final/sweep.mjs <port> <phone|dark|en|laptop|ipad> <out|employee|boss> <outdir>` shoots every screen and writes report.json (page errors, overflow, leftover French); judge brief in `crew/judge-brief.md`.
+

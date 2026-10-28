@@ -60,7 +60,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"js/problems.js","revision":"3c78c9fb8001"},
   {"url":"js/puzzle.js","revision":"66b64ebb5f79"},
   {"url":"js/report.js","revision":"64c1b79ed61b"},
-  {"url":"js/updates.js","revision":"385b398498e2"},
+  {"url":"js/updates.js","revision":"c1a650c3b69c"},
   {"url":"manifest.webmanifest","revision":"d46c08bd92fd"},
   {"url":"styles.css","revision":"0d9bd2b778d1"},
   {"url":"vendor/auto-animate/index.js","revision":"ff3ed293e583"},

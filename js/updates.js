@@ -3,6 +3,30 @@
 // grosse mise à jour; les avis de l'admin (serveur + courriel) guident la suivante.
 export const UPDATES = [
   {
+    id: '2026-10-28-final',
+    date: '2026-10-28',
+    fr: {
+      title: 'Dernières retouches de la boucle',
+      items: [
+        'Une seule tâche dit « En cours » à la fois.',
+        'Les tâches ajoutées ont leur icône « divers » (plus de carré vide), une par ligne dans « Ton quart en un coup d’œil », avec le nom de chaque superviseur qui l’a ajoutée.',
+        'La liste ne glisse plus le titre « Tes tâches » sous l’en-tête.',
+        'Le pointage montre son image et son heure (plus de « 0 min »).',
+        'En anglais, les onglets disent Problems et Reports.',
+      ],
+    },
+    en: {
+      title: 'Last touches of the loop',
+      items: [
+        'Only one task says “In progress” at a time.',
+        'Added tasks get the “misc” icon (no more empty square), one per line in “Your shift at a glance”, naming every supervisor who added one.',
+        'The list no longer slides the “Your tasks” title under the header.',
+        'Punching in shows its picture and its time (no more “0 min”).',
+        'In English, the tabs now say Problems and Reports.',
+      ],
+    },
+  },
+  {
     id: '2026-10-28-training',
     date: '2026-10-28',
     fr: {
