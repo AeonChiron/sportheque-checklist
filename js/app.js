@@ -1891,6 +1891,7 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
 // ---------- Ronde 7 : « Pourquoi » (D3) et petit plan du gym (D4) dans les tâches ----------
 // Le pourquoi vient de La méthode (même ordre que le plan : it.ref = l'étape); jamais inventé.
 function whyOf(it) {
+  if (it.noWhy) return '';
   const sh = Number((/^q([12])-/.exec(it.id || '') || [])[1]);
   const step = sh && Number.isInteger(it.ref) ? METHOD[lang()].flows[sh]?.[it.ref] : null;
   return step && !step.kind && step.why ? step.why : '';
@@ -5881,7 +5882,7 @@ function renderGlance() {
   $('#glanceBody').innerHTML = `<div class="gl-wrap${reducedMotion() ? '' : ' cascade'}">
     <div class="gl-facts">${F.facts.map(factHTML).join('')}</div>
     <div class="gl-sum">${shiftBar(F.items)}<p class="num">${esc(t('glCount', F.tasks.length, hours(F.work)))}</p></div>
-    ${(() => { const deep = F.items.find((i) => i.deep && i.zone); return deep ? miniMap(deep.zone, tg.date, t('mmDeep', f(deep.start))) : ''; })()}
+    ${(() => { const deep = F.items.find((i) => i.deep && i.zone); return deep ? miniMap(deep.zone, tg.date, t(tg.mine ? 'mmDeep' : 'mmDeepOther', f(deep.start))) : ''; })()}
     <h2 class="gl-h">${esc(t('glWork'))}</h2>
     <ol class="gl-list">${rows}</ol>
     ${cta}</div>`;

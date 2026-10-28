@@ -226,6 +226,10 @@ function resolveBlock(block, shiftId, day, lang, compostCovered) {
     b.summary = (day.weekday === 2 ? L.compostWedSummary : L.compostSummary) + src.summary;
   }
 
+  // Le « pourquoi » de La méthode parle de la moppe et du compost : on le cache
+  // quand la tâche du jour n'en a pas (journée miroirs/vérif, compost non couvert).
+  if ((block.surfaces === 2 && day.surfaces !== 'tuiles') || (block.compost && !compostCovered)) b.noWhy = true;
+
   return b;
 }
 

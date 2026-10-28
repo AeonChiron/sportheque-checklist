@@ -23,7 +23,7 @@ export const METHOD = {
       1: [
         { t: 'Ouverture', what: 'Ventilation, 4 télés, musique, vaporisateurs pleins.', why: 'Les télés, c’est la première chose que les clients voient.' },
         { t: 'Guenilles, 1re tournée', what: 'Ramasser les guenilles sales, partir la laveuse.', why: 'La laveuse et la sécheuse tournent pendant que tu fais tes autres tâches.' },
-        { t: 'Désinfection', what: 'Écrans, devant des cardios, poignées.', why: 'C’est ce que les clients touchent le plus.' },
+        { t: 'Désinfection', what: 'Écrans, devant des cardios, poignées.', why: 'Les clients touchent souvent ces surfaces.' },
         { t: 'Poubelles', what: 'Gym, bureaux, vestiaires. Recyclage aussi.' },
         { t: 'Aspirateur : musculation', what: 'Tapis noirs, allées, autour des bancs et des supports.' },
         { t: 'Entretien général', what: 'Poignées, sièges, boutons, surfaces de bois et de métal.' },
@@ -35,7 +35,7 @@ export const METHOD = {
         { t: 'Guenilles, 3e tournée', what: 'Ramasser, laver, plier, redistribuer.' },
         { t: 'Aspirateur : cardio', what: 'Tapis gris, passages, autour des appareils.' },
         { t: 'Tâche de la semaine', what: 'Une petite tâche différente chaque jour.' },
-        { t: 'Spinning', what: 'Tous les vélos, la salle au complet.', why: 'Seul le quart de matin nettoie le spinning au complet.' },
+        { t: 'Spinning', what: 'Tous les vélos, la salle au complet.', why: 'Le spinning, c’est juste le matin.' },
         { t: 'Fin de quart', what: 'Sortir les déchets, guenilles propres en place, signaler ce qui manque.' },
       ],
       2: [
@@ -114,7 +114,7 @@ export const METHOD = {
       1: [
         { t: 'Opening', what: 'Ventilation, 4 TVs, music, full spray bottles.', why: 'The TVs are the first thing members see.' },
         { t: 'Rags, 1st round', what: 'Pick up dirty rags, start the washer.', why: 'The washer and dryer run while you do your other tasks.' },
-        { t: 'Disinfecting', what: 'Screens, cardio fronts, handles.', why: 'It’s what members touch the most.' },
+        { t: 'Disinfecting', what: 'Screens, cardio fronts, handles.', why: 'Members touch these surfaces often.' },
         { t: 'Trash', what: 'Gym, offices, locker rooms. Recycling too.' },
         { t: 'Vacuum: weights area', what: 'Black mats, aisles, around benches and racks.' },
         { t: 'General upkeep', what: 'Handles, seats, buttons, wood and metal surfaces.' },
@@ -126,7 +126,7 @@ export const METHOD = {
         { t: 'Rags, 3rd round', what: 'Pick up, wash, fold, hand out.' },
         { t: 'Vacuum: cardio', what: 'Grey mats, walkways, around the machines.' },
         { t: 'Task of the week', what: 'A small different task each day.' },
-        { t: 'Spinning', what: 'Every bike, the whole room.', why: 'Only the morning shift fully cleans spinning.' },
+        { t: 'Spinning', what: 'Every bike, the whole room.', why: 'Spinning is a morning-only job.' },
         { t: 'End of shift', what: 'Take out the trash, clean rags in place, report what’s missing.' },
       ],
       2: [

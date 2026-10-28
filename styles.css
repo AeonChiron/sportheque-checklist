@@ -4093,3 +4093,8 @@ html[data-text="xl"] .pr-vol input { grid-column: 1 / -1; grid-row: 2; }
 .mini-map > svg { width: 18px; height: 18px; flex: none; color: var(--muted); fill: none; stroke: currentColor; stroke-width: 2; }
 .gl-wrap > .mini-map { margin: 0 0 16px; }
 .mini-map .zm:not(.hot):not(.sel) { opacity: .42; }
+.mini-map .room.sel .zm-room { fill: var(--accent); stroke: var(--accent); stroke-width: 10; paint-order: stroke; }
+.mini-map .room.sel .zm-room-label { fill: var(--surface); }
+/* Petit plan sur une pièce (spinning) : les zones s'effacent pour que la pièce ressorte. */
+.mini-map .floor:has(.room.sel) :is(.zm-tint, .zm-edge, .zm-label-group) { opacity: .12; }
+.mini-map .floor:has(.room.sel) .zm-gear { opacity: .45; }
