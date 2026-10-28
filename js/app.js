@@ -1888,6 +1888,33 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
   drawInfo();
 }
 
+// ---------- Ronde 7 : « Pourquoi » (D3) et petit plan du gym (D4) dans les tâches ----------
+// Le pourquoi vient de La méthode (même ordre que le plan : it.ref = l'étape); jamais inventé.
+function whyOf(it) {
+  const sh = Number((/^q([12])-/.exec(it.id || '') || [])[1]);
+  const step = sh && Number.isInteger(it.ref) ? METHOD[lang()].flows[sh]?.[it.ref] : null;
+  return step && !step.kind && step.why ? step.why : '';
+}
+const whyBox = (it) => { const w = whyOf(it); return w ? `<details class="why-box"><summary>${esc(METHOD[lang()].why)}</summary><p>${md(w)}</p><button type="button" class="link" data-method-link>${esc(t('whyMethod'))}</button></details>` : ''; };
+// Où dans le gym : la zone (profondeur, miroirs) ou la pièce, seulement quand c'est sûr.
+const TASK_SPOT = { cardio: 'A', spinning: '4' };
+const spotOf = (it) => it.zone || TASK_SPOT[it.area] || null;
+function miniMap(spot, date, label = t('mmWhere')) {
+  const zone = /^[ABC]$/.test(spot);
+  const svg = zoneMap({ highlight: zone ? spot : null, selected: zone ? null : spot, tags: {}, labels: MAP_LABELS[lang()] })
+    .replace(/ role="button"/g, '').replace(/ tabindex="0"/g, '').replace(/ aria-label="[^"]*"/g, '');
+  return `<button type="button" class="mini-map" data-fullmap="${date}"><span class="mm-svg" aria-hidden="true">${svg}</span><span class="mm-text"><small>${esc(label)}</small><b>${esc(FLOOR[spot]?.[lang()].name || '')}</b><em>${esc(t('mmOpen'))}</em></span>${CHEV_R}</button>`;
+}
+function openFullMap(date) {
+  ap.day = date; ap.week = mondayOf(date); ap.tab = 'day'; ap.keepNext = true;
+  openApercu({ keep: true });
+}
+document.addEventListener('click', (e) => {
+  const m = e.target.closest('[data-fullmap]');
+  if (m) { const d = m.dataset.fullmap; sfx('tap'); if (!$('#sheet').hidden) { closeSheet(); setTimeout(() => openFullMap(d), 320); } else openFullMap(d); return; }
+  if (e.target.closest('[data-method-link]')) { closeSheet(); setTimeout(() => { location.hash = 'methode'; }, 320); }
+});
+
 // ---------- Détail d'une tâche ----------
 function taskVisual(it) {
   if (it.deep || (it.zone && it.photo === 'miroirs')) {
@@ -1933,6 +1960,8 @@ function openTask(id) {
     ${tv}
     ${clockBox}
     ${tips}
+    ${whyBox(it)}
+    ${!mapLast && spotOf(it) ? miniMap(spotOf(it), state.date) : ''}
     ${skipped ? `<div><p class="block-label">${t('whyOptional')}</p><div class="reasons">${Object.entries(SKIP_REASONS).map(([k, v]) => `<button type="button" data-reason="${k}" class="${k === 'oublie' ? 'rs-forgot' : ''}" aria-pressed="${e.reason === k}">${k === 'oublie' ? '✓ ' : ''}${esc(v[lang()])}</button>`).join('')}</div></div>` : ''}
     <label class="field"><span>${t('remark')}</span>
       <textarea id="remark" rows="2" placeholder="${esc(t(e.skipped ? 'remarkSkipPh' : 'remarkPh'))}">${esc(e.remark || '')}</textarea>
@@ -3228,6 +3257,7 @@ function openTaskInfo(shift, id) {
     <div><p class="block-label">${t('steps')}</p><ol class="steps static">${it.steps.map((s) => `<li><span class="step"><span class="step-text">${md(s)}</span></span></li>`).join('')}</ol></div>
     ${it.tvTable ? `<figure class="visual map-visual"><figcaption class="block-label">${t('channels')}</figcaption>${tvDiagram(TV_CHANNELS)}</figure>` : ''}
     ${tipsCallout(it)}
+    ${whyBox(it)}
     ${isBoss() ? `<button type="button" class="link flag-link" data-rtask="${esc(it.title)}">${ICON.flag}${esc(t('rtButton'))}</button>` : ''}
   `, (root) => {
     const mapBox = root.querySelector('[data-map]');
@@ -3251,6 +3281,8 @@ function openGlanceTask(id) {
     </div>
     ${it.steps?.length ? `<div><p class="block-label">${t('steps')}</p><ol class="steps static">${it.steps.map((s) => `<li><span class="step"><span class="step-text">${md(s)}</span></span></li>`).join('')}</ol></div>` : ''}
     ${tipsCallout(it)}
+    ${whyBox(it)}
+    ${!(it.deep || (it.zone && it.photo === 'miroirs')) && spotOf(it) ? miniMap(spotOf(it), tg.date) : ''}
     ${it.deep || (it.zone && it.photo === 'miroirs') ? taskVisual(it) : ''}
     <div class="gt-acts"><button type="button" class="btn ghost" data-rtask="${esc(it.title)}">${ICON.flag}<span>${esc(t('rtButton'))}</span></button>
     ${tg.email ? `<button type="button" class="btn ghost" data-pfopen="${esc(tg.email)}" data-close-first>${HUB_ICO.team}<span>${esc(t('glProfile', tg.name))}</span></button>` : ''}</div>
@@ -4137,7 +4169,15 @@ $('#poolFict').hidden = FICTIVE;
 if (FICTIVE) {
   document.body.classList.add('fictive');
   $('#fictExit').hidden = false;
-  $('#fictExit').addEventListener('click', () => {
+  // Ronde 7 : après 5 s, la pastille rouge devient un simple ✕ (elle cachait le haut des écrans);
+  // un toucher la fait grandir à nouveau, un deuxième ouvre « Quitter ».
+  const fx = $('#fictExit');
+  let fxTimer = 0;
+  const shrinkSoon = () => { clearTimeout(fxTimer); fxTimer = setTimeout(() => fx.classList.add('mini'), 5000); };
+  shrinkSoon();
+  fx.addEventListener('click', () => {
+    if (fx.classList.contains('mini')) { fx.classList.remove('mini'); sfx('tick'); shrinkSoon(); return; }
+    shrinkSoon();
     openSheet(`<div class="sheet-head"><h2>${esc(t('fictExitTitle'))}</h2></div><p class="lede">${esc(t('fictExitBody'))}</p>`, () => {
       $('#fxYes').onclick = () => exitFictive();
       $('#fxNo').onclick = closeSheet;
@@ -5841,6 +5881,7 @@ function renderGlance() {
   $('#glanceBody').innerHTML = `<div class="gl-wrap${reducedMotion() ? '' : ' cascade'}">
     <div class="gl-facts">${F.facts.map(factHTML).join('')}</div>
     <div class="gl-sum">${shiftBar(F.items)}<p class="num">${esc(t('glCount', F.tasks.length, hours(F.work)))}</p></div>
+    ${(() => { const deep = F.items.find((i) => i.deep && i.zone); return deep ? miniMap(deep.zone, tg.date, t('mmDeep', f(deep.start))) : ''; })()}
     <h2 class="gl-h">${esc(t('glWork'))}</h2>
     <ol class="gl-list">${rows}</ol>
     ${cta}</div>`;

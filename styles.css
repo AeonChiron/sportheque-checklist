@@ -4034,3 +4034,62 @@ html[data-text="xl"] .pr-vol input { grid-column: 1 / -1; grid-row: 2; }
 .wk-ppl.gone b { color: var(--muted); font-weight: 600; }
 .wk-ppl.gone svg { stroke-dasharray: 2 2; }
 @media (forced-colors: active) { .rc-tip { border: 1px solid CanvasText; } .rc-grid { stroke: GrayText; } }
+
+/* ---------- Ronde 7 : visuels ---------- */
+/* Page bleue : les deux liens sur une ligne, la carte « équipe fictive » plus basse, la phrase du jour
+   plus serrée : la place gagnée va au lapin (propriétaire : « assez gros sur tous les appareils »). */
+.pool-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 22px; row-gap: 0; }
+.pool-links:not(:has(> :not([hidden]))) { display: none; }
+.pool-bottom .pool-cheer { padding: 8px 16px; }
+.pool-cheer strong { font-size: 18px; margin-bottom: 2px; }
+.pool-cheer span { font-size: 15px; }
+.pool-fict { position: relative; padding: 9px 16px 9px 9px; }
+.pool-fict .pf-beta { position: absolute; top: -9px; right: 14px; box-shadow: 0 3px 8px rgba(120, 60, 0, .25); }
+.pool-fict .pf-ico { width: 38px; height: 38px; }
+@media (max-height: 620px) { #auth:not(.inside) .pool-cheer span { display: none; } }
+/* Écran large : le titre et les boutons se regroupent au milieu; le lapin se tient à gauche (pool.js). */
+@media (min-width: 1100px) and (min-height: 480px) {
+  #auth .pool-ui { justify-content: center; }
+  #auth .pool-bottom { margin-top: min(9vh, 80px); }
+}
+/* La pastille « Quitter l'équipe fictive » se réduit à un ✕ après 5 s (un toucher la ramène). */
+.fict-exit { transition: padding .35s cubic-bezier(.3, 1.4, .5, 1), gap .35s; }
+.fict-exit span { max-width: 220px; overflow: hidden; white-space: nowrap; transition: max-width .35s cubic-bezier(.3, 1.2, .5, 1), opacity .2s; }
+.fict-exit.mini { padding: 5px; gap: 0; animation: none; }
+.fict-exit.mini span { max-width: 0; opacity: 0; }
+.fict-exit.mini svg { width: 30px; height: 30px; padding: 7px; }
+@media (prefers-reduced-motion: reduce) { .fict-exit, .fict-exit span { transition: none; } }
+/* iPad debout : les tuiles du tableau de bord en 3 + 2 (propriétaire), jamais une moitié de rangée vide. */
+@media (min-width: 760px) and (max-width: 1099px) {
+  .hub-body > .hb-tiles { grid-template-columns: repeat(6, 1fr); }
+  .hub-body > .hb-tiles > .hb-tile, .hub-body > .hb-tiles > .hb-tile:last-child:nth-child(odd) { grid-column: span 2; }
+  .hub-body > .hb-tiles:has(> :nth-child(2):last-child) > .hb-tile,
+  .hub-body > .hb-tiles:has(> :nth-child(4):last-child) > .hb-tile,
+  .hub-body > .hb-tiles:has(> :nth-child(5):last-child) > .hb-tile:nth-child(n+4) { grid-column: span 3; }
+  .hub-body > .hb-tiles > .hb-tile:only-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1100px) {
+  .hub-body > .hb-tiles:has(> :nth-child(2):last-child) { grid-template-columns: 1fr 1fr; }
+  .hub-body > .hb-tiles:has(> :nth-child(3):last-child) { grid-template-columns: repeat(3, 1fr); }
+}
+/* « Pourquoi » dans une tâche (D3) : fermé par défaut, une phrase de La méthode. */
+.why-box { margin: 4px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 0 14px; }
+.why-box summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 46px; font-weight: 700; color: var(--accent); }
+.why-box summary::-webkit-details-marker { display: none; }
+.why-box summary::before { content: '?'; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 14%, transparent); font: 800 13px/1 var(--font); }
+.why-box summary::after { content: ''; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform .2s; }
+.why-box[open] summary::after { transform: rotate(-135deg); }
+.why-box p { margin: 0 0 8px; font-size: 15.5px; line-height: 1.45; }
+.why-box .link { margin: 0 0 12px; font-size: 14px; }
+/* Petit plan du gym (D4) : la zone ou la pièce en couleur; un toucher ouvre le grand plan en 3D. */
+.mini-map { display: flex; align-items: center; gap: 14px; width: 100%; margin: 4px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mini-map:hover, .mini-map:focus-visible { border-color: var(--accent); }
+.mini-map .mm-svg { flex: none; width: 112px; border-radius: 10px; overflow: hidden; background: var(--sunk); }
+.mini-map .mm-svg svg { display: block; width: 100%; height: auto; pointer-events: none; }
+.mini-map .mm-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mini-map small { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.mini-map b { font-size: 15.5px; }
+.mini-map em { font-style: normal; font-size: 13px; color: var(--accent); }
+.mini-map > svg { width: 18px; height: 18px; flex: none; color: var(--muted); fill: none; stroke: currentColor; stroke-width: 2; }
+.gl-wrap > .mini-map { margin: 0 0 16px; }
+.mini-map .zm:not(.hot):not(.sel) { opacity: .42; }

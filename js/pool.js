@@ -83,11 +83,20 @@ export function mountPool(root) {
     // Grand écran (ordinateur) : le lapin grandit avec la hauteur de l'écran (propriétaire).
     const cap = big ? Math.max(250, Math.min(500, H * 0.4)) : Math.max(170, Math.min(380, H * 0.3));
     s.size = Math.max(84, Math.min(cap, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
+    // Écran large (ordinateur, tablette couchée) : la colonne du milieu est pleine, mais les côtés sont
+    // vides. Le lapin se tient debout à gauche, grand, à côté des boutons (ronde 7).
+    const side = (W - Math.min(640, W)) / 2;
+    s.wide = side >= 230 && H >= 480;
+    if (s.wide) s.size = Math.max(s.size, Math.min(420, H * 0.46 / RATIO * 1.25, side * 0.78));
     hero.style.width = `${s.size}px`;
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
     readObstacles();
     // Au repos : pile au milieu de l'espace libre entre le titre et le bouton.
-    if (!s.touched && W > 200) { const h = s.size * RATIO; s.x = W * 0.5 + (FOOT_X - LOOK_X) * s.size; s.y = (edges.top + edges.bottom) / 2 + h * 0.45; }
+    if (!s.touched && W > 200) {
+      const h = s.size * RATIO;
+      if (s.wide) { s.x = side / 2 + (FOOT_X - LOOK_X) * s.size; s.y = Math.min(H - 24, Math.max(h + 20, (foot?.bottom ?? H) - r.top)); } // debout au niveau du bas des boutons
+      else { s.x = W * 0.5 + (FOOT_X - LOOK_X) * s.size; s.y = (edges.top + edges.bottom) / 2 + h * 0.45; }
+    }
     if (still) draw();
   }
 
@@ -103,7 +112,7 @@ export function mountPool(root) {
   // lumière, fondu sur la longueur), puis dessinée en éventail. Deux couches se balancent
   // lentement, chacune à son rythme; la lumière scintille à peine, comme à travers l'eau.
   function rnd(seed) { let x = seed >>> 0; return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296); }
-  function makeBeam(seed, streaks, soft) {
+  function makeBeam(seed, streaks, soft, rgb = '255,255,255') {
     const w = 128, h = 720, r = rnd(seed);
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d');
@@ -112,11 +121,11 @@ export function mountPool(root) {
       const half = (0.16 + 0.84 * f) * w / 2;
       const a = Math.min(1, f / 0.05) * Math.pow(1 - f, 1.35);
       const lg = g.createLinearGradient(w / 2 - half, 0, w / 2 + half, 0);
-      lg.addColorStop(0, 'rgba(255,255,255,0)');
-      lg.addColorStop(soft ? 0.22 : 0.3, `rgba(255,255,255,${a * 0.28})`);
-      lg.addColorStop(0.5, `rgba(255,255,255,${a})`);
-      lg.addColorStop(soft ? 0.78 : 0.7, `rgba(255,255,255,${a * 0.28})`);
-      lg.addColorStop(1, 'rgba(255,255,255,0)');
+      lg.addColorStop(0, `rgba(${rgb},0)`);
+      lg.addColorStop(soft ? 0.2 : 0.3, `rgba(${rgb},${a * 0.3})`);
+      lg.addColorStop(0.5, `rgba(${rgb},${a})`);
+      lg.addColorStop(soft ? 0.8 : 0.7, `rgba(${rgb},${a * 0.3})`);
+      lg.addColorStop(1, `rgba(${rgb},0)`);
       g.fillStyle = lg; g.fillRect(0, y, w, 1);
     }
     // Les stries : de fins filets plus clairs dans le faisceau (la poussière qui attrape la lumière).
@@ -124,26 +133,29 @@ export function mountPool(root) {
     for (let k = 0; k < streaks; k++) {
       const u = (r() * 2 - 1) * 0.7, lw = 0.6 + r() * 2.2, al = 0.08 + r() * 0.16;
       const sg = g.createLinearGradient(0, 0, 0, h);
-      sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.12 + r() * 0.2, `rgba(255,255,255,${al})`);
-      sg.addColorStop(0.55 + r() * 0.3, `rgba(255,255,255,${al * 0.4})`); sg.addColorStop(1, 'rgba(255,255,255,0)');
+      sg.addColorStop(0, `rgba(${rgb},0)`); sg.addColorStop(0.12 + r() * 0.2, `rgba(${rgb},${al})`);
+      sg.addColorStop(0.55 + r() * 0.3, `rgba(${rgb},${al * 0.4})`); sg.addColorStop(1, `rgba(${rgb},0)`);
       g.strokeStyle = sg; g.lineWidth = lw;
       g.beginPath(); g.moveTo(w / 2 + u * 0.16 * w / 2, 0); g.lineTo(w / 2 + u * w / 2, h); g.stroke();
     }
     return c;
   }
   // tx : où le faisceau tombe (part de la largeur), bw : sa largeur, a : sa force, layer 0 = large et doux.
+  // Ronde 7 (propriétaire : « plus larges, plus réalistes ») : de grands pans de lumière très doux,
+  // quelques rayons moyens, et peu de fins rayons nets : c'est ce mélange qui fait vrai.
   const BEAMS = [
-    { tx: -0.1, bw: 0.22, a: 0.3, sp: 0.05, ph: 0.4, layer: 0 },
-    { tx: 0.22, bw: 0.26, a: 0.24, sp: 0.04, ph: 2.6, layer: 0 },
-    { tx: 0.58, bw: 0.22, a: 0.26, sp: 0.045, ph: 4.1, layer: 0 },
-    { tx: 0.98, bw: 0.28, a: 0.2, sp: 0.035, ph: 5.6, layer: 0 },
-    { tx: 0.04, bw: 0.05, a: 0.5, sp: 0.09, ph: 1.1, layer: 1 },
-    { tx: 0.3, bw: 0.035, a: 0.55, sp: 0.11, ph: 3.3, layer: 1 },
-    { tx: 0.44, bw: 0.075, a: 0.4, sp: 0.08, ph: 5.0, layer: 1 },
-    { tx: 0.7, bw: 0.04, a: 0.5, sp: 0.1, ph: 0.2, layer: 1 },
-    { tx: 0.85, bw: 0.06, a: 0.42, sp: 0.07, ph: 2.0, layer: 1 },
+    { tx: -0.12, bw: 0.36, a: 0.26, sp: 0.05, ph: 0.4, layer: 0 },
+    { tx: 0.24, bw: 0.42, a: 0.2, sp: 0.04, ph: 2.6, layer: 0 },
+    { tx: 0.62, bw: 0.34, a: 0.22, sp: 0.045, ph: 4.1, layer: 0 },
+    { tx: 1.02, bw: 0.4, a: 0.17, sp: 0.035, ph: 5.6, layer: 0 },
+    { tx: 0.4, bw: 0.6, a: 0.1, sp: 0.03, ph: 1.9, layer: 0 },
+    { tx: 0.05, bw: 0.09, a: 0.42, sp: 0.09, ph: 1.1, layer: 1 },
+    { tx: 0.31, bw: 0.05, a: 0.48, sp: 0.11, ph: 3.3, layer: 1 },
+    { tx: 0.45, bw: 0.12, a: 0.34, sp: 0.08, ph: 5.0, layer: 1 },
+    { tx: 0.72, bw: 0.06, a: 0.42, sp: 0.1, ph: 0.2, layer: 1 },
+    { tx: 0.87, bw: 0.1, a: 0.36, sp: 0.07, ph: 2.0, layer: 1 },
   ];
-  let sprites = null;
+  const sprites = {}; // une série par thème : blanc le jour, bleu argenté au clair de lune
   // Des grains de poussière qui flottent dans la lumière.
   const MOTES = Array.from({ length: 34 }, (_, i) => { const r = rnd(900 + i); return { x: r(), y: r(), z: 0.4 + r() * 0.6, ph: r() * 6.28, sp: 0.4 + r() * 0.8 }; });
   // Les grains de poussière : une petite image faite une fois (pas de dégradé recalculé à chaque image).
@@ -157,7 +169,8 @@ export function mountPool(root) {
   }
   function light(D) {
     if (W < 2 || H < 2) return; // pas encore mesuré
-    if (!sprites) sprites = BEAMS.map((b, i) => makeBeam(77 + i * 13, b.layer ? 9 : 5, !b.layer));
+    const key = D ? 'moon' : 'sun';
+    sprites[key] ||= BEAMS.map((b, i) => makeBeam(77 + i * 13, b.layer ? 9 : 5, !b.layer, D ? '185,212,255' : '255,255,255'));
     if (!moteImg) moteImg = makeMote();
     const R = Math.max(W, H);
     const Sx = -R * 0.06, Sy = -R * 0.42; // la fenêtre, loin au-dessus à gauche
@@ -170,11 +183,11 @@ export function mountPool(root) {
       const dx = tx - Sx, dy = ty - Sy, d = Math.hypot(dx, dy);
       const breathe = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(t * (0.21 + b.sp) + b.ph * 2));
       const shimmer = 1 + 0.07 * Math.sin(t * 1.9 + b.ph * 3) * Math.sin(t * 1.3 + b.ph);
-      ctx.globalAlpha = Math.min(1, b.a * breathe * shimmer * (D ? 0.6 : 1));
+      ctx.globalAlpha = Math.min(1, b.a * breathe * shimmer * (D ? 0.72 : 1));
       const L = d * 1.75, wb = R * b.bw * (1 + 0.12 * Math.sin(t * 0.17 + b.ph)) * 1.75;
       ctx.save();
       ctx.translate(Sx, Sy); ctx.rotate(Math.atan2(-dx, dy));
-      ctx.drawImage(sprites[i], -wb / 2, 0, wb, L);
+      ctx.drawImage(sprites[key][i], -wb / 2, 0, wb, L);
       ctx.restore();
     });
     ctx.restore();
@@ -220,7 +233,22 @@ export function mountPool(root) {
     const glow = ctx.createRadialGradient(W * 0.08, -H * 0.05, 0, W * 0.08, -H * 0.05, R * 0.6);
     glow.addColorStop(0, D ? 'rgba(120,200,255,.14)' : 'rgba(150,230,255,.2)'); glow.addColorStop(1, 'rgba(120,200,255,0)');
     ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H); ctx.restore();
+    // Le soir (thème sombre) : un clair de lune, une grande lueur froide en haut à gauche (Q64).
+    if (D) {
+      const moon = ctx.createRadialGradient(W * 0.14, H * 0.02, 0, W * 0.14, H * 0.02, R * 0.75);
+      moon.addColorStop(0, 'rgba(205,225,255,.3)'); moon.addColorStop(0.35, 'rgba(160,195,255,.1)'); moon.addColorStop(1, 'rgba(140,180,255,0)');
+      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = moon; ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
     if (!still) light(D); else { t = 3; light(D); }
+    // Une lueur douce au sol sous le lapin, là où les rayons se croisent (Q63).
+    {
+      const hh = s.size * RATIO, gx = s.x, gy = s.y - hh * 0.08, gr = s.size * 1.05;
+      const pool = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+      const c = D ? '190,215,255' : '255,250,235', k = 0.55 + 0.08 * Math.sin(t * 0.6);
+      pool.addColorStop(0, `rgba(${c},${0.5 * k})`); pool.addColorStop(0.45, `rgba(${c},${0.2 * k})`); pool.addColorStop(1, `rgba(${c},0)`);
+      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.translate(gx, gy); ctx.scale(1, 0.55); ctx.translate(-gx, -gy);
+      ctx.fillStyle = pool; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
     // Les ronds dans l'eau : bord fin et clair, bande plus sombre juste en dedans.
     for (const rp of ripples) {
       const life = 1.5;
@@ -359,7 +387,8 @@ export function mountPool(root) {
   for (const el of [root.parentElement?.querySelector('.pool-head'), root.parentElement?.querySelector('.pool-bottom')]) if (el) ro?.observe(el);
 
   return {
-    start() { requestAnimationFrame(resize); if (!still && !raf) { last = 0; raf = requestAnimationFrame(step); } else requestAnimationFrame(() => { resize(); draw(); }); },
+    // (Les boutons du bas entrent en glissant : on remesure quand ils sont à leur place.)
+    start() { requestAnimationFrame(resize); setTimeout(() => { if (!s.touched) resize(); }, 1600); if (!still && !raf) { last = 0; raf = requestAnimationFrame(step); } else requestAnimationFrame(() => { resize(); draw(); }); },
     stop() { cancelAnimationFrame(raf); raf = 0; },
     cheer() {
       for (let k = 0; k < 4; k++) setTimeout(() => ripples.push({ x: s.x + (Math.random() - 0.5) * 30, y: s.y + (Math.random() - 0.5) * 10, age: 0, str: 1 - k * 0.15, seed: Math.random() * 6.28 }), 380 + k * 90);
