@@ -55,7 +55,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"js/motion.js","revision":"10159b3a61e9"},
   {"url":"js/photos.js","revision":"634bb13011cd"},
   {"url":"js/planner.js","revision":"8fef688fa974"},
-  {"url":"js/pool.js","revision":"a59527f7d7e9"},
+  {"url":"js/pool.js","revision":"0303498b4ba3"},
   {"url":"js/problem-shape.js","revision":"f77b5beed108"},
   {"url":"js/problems.js","revision":"3c78c9fb8001"},
   {"url":"js/puzzle.js","revision":"66b64ebb5f79"},

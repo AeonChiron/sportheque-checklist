@@ -275,7 +275,8 @@ export function mountPool(root) {
       if (r > 5) ring(r - 4, `rgba(11,58,116,${fade * 0.28})`, 5);
       ring(r, `rgba(255,255,255,${fade * 0.85})`, 1.4);
     }
-    // Son ombre au sol, un peu en bas à droite; la ligne mouillée autour des pieds.
+    // Son ombre au sol, un peu en bas à droite; la ligne mouillée autour des pieds (pas quand il est caché).
+    if (hero.style.display !== 'none') {
     const sh = ctx.createRadialGradient(s.x + 14, s.y + 4, 0, s.x + 14, s.y + 4, s.size * 0.5);
     sh.addColorStop(0, 'rgba(6,38,79,.36)'); sh.addColorStop(1, 'rgba(6,38,79,0)');
     ctx.fillStyle = sh;
@@ -283,6 +284,7 @@ export function mountPool(root) {
     ctx.beginPath(); ctx.arc(s.x + 14, s.y + 4, s.size * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.ellipse(s.x, s.y, s.size * 0.36 * (1 + Math.sin(t * 3) * 0.03), 9, s.lean * 0.15 * Math.PI / 180, 0, Math.PI * 2); ctx.stroke();
+    }
     // Le lapin.
     const bob = Math.sin(t * 2.2) * 1.6;
     const sq = Math.max(-0.06, Math.min(0.06, s.sq));
