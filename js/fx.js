@@ -270,7 +270,10 @@ let tokN = 0;
 
 const SOUNDS = {
   // ---------- Niveau 1 ----------
-  tap(t) { click(t); }, // un bouton : un vrai clic
+  // Le toucher d'un bouton suit son importance (propriétaire, Q75 : « ça dépend de l'importance », −30 %) :
+  tap(t) { click(t, { gain: 0.14 }); }, // un bouton ordinaire : un vrai clic
+  tapSoft(t) { click(t, { gain: 0.09, kind: 'soft', verb: 0.08 }); }, // un lien, un onglet, un petit bouton : à peine
+  tapBig(t) { click(t, { gain: 0.15 }); tok(t + 0.004, 523.25, 0.1); }, // l'action principale : un clic avec un petit bloc de bois chaud
   tick(t) { click(t, { gain: 0.16, kind: 'tick', pan: -0.1 }); click(t + 0.032, { gain: 0.1, kind: 'tick', pan: 0.1 }); }, // interrupteur, onglet : « tic-tic »
   open(t) { whoosh(t, { up: true }); click(t + 0.12, { gain: 0.09, kind: 'soft', verb: 0.25 }); }, // une feuille monte et se pose
   close(t) { whoosh(t, { up: false, gain: 0.06, dur: 0.2 }); click(t + 0.1, { gain: 0.06, kind: 'soft', verb: 0.2 }); },
@@ -352,6 +355,12 @@ const SOUNDS = {
     whoosh(t, { up: true, gain: 0.09, dur: 0.28 });
     bell(PENTA[10], t + 0.2, { gain: 0.09, dur: 1.4, ratio: 3.5, index: 1.8, pan: -0.2, verb: 0.7 });
     bell(PENTA[13], t + 0.3, { gain: 0.07, dur: 1.6, ratio: 3.5, index: 2, pan: 0.35, verb: 0.75 });
+  },
+  // Un superviseur t'a ajouté une tâche (Q76) : une cloche douce, deux notes qui montent, dans le médium
+  // (jamais aiguë), plus calme que « urgent ».
+  bell(t) {
+    bell(PENTA[5], t, { gain: 0.09, dur: 1.8, ratio: 2, index: 1.4, pan: -0.12, verb: 0.6 });
+    bell(PENTA[7], t + 0.16, { gain: 0.07, dur: 2.2, ratio: 2, index: 1.2, pan: 0.12, verb: 0.65 });
   },
   urgent(t) {
     thump(90, t, 0.25, 0.25);
@@ -479,9 +488,9 @@ export function fxSoundAt(name, at, opts = {}) {
 }
 // Chaque toucher de bouton a son son (propriétaire) : si le bouton n'a pas déjà joué
 // son propre son, le « tap » mélodique part juste après.
-export function clickTap(ok = () => true) {
+export function clickTap(ok = () => true, kind = 'tap') {
   const t0 = performance.now();
-  setTimeout(() => { if (lastAt < t0 && ok()) fxSound('tap'); }, 0);
+  setTimeout(() => { if (lastAt < t0 && ok()) fxSound(kind); }, 0);
 }
 
 // ---------- Verre d'eau (progrès du quart) ----------

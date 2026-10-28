@@ -34,7 +34,7 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"icons/rabbit-rest.svg","revision":"38b94e634be1"},
   {"url":"icons/rabbit.svg","revision":"e23c8e5bcb2a"},
   {"url":"index.html","revision":"c5bf52a7620a"},
-  {"url":"js/app.js","revision":"7e5236eb2bc4"},
+  {"url":"js/app.js","revision":"d2aa5852f3d4"},
   {"url":"js/auth.js","revision":"30affe1946a9"},
   {"url":"js/avatars.js","revision":"6a1e3a290665"},
   {"url":"js/board-shape.js","revision":"e8d853425827"},
@@ -44,10 +44,10 @@ const MANIFEST = [{"url":"fonts/fraunces-latin-full-normal.woff2","revision":"9a
   {"url":"js/config.js","revision":"b6f2e28fde88"},
   {"url":"js/fictive.js","revision":"1dfa6f93918c"},
   {"url":"js/floor-layout.js","revision":"929d6d428978"},
-  {"url":"js/fx.js","revision":"f190e8799384"},
+  {"url":"js/fx.js","revision":"a062fbdf132e"},
   {"url":"js/gym3d.js","revision":"613145263544"},
   {"url":"js/holidays.js","revision":"b3a52a4f2385"},
-  {"url":"js/i18n.js","revision":"3e849887f823"},
+  {"url":"js/i18n.js","revision":"5d46beadfab9"},
   {"url":"js/illustrations.js","revision":"c6c8e281c2b5"},
   {"url":"js/keep.js","revision":"7c020b6864e5"},
   {"url":"js/manual.js","revision":"af0d644cfa96"},
@@ -93,10 +93,12 @@ registerRoute(
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data?.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Sporthèque', {
+  // L'app est ouverte : elle se met à jour tout de suite (et sonne la cloche douce pour une tâche ajoutée, Q76).
+  const tell = self.clients.matchAll({ type: 'window' }).then((list) => list.forEach((c) => c.postMessage({ type: 'push', tag: d.tag || '', bell: Boolean(d.bell) })));
+  e.waitUntil(Promise.all([tell, self.registration.showNotification(d.title || 'Sporthèque', {
     body: d.body || '', tag: d.tag || undefined, renotify: Boolean(d.tag),
     icon: 'icons/icon-180.png', badge: 'icons/icon-180.png', data: { url: d.url || './' },
-  }));
+  })]));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();

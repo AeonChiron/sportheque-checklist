@@ -596,8 +596,13 @@ async function refreshExtras() {
     const meName = session.user?.name || '';
     // (Un quart que je viens d'accepter ne se répète pas; un quart à moi pris par un collègue se dit clairement.)
     const news = Object.entries(next.overrides).filter(([d, v]) => d >= today && v.by && v.by !== meName && !v.self && !(v.swap && !v.off) && JSON.stringify(extras.overrides?.[d]) !== JSON.stringify(v));
-    const say = ([d, v]) => t(v.swap ? 'ovSwapTaken' : 'ovChanged', v.by, dayWord(d).toLowerCase());
+    const say = ([d, v]) => t(v.swap ? 'ovSwapTaken' : 'ovChanged', v.by, dayInSentence(d));
     if (news.length && extras.seen) setTimeout(() => toast(news.length === 1 ? say(news[0]) : t('ovChangedN', news.length), 'ok'), 900);
+    // Une tâche qu'un superviseur vient de m'ajouter (Q76) : une cloche douce et un message, une seule fois.
+    const had = new Set((extras.tasks || []).map((x) => `${x.id}|${x.date}`));
+    const added = next.tasks.filter((x) => x.date >= today && x.by && x.by !== meName && !had.has(`${x.id}|${x.date}`));
+    const firstOf = [...new Map(added.map((x) => [x.id, x])).values()]; // une tâche qui revient chaque semaine compte une fois
+    if (firstOf.length && extras.seen) setTimeout(() => { sfx('bell'); toast(firstOf.length === 1 ? t('taskNewFor', firstOf[0].by, firstOf[0].title, dayInSentence(firstOf[0].date)) : t('taskNewForN', firstOf[0].by, firstOf.length), 'ok'); }, news.length ? 3200 : 900);
     next.seen = true;
     extras = next; write(EXTRAS, extras);
     refreshScheduleStatus();
@@ -1249,7 +1254,13 @@ const PZ_TINT = { r: '#1f5cc4', b: '#1f5cc4', y: '#e0a800', g: '#1d8a4a', w: '#6
 const taskPuzzle = (it, done, land = -1) => puzzleHTML({ uid: it.id, art: illustration(it.auto ? 'pointage' : it.photo), n: it.steps.length, done, land, tint: PZ_TINT[plateOf(it)] || '#1f5cc4', label: t('pzLabel', done, it.steps.length) });
 const soundOn = () => prefs.sound !== false && !prefs.calm; // le mode calme coupe tous les sons
 const sfx = (name, opts) => { if (soundOn()) fxSound(name, opts); };
-document.addEventListener('click', (ev) => { if (soundOn() && ev.target.closest('button, [role="button"], a[href], summary, [data-act]')) clickTap(soundOn); }, true);
+// Le son d'un toucher suit l'importance du bouton : l'action principale sonne plus riche, un lien ou un onglet à peine.
+const TAP_BIG = '.btn.primary, .pool-cta, .gl-cta, .hb-tile, [data-tap="big"]';
+const TAP_SOFT = 'a[href], summary, .link, .chip, [role="tab"], [role="switch"], [aria-pressed], .btn.small, .icon-btn, [data-tap="soft"]';
+document.addEventListener('click', (ev) => {
+  const el = soundOn() && ev.target.closest('button, [role="button"], a[href], summary, [data-act]');
+  if (el) clickTap(soundOn, el.matches(TAP_BIG) ? 'tapBig' : el.matches(TAP_SOFT) ? 'tapSoft' : 'tap');
+}, true);
 // iPhone : par défaut, le bouton silencieux coupe les sons et la musique de l'employé continue.
 // « Sons même en silencieux » (Menu) : les sons jouent quand même (la musique peut s'arrêter).
 function applyAudioSession() { try { if (navigator.audioSession) navigator.audioSession.type = prefs.soundSilent ? 'playback' : 'ambient'; } catch { /* ignore */ } }
@@ -4283,6 +4294,14 @@ function countdown(min) {
   return t('cdMin', Math.max(1, min));
 }
 // « Aujourd'hui », « Demain », sinon le jour de la semaine.
+// Le jour au milieu d'une phrase : « aujourd'hui », « jeudi », « jeudi 5 novembre » (plus d'une semaine);
+// en anglais, les jours gardent leur majuscule (« Thursday »).
+function dayInSentence(iso) {
+  const today = todayISO();
+  if (iso === today || iso === addDays(today, 1)) return dayWord(iso).toLowerCase();
+  const w = iso <= addDays(today, 6) ? dayWord(iso) : dateOf(iso).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
+  return lang() === 'fr' ? w.toLowerCase() : w;
+}
 function dayWord(iso) {
   const today = todayISO();
   if (iso === today) return t('today');
@@ -7037,5 +7056,6 @@ if ('serviceWorker' in navigator && isSecureContext) {
   // Une nouvelle version vient de s'installer : on recharge une fois (le quart en cours est déjà enregistré).
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloaded = false;
+  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'push') refreshExtras(); }); // un avis arrive, l'app ouverte se met à jour
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
 }
