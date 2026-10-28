@@ -78,8 +78,8 @@ const webPush = {
   },
 };
 const PUSH_TEXT = {
-  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' }, conge: (who, when) => ({ title: `${who} prend congé`, body: `${when}. C’est dans l’horaire de l’équipe.` }), swapAsk: (who, when, h) => ({ title: `${who} cherche quelqu’un`, body: `Pour son quart du ${when} (${h}). Touche pour répondre.` }), swapOk: (who, when) => ({ title: 'Ton quart est pris', body: `${who} prend ton quart du ${when}. Merci !` }), swapNo: (who, when) => ({ title: 'Pas cette fois', body: `${who} ne peut pas prendre ton quart du ${when}.` }), swapDone: (a, b, when) => ({ title: 'Échange de quart', body: `${b} prend le quart de ${a} le ${when}.` }), nosched: { title: 'Ton horaire est vide', body: 'Entre tes jours de travail une fois : ton quart partira tout seul.' }, weekly: (pct, urgent) => ({ title: 'Ta semaine au gym', body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`}${urgent ? ` · ${urgent} urgent${urgent > 1 ? 's' : ''} à régler` : ' · rien d’urgent'}.` }) },
-  en: { sched: (by) => ({ title: 'Your schedule changed', body: `${by} changed your schedule. Tap to see it.` }), day: (by, d) => ({ title: 'Your shift changed', body: `${by} changed your shift on ${d}.` }), task: (by, title, h) => ({ title: `New task: ${title}`, body: `Added by ${by}${h ? `, at ${h}` : ''}.` }), remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' }, conge: (who, when) => ({ title: `${who} is taking time off`, body: `${when}. It’s in the team schedule.` }), swapAsk: (who, when, h) => ({ title: `${who} is looking for someone`, body: `For their shift on ${when} (${h}). Tap to answer.` }), swapOk: (who, when) => ({ title: 'Your shift is taken', body: `${who} is taking your shift on ${when}. Thanks!` }), swapNo: (who, when) => ({ title: 'Not this time', body: `${who} can’t take your shift on ${when}.` }), swapDone: (a, b, when) => ({ title: 'Shift swap', body: `${b} is taking ${a}’s shift on ${when}.` }), nosched: { title: 'Your schedule is empty', body: 'Enter your work days once: your shift will start by itself.' }, weekly: (pct, urgent) => ({ title: 'Your week at the gym', body: `${pct === null ? 'No shift sent' : `The gym: ${pct}% of tasks done`}${urgent ? ` · ${urgent} urgent to fix` : ' · nothing urgent'}.` }) },
+  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' }, conge: (who, when) => ({ title: `${who} prend congé`, body: `${when}. C’est dans l’horaire de l’équipe.` }), swapAsk: (who, when, h) => ({ title: `${who} cherche quelqu’un`, body: `Pour son quart du ${when} (${h}). Touche pour répondre.` }), swapOk: (who, when) => ({ title: 'Ton quart est pris', body: `${who} prend ton quart du ${when}. Merci !` }), swapNo: (who, when) => ({ title: 'Pas cette fois', body: `${who} ne peut pas prendre ton quart du ${when}.` }), swapDone: (a, b, when) => ({ title: 'Échange de quart', body: `${b} prend le quart de ${a} le ${when}.` }), monthly: (m, pct, fixed) => ({ title: `Le résumé de ${m} est prêt`, body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`} · ${fixed} problème${fixed > 1 ? 's' : ''} réglé${fixed > 1 ? 's' : ''}.` }), nosched: { title: 'Ton horaire est vide', body: 'Entre tes jours de travail une fois : ton quart partira tout seul.' }, weekly: (pct, urgent) => ({ title: 'Ta semaine au gym', body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`}${urgent ? ` · ${urgent} urgent${urgent > 1 ? 's' : ''} à régler` : ' · rien d’urgent'}.` }) },
+  en: { sched: (by) => ({ title: 'Your schedule changed', body: `${by} changed your schedule. Tap to see it.` }), day: (by, d) => ({ title: 'Your shift changed', body: `${by} changed your shift on ${d}.` }), task: (by, title, h) => ({ title: `New task: ${title}`, body: `Added by ${by}${h ? `, at ${h}` : ''}.` }), remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' }, conge: (who, when) => ({ title: `${who} is taking time off`, body: `${when}. It’s in the team schedule.` }), swapAsk: (who, when, h) => ({ title: `${who} is looking for someone`, body: `For their shift on ${when} (${h}). Tap to answer.` }), swapOk: (who, when) => ({ title: 'Your shift is taken', body: `${who} is taking your shift on ${when}. Thanks!` }), swapNo: (who, when) => ({ title: 'Not this time', body: `${who} can’t take your shift on ${when}.` }), swapDone: (a, b, when) => ({ title: 'Shift swap', body: `${b} is taking ${a}’s shift on ${when}.` }), monthly: (m, pct, fixed) => ({ title: `Your ${m} summary is ready`, body: `${pct === null ? 'No shift sent' : `The gym: ${pct}% of tasks done`} · ${fixed} problem${fixed === 1 ? '' : 's'} fixed.` }), nosched: { title: 'Your schedule is empty', body: 'Enter your work days once: your shift will start by itself.' }, weekly: (pct, urgent) => ({ title: 'Your week at the gym', body: `${pct === null ? 'No shift sent' : `The gym: ${pct}% of tasks done`}${urgent ? ` · ${urgent} urgent to fix` : ' · nothing urgent'}.` }) },
 };
 
 export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => fetch(...a), clock = () => new Date() }) {
@@ -583,7 +583,40 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
       await pushes().setJSON(key, { ...rec, reminded: day });
       sent += await sendTo(key, (T) => ({ ...T.remind(slot.start), tag: `r-${day}`, url: './' }), 'remind', now);
     }
-    return sent + await weeklyDue(now) + await noSchedDue(now);
+    return sent + await weeklyDue(now) + await monthlyDue(now) + await noSchedDue(now);
+  }
+  // Propriétaire (Q57) : le résumé du mois, fait tout seul le 1er (9 h) pour les superviseurs :
+  // le % du gym, les problèmes réglés. Jamais une personne. Même interrupteur que le résumé de la semaine.
+  async function monthlyDue(now = new Date()) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map((x) => [x.type, x.value]));
+    if (Number(parts.day) !== 1 || Number(parts.hour) !== 9 || Number(parts.minute) > 14) return 0;
+    const day = localDay(now);
+    const first = `${plusDays(day, -1).slice(0, 8)}01`, last = plusDays(day, -1); // le mois qui vient de finir
+    const { blobs } = await pushes().list();
+    const leads = [];
+    for (const { key } of blobs) {
+      const rec = await pushes().get(key, { type: 'json' });
+      if (!rec?.subs?.length || rec.weekly === false || rec.monthlyFor === day) continue;
+      const u = await users().get(key, { type: 'json' });
+      if (u && !u.removed && lead(u)) leads.push([key, rec]);
+    }
+    if (!leads.length) return 0;
+    let done = 0, total = 0;
+    for (const d of datesIn(first, last, 31)) {
+      for (const sh of (await board().get(d, { type: 'json' })) || []) if (!sh.open && !sh.ghost) { const it = (sh.items || []).filter((i) => i.id !== 'pointage'); done += it.filter((i) => i.status === 'done').length; total += it.length; }
+    }
+    const pct = total ? Math.round((100 * done) / total) : null;
+    const { blobs: pb } = await problems().list();
+    let fixed = 0;
+    for (const { key } of pb) { const pr = await problems().get(key, { type: 'json' }); const at = pr?.resolvedAt ? localDay(pr.resolvedAt) : ''; if (pr?.status === 'resolved' && at >= first && at <= last) fixed += 1; }
+    let sent = 0;
+    for (const [key, rec] of leads) {
+      await pushes().setJSON(key, { ...rec, monthlyFor: day });
+      const L = rec.lang === 'en' ? 'en' : 'fr';
+      const month = new Date(`${first}T12:00:00Z`).toLocaleDateString(L === 'en' ? 'en-CA' : 'fr-CA', { month: 'long', timeZone: 'UTC' });
+      sent += await sendTo(key, (T) => ({ ...T.monthly(month, pct, fixed), tag: `m-${day}`, url: './#historique' }), 'weekly', now);
+    }
+    return sent;
   }
   // Propriétaire (Q47) : pas encore d'horaire → un petit rappel une fois par semaine (lundi, 10 h).
   async function noSchedDue(now = new Date()) {

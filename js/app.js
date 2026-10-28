@@ -3578,24 +3578,11 @@ function upcomingList(skip = '') {
 
 // L'analyse du superviseur : quelques phrases simples sur la période choisie,
 // comparées à la période d'avant. Jamais de classement d'employés.
+// L'analyse : le % et sa flèche vivent dans les cartes du haut (un seul calcul, jamais deux chiffres
+// qui se contredisent); ici, ce qui demande un mot de plus.
 function teamAnalysis(span) {
   if (!span.length) return '';
-  const today = todayISO();
-  const pct = (list) => { const m = list.map(metrics); const tot = m.reduce((a, x) => a + x.total, 0); return tot ? Math.round((100 * m.reduce((a, x) => a + x.done, 0)) / tot) : null; };
-  const range = {
-    day: [addDays(today, -1), addDays(today, -1)],
-    week: [addDays(mondayOf(today), -7), addDays(mondayOf(today), -1)],
-    month: [`${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`, addDays(`${today.slice(0, 8)}01`, -1)],
-    year: [`${Number(today.slice(0, 4)) - 1}-01-01`, `${Number(today.slice(0, 4)) - 1}-12-31`],
-  }[hist.period];
-  const who = (x) => !hist.who || (hist.by === 'shift' ? String(x.shift) : (x.name || '').trim() || '?') === hist.who;
-  const prev = range ? hist.recent.filter((x) => x.date >= range[0] && x.date <= range[1] && who(x)) : [];
-  const now = pct(span), before = prev.length ? pct(prev) : null;
   const lines = [];
-  if (now !== null) {
-    const d = before === null ? '' : now === before ? t('anSame') : t(now > before ? 'anUp' : 'anDown', Math.abs(now - before));
-    lines.push(`<li><b class="num">${now}%</b> ${esc(t('anDone'))}${d ? ` <span class="an-trend ${now >= before ? 'up' : 'down'}">${esc(d)}</span>` : ''}</li>`);
-  }
   const full = span.filter((x) => { const m = metrics(x); return m.total && m.done === m.total; }).length;
   lines.push(`<li>${esc(t('anFull', full, span.length))}</li>`);
   const count = (arr) => [...arr.reduce((m, k) => m.set(k, (m.get(k) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]).slice(0, 3);
@@ -3605,6 +3592,146 @@ function teamAnalysis(span) {
   const probs = count(flags.filter((f) => f.category !== 'difficile').map((f) => catName(f.category)));
   lines.push(probs.length ? `<li>${esc(t('anProbs'))} ${probs.map(([k, n]) => `<b>${esc(k)}</b>${n > 1 ? ` ×${n}` : ''}`).join(', ')}</li>` : `<li>${esc(t('anNoProbs'))}</li>`);
   return `<section class="hi-tally an-card"><h2>${esc(t('anTitle'))}</h2><ul class="an-list">${lines.join('')}</ul></section>`;
+}
+
+// ---------- Ronde 6 : les rapports des superviseurs ----------
+const HF = ['all', 'am', 'pm', 'flags', 'todo'];
+const startOf = (x) => x.start || SHIFTS[x.shift]?.start || '12:00';
+function passF(x) {
+  const f = hist.f || 'all';
+  if (f === 'am') return toMin(startOf(x)) < 720;
+  if (f === 'pm') return toMin(startOf(x)) >= 720;
+  if (f === 'flags') return (x.flags || []).length > 0;
+  if (f === 'todo') { const m = metrics(x); return m.total > 0 && m.done < m.total; }
+  return true;
+}
+// Le même calcul partout (tâches faites / tâches prévues de chaque quart) : jamais deux chiffres qui se contredisent.
+function pctOf(list) { let d = 0, n = 0; for (const x of list) { const m = metrics(x); d += m.done; n += m.total; } return n ? Math.round((100 * d) / n) : null; }
+const prevMonth = () => addDays(`${todayISO().slice(0, 8)}01`, -1).slice(0, 7);
+const monthName = (ym) => new Date(`${ym}-15T12:00:00`).toLocaleDateString(locale(), { month: 'long' });
+// La période d'avant, de même longueur (pour les petites flèches ▲ ▼).
+function prevShifts() {
+  const today = todayISO();
+  const r = {
+    day: [addDays(today, -3), addDays(today, -2)],
+    week: [addDays(mondayOf(today), -7), addDays(today, -7)],
+    month: [`${prevMonth()}-01`, addDays(today, -Number(today.slice(8, 10)))],
+    year: [`${Number(today.slice(0, 4)) - 1}-01-01`, `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`],
+  }[hist.period];
+  if (r && hist.period === 'month') r[1] = `${prevMonth()}-${today.slice(8, 10)}` <= addDays(`${today.slice(0, 8)}01`, -1) ? `${prevMonth()}-${today.slice(8, 10)}` : addDays(`${today.slice(0, 8)}01`, -1);
+  return r ? hist.recent.filter((x) => !x.open && x.date >= r[0] && x.date <= r[1] && passF(x)) : [];
+}
+function sumCards(span) {
+  const prev = prevShifts();
+  const now = pctOf(span), before = prev.length ? pctOf(prev) : null;
+  const fl = span.reduce((a, x) => a + (x.flags || []).length, 0), flPrev = prev.length ? prev.reduce((a, x) => a + (x.flags || []).length, 0) : null;
+  const delta = (a, b, pts, goodUp) => (a === null || b === null ? '' : a === b ? `<small class="rc-d same">${esc(t('rcSame'))}</small>`
+    : `<small class="rc-d ${(a > b) === goodUp ? 'up' : 'down'}" title="${esc(t('rcVsBefore'))}">${a > b ? '▲' : '▼'} ${Math.abs(a - b)}${pts ? ` ${t('rcPts', Math.abs(a - b))}` : ''}<span class="sr-only"> ${esc(t('rcVsBefore'))}</span></small>`);
+  return `<div class="rc-cards">
+    <div class="rc-card main${now === null ? '' : now >= 90 ? ' ok' : now >= 60 ? ' mid' : ' low'}"><span class="rc-l">${esc(t('rcDone'))}</span><b class="num">${now === null ? '–' : `${now}<small>%</small>`}</b>${delta(now, before, true, true)}</div>
+    <div class="rc-card"><span class="rc-l">${esc(t('rcShifts'))}</span><b class="num" data-count>${span.length}</b>${delta(span.length, prev.length ? prev.length : null, false, true)}</div>
+    <div class="rc-card${fl ? ' bad' : ''}"><span class="rc-l">${esc(t('rcFlags'))}</span><b class="num" data-count>${fl}</b>${delta(fl, flPrev, false, false)}</div>
+  </div>`;
+}
+// La courbe : le % du gym jour par jour (ou mois par mois pour l'année). Une seule série, une seule couleur.
+function trendBuckets() {
+  const today = todayISO(), p = hist.period;
+  const all = hist.recent.filter((x) => !x.open && passF(x));
+  if (p === 'year') {
+    const y = today.slice(0, 4), m = Number(today.slice(5, 7));
+    return Array.from({ length: m }, (_, i) => { const ym = `${y}-${String(i + 1).padStart(2, '0')}`; const l = all.filter((x) => x.date.startsWith(ym));
+      return { key: ym, label: new Date(`${ym}-15T12:00:00`).toLocaleDateString(locale(), { month: 'narrow' }), full: cap(monthName(ym)), pct: pctOf(l), n: l.length, now: i + 1 === m }; });
+  }
+  const dates = p === 'week' ? weekDates(mondayOf(today)).filter((d) => d <= today) : p === 'month' ? Array.from({ length: Number(today.slice(8, 10)) }, (_, i) => `${today.slice(0, 8)}${String(i + 1).padStart(2, '0')}`) : Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  return dates.map((d) => { const l = all.filter((x) => x.date === d);
+    return { key: d, label: p === 'month' ? String(Number(d.slice(8, 10))) : dateOf(d).toLocaleDateString(locale(), { weekday: 'narrow' }), full: longDay(d), pct: pctOf(l), n: l.length, now: d === today }; });
+}
+function trendChart() {
+  const b = trendBuckets();
+  if (!b.some((x) => x.n)) return '';
+  const W = 320, H = 140, L = 34, B = 20, T = 10;
+  const cw = (W - L - 4) / b.length, bw = Math.max(4, Math.min(20, cw - 4));
+  const y = (v) => T + (H - B - T) * (1 - v / 100);
+  const every = b.length > 12 ? 5 : 1;
+  const bars = b.map((x, i) => {
+    const cx = L + i * cw + cw / 2, x0 = cx - bw / 2, y0 = y(0);
+    const tip = `${x.full} · ${x.n ? `${x.pct} % · ${t('nShifts', x.n)}` : t('rcNoShift')}`;
+    const lab = (i % every === 0 || i === b.length - 1) ? `<text class="rc-x${x.now ? ' now' : ''}" x="${cx}" y="${H - 5}" text-anchor="middle">${esc(x.label)}</text>` : '';
+    if (!x.n) return `<g><circle class="rc-empty" cx="${cx}" cy="${y0 - 2}" r="2"/>${lab}<rect class="rc-hit" x="${L + i * cw}" y="${T}" width="${cw}" height="${H - B - T}" data-tip="${esc(tip)}"/></g>`;
+    const yt = y(x.pct), h = y0 - yt, r = Math.min(4, bw / 2, h);
+    const d = `M${x0},${y0} V${yt + r} Q${x0},${yt} ${x0 + r},${yt} H${x0 + bw - r} Q${x0 + bw},${yt} ${x0 + bw},${yt + r} V${y0} Z`;
+    return `<g><path class="rc-bar${x.now ? ' now' : ''}" d="${d}"/>${lab}<rect class="rc-hit" x="${L + i * cw}" y="${T}" width="${cw}" height="${H - B - T}" data-tip="${esc(tip)}"/></g>`;
+  }).join('');
+  const grid = [0, 50, 100].map((v) => `<line class="rc-grid${v ? '' : ' base'}" x1="${L}" x2="${W - 2}" y1="${y(v)}" y2="${y(v)}"/><text class="rc-y" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`).join('');
+  const rows = b.map((x) => `<tr><th scope="row">${esc(x.full)}</th><td>${x.n ? `${x.pct} %` : '–'}</td><td>${x.n}</td></tr>`).join('');
+  return `<section class="rc-trend"><div class="rc-th"><h2>${esc(t('rcTrend'))}</h2><small>${esc(t(hist.period === 'year' ? 'rcTrendMonths' : 'rcTrendDays'))}</small></div>
+    <div class="rc-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t('rcTrendAria'))}">${grid}${bars}</svg><div class="rc-tip" hidden></div></div>
+    <table class="sr-only"><caption>${esc(t('rcTrend'))}</caption><thead><tr><th>${esc(t('rcDay'))}</th><th>${esc(t('rcDone'))}</th><th>${esc(t('rcShifts'))}</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+}
+// L'info-bulle de la courbe : au survol (souris) ou au toucher.
+function wireTrend() {
+  const box = $('#historyBody .rc-chart');
+  if (!box) return;
+  const tip = box.querySelector('.rc-tip');
+  const showTip = (e) => {
+    const hit = e.target.closest('.rc-hit');
+    if (!hit) { tip.hidden = true; return; }
+    tip.textContent = hit.dataset.tip; tip.hidden = false;
+    const r = box.getBoundingClientRect(), hr = hit.getBoundingClientRect();
+    tip.style.left = `${Math.max(4, Math.min(r.width - tip.offsetWidth - 4, hr.left - r.left + hr.width / 2 - tip.offsetWidth / 2))}px`;
+    for (const g of box.querySelectorAll('.rc-bar.hover')) g.classList.remove('hover');
+    hit.previousElementSibling?.previousElementSibling?.classList?.add('hover');
+  };
+  box.addEventListener('pointermove', showTip);
+  box.addEventListener('pointerdown', showTip);
+  box.addEventListener('pointerleave', () => { tip.hidden = true; for (const g of box.querySelectorAll('.rc-bar.hover')) g.classList.remove('hover'); });
+}
+// Le résumé du mois (Q57) : fait tout seul le 1er. Le % du gym, ce qui manque le plus souvent,
+// les problèmes réglés et les idées qui ont marché (« si ça marche, ça va dans le rapport »).
+function monthRecap(ym) {
+  const list = hist.recent.filter((x) => !x.open && x.date.startsWith(ym));
+  const by = new Map();
+  for (const sh of list) for (const it of summaryReport(sh).items) { const r = by.get(it.title) || by.set(it.title, { title: it.title, done: 0, n: 0 }).get(it.title); r.n++; if (it.status === 'done') r.done++; }
+  const missed = [...by.values()].filter((r) => r.n >= 2 && r.done < r.n).sort((a, b) => a.done / a.n - b.done / b.n || b.n - a.n).slice(0, 3);
+  const fixed = (boss.problems || []).filter((p) => p.status === 'resolved' && (p.resolvedAt || '').slice(0, 7) === ym).length;
+  const worked = (coin.ideas || []).filter((i) => i.status === 'worked' && (i.statusAt || '').slice(0, 7) === ym);
+  return { list, pct: pctOf(list), missed, fixed, worked };
+}
+function recapHTML(ym) {
+  const R = monthRecap(ym);
+  if (!R.list.length) return `<p class="hb-quiet">${esc(t('rcRecapEmpty'))}</p>`;
+  return `<div class="rc-recap-body">
+    <div class="rc-recap-top">${wkRing(R.pct ?? 0, ` big${R.pct >= 90 ? ' ok' : R.pct >= 60 ? ' mid' : ' low'}`)}<div><b>${esc(t('wkGymDone', R.pct ?? 0))}</b><small>${esc(t('rcRecapShifts', R.list.length))}</small></div></div>
+    <p class="block-label">${esc(t('rcRecapMissed'))}</p>${R.missed.length ? `<ul class="rc-recap-list">${R.missed.map((r) => `<li><span>${esc(r.title)}</span><b class="num">${r.done}/${r.n}</b></li>`).join('')}</ul>` : `<p class="hb-quiet">${esc(t('rcRecapNoMiss'))}</p>`}
+    <p class="block-label">${esc(t('rcRecapFixed'))}</p><p class="rc-recap-n"><b class="num">${R.fixed}</b> ${esc(t('rcRecapFixedN', R.fixed))}</p>
+    ${R.worked.length ? `<p class="block-label">${esc(t('rcRecapWorked'))}</p><ul class="rc-recap-list ideas">${R.worked.map((i) => `<li><span>${esc(i.text)}</span><small>${esc(i.by)}</small></li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+function openRecap(ym) {
+  openSheet(`<div class="sheet-head"><p class="eyebrow">${esc(t('rcRecapEyebrow'))}</p><h2>${esc(t('rcRecapTitle', monthName(ym)))}</h2></div>${recapHTML(ym)}`, null, `<button type="button" class="btn primary" data-close-sheet>${esc(t('close'))}</button>`);
+  $('#sheetFoot [data-close-sheet]')?.addEventListener('click', closeSheet);
+}
+// La première semaine du mois, en haut des rapports : « Le résumé de septembre est prêt ».
+function recapBanner() {
+  const ym = prevMonth();
+  if (Number(todayISO().slice(8, 10)) > 7 || prefs.recapSeen === ym || !hist.recent.some((x) => x.date.startsWith(ym))) return '';
+  const R = monthRecap(ym);
+  return `<section class="rc-recap-banner"><button type="button" class="rc-rb-main" data-recapopen><span class="rc-rb-ico">${HUB_ICO.week}</span><span><b>${esc(t('rcRecapReady', monthName(ym)))}</b><small>${esc(t('wkGymDone', R.pct ?? 0))} · ${esc(t('rcRecapFixedShort', R.fixed))}</small></span>${CHEV_R}</button><button type="button" class="rc-rb-x" data-recapx aria-label="${esc(t('close'))}">✕</button></section>`;
+}
+// « Exporter le mois » (Q58) : un fichier qu'Excel ouvre (CSV), seulement si on le veut.
+function exportMonth() {
+  const ym = todayISO().slice(0, 7);
+  const list = hist.recent.filter((x) => !x.open && x.date.startsWith(ym) && passF(x)).sort((a, b) => a.date.localeCompare(b.date) || startOf(a).localeCompare(startOf(b)));
+  const sep = lang() === 'fr' ? ';' : ',';
+  const cell = (v) => { const x = String(v ?? ''); return /[";,\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+  const head = t('rcCsvHead');
+  const rows = list.map((x) => { const m = metrics(x); return [x.date, SHIFTS[x.shift]?.[lang()].short || '', x.start || '', x.end || '', x.name || '', m.done, m.total, m.total ? m.pct : '', (x.flags || []).length].map(cell).join(sep); });
+  const blob = new Blob([`﻿${head.map(cell).join(sep)}\n${rows.join('\n')}\n`], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `${(CONFIG.gymName || 'gym').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${ym}.csv`;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  sfx('save'); toast(t('rcExported', list.length), 'ok');
 }
 
 function renderHistory({ animate = true } = {}) {
@@ -3626,6 +3753,7 @@ function renderHistory({ animate = true } = {}) {
   const whoBar = isBoss() && shifts.length ? `<div class="segmented hi-by" role="tablist">${['who', 'shift'].map((b) => `<button type="button" role="tab" data-hby="${b}" aria-selected="${(hist.by || 'who') === b}">${esc(t(b === 'who' ? 'byEmployee' : 'byShift'))}</button>`).join('')}</div>
     <div class="hi-who">${['', ...names].map((n) => `<button type="button" class="chip" data-hwho="${esc(n)}" aria-pressed="${hist.who === n}">${esc(n ? labelOf(n) : t('teamAll'))}</button>`).join('')}</div>` : '';
   if (hist.who) shifts = shifts.filter((x) => keyOf(x) === hist.who);
+  if (bossWatching()) shifts = shifts.filter(passF); // les filtres du superviseur (jamais par personne)
   $('#hiEyebrow').textContent = [CONFIG.gymName, t('floor')].filter(Boolean).join(' · ');
 
   // Par jour, le plus récent en haut; dans un jour, le dernier enregistré en haut.
@@ -3667,26 +3795,27 @@ function renderHistory({ animate = true } = {}) {
   }
 
   let k = 0;
-  const groups = dates.map((d) => `<section class="hi-day">
-      <div class="hi-dayhead"><h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', byDate.get(d).length))}</span></div>
+  const dayHead = (d) => { const l = byDate.get(d), pc = pctOf(l), fl = l.reduce((a, x) => a + (x.flags || []).length, 0);
+    return bossWatching() ? `<div class="hi-dayhead rc-dayhead">${pc === null ? '' : wkRing(pc, pc >= 90 ? ' ok' : pc >= 60 ? ' mid' : ' low')}<h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', l.length))}${fl ? ` · ⚑ ${fl}` : ''}</span></div>`
+      : `<div class="hi-dayhead"><h2>${esc(dayTitle(d))}</h2><span class="num">${esc(t('nShifts', l.length))}</span></div>`; };
+  const groups = dates.map((d) => `<section class="hi-day${bossWatching() ? ' rc-day' : ''}">
+      ${dayHead(d)}
       ${byDate.get(d).map((s) => { const i = k++; return adminPowers() ? `<div class="hi-row">${histCard(s, i)}<button type="button" class="hi-del" data-hdel="${i}" aria-label="${esc(t('histDelete'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>` : histCard(s, i); }).join('')}
     </section>`).join('');
 
   $('#history').classList.remove('dash-mode');
   if (bossWatching()) {
-    // La page du patron : une phrase, les filtres, ce qui manque, puis les quarts. Rien d'autre.
+    // Propriétaire (D5) : beau, utile, facile. La période, trois chiffres, une seule courbe, des filtres
+    // simples (jamais par personne : on aide, on ne note pas), ce qui manque, puis les jours en cartes.
     const per = `<div class="segmented hi-period" role="tablist">${['day', 'week', 'month', 'year'].map((k2) => `<button type="button" role="tab" data-hper="${k2}" aria-selected="${hist.period === k2}">${esc(t(`per_${k2}`))}</button>`).join('')}</div>`;
-    const sum = !ready ? '' : span.length ? t('teamSum', span.length, hist.pctDone, nFlags) : t('teamNone');
-    const bstrip = span.length ? `<div class="ap-stats hi-stats">
-      <div><b class="num" data-count>${span.length}</b><span>${esc(t('statShifts', span.length))}</span></div>
-      <div class="${hist.pctDone === 100 ? 'ok' : ''}"><b class="num">${hist.pctDone}%</b><span>${esc(t('statTasksDone'))}</span></div>
-      <div class="${nFlags ? 'bad' : ''}"><b class="num" data-count>${nFlags}</b><span>${esc(t('statFlags', nFlags))}</span></div>
-    </div>` : '';
-    $('#historyBody').innerHTML = `${urgentBlock()}${per}${ready ? `<p class="team-sum">${esc(sum)}</p>${whoBar}${bstrip}${teamAnalysis(span)}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
+    const chips = `<div class="hi-who rc-filters" role="group" aria-label="${esc(t('rcFilter'))}">${HF.map((k2) => `<button type="button" class="chip" data-hf="${k2}" aria-pressed="${(hist.f || 'all') === k2}">${esc(t(`rcF_${k2}`))}</button>`).join('')}</div>`;
+    const month = hist.period === 'month' ? `<div class="rc-month-acts"><button type="button" class="btn ghost" data-hrecap>${HUB_ICO.week}<span>${esc(t('rcRecapBtn', monthName(prevMonth())))}</span></button>${span.length ? `<button type="button" class="btn ghost" data-hexport>${esc(t('rcExport'))}</button>` : ''}</div>` : '';
+    $('#historyBody').innerHTML = `${urgentBlock()}${recapBanner()}${per}${ready ? `${sumCards(span)}${trendChart()}${chips}${span.length ? `${teamAnalysis(span)}${tally}<div class="hi-list${animate ? ' cascade' : ''}">${groups}</div>` : `<p class="team-sum">${esc(t('teamNone'))}</p>`}${month}` : '<div class="hi-skel" aria-hidden="true"><i></i><i></i><i></i></div>'}
       <div class="hi-links">
         <button type="button" class="hi-link tips" data-hlink="tips">${HERO_ICONS.tips}<span><b>${esc(t('dashTips'))}</b><small>${esc(t('dashTipsSub'))}</small></span></button>
         <button type="button" class="hi-link overview" data-hlink="overview">${HERO_ICONS.overview}<span><b>${esc(t('dashOverview'))}</b><small>${esc(t('dashOverviewSub'))}</small></span></button>
       </div>`;
+    wireTrend();
     if (animate && ready) countUp($('#historyBody'));
     return;
   }
@@ -3716,6 +3845,12 @@ function renderHistory({ animate = true } = {}) {
 $('#historyBody').addEventListener('click', (ev) => {
   const pid = ev.target.closest('[data-pid]')?.dataset.pid;
   if (pid) { location.hash = `probleme=${encodeURIComponent(pid)}`; return; }
+  if (ev.target.closest('[data-hexport]')) { exportMonth(); return; }
+  if (ev.target.closest('[data-hrecap]')) { openRecap(prevMonth()); return; }
+  if (ev.target.closest('[data-recapopen]')) { openRecap(prevMonth()); return; }
+  if (ev.target.closest('[data-recapx]')) { prefs.recapSeen = prevMonth(); savePrefs(); sfx('toggle'); renderHistory({ animate: false }); return; }
+  const hf = ev.target.closest('[data-hf]');
+  if (hf) { hist.f = hf.dataset.hf; sfx('tab'); flip($('#historyBody'), '.hi-card, .hi-tally, .rc-card', () => renderHistory({ animate: false })); return; }
   const el = ev.target.closest('[data-hmode], [data-hwk], [data-hi], [data-upwk], [data-up], [data-hper], [data-hdel], [data-hwho], [data-hby]');
   if (!el || el.disabled) return;
   const ds = el.dataset;
@@ -5220,7 +5355,7 @@ function renderHub({ animate = true } = {}) {
 // surveille pas); les jours à venir, qui travaille. On change de semaine avec les flèches.
 // Toucher un jour ouvre sa journée : qui a travaillé, ce qui a été fait, les mots laissés.
 const wk = { mon: '', days: {}, loading: {} };
-const WK_BACK = 8; // jusqu'à 8 semaines en arrière
+const WK_BACK = 4; // jusqu'à 4 semaines en arrière (propriétaire, Q55)
 // force : la semaine en cours se recharge à chaque visite (un quart vient peut-être d'être envoyé).
 async function ensureWeek(mon, force = false) {
   if (!mon || mon > todayISO() || (wk.days[mon] && !force) || wk.loading[mon]) return;
@@ -5238,7 +5373,7 @@ function rerenderWeek() { if (current === 'hub') renderHub({ animate: false }); 
 // Le résumé d'une journée, pour tout le gym.
 function dayDigest(d) {
   const list = shiftsOn(d);
-  const done = new Map(), left = new Map(), flags = [], notes = [];
+  const done = new Map(), left = new Map(), zoneOf = new Map(), flags = [], notes = [];
   let n = 0, tot = 0;
   for (const s of list) {
     let p = null;
@@ -5248,13 +5383,14 @@ function dayDigest(d) {
       tot++;
       // Les grosses tâches d'abord (zone à fond, tâche de la semaine, tâches spéciales), puis le reste.
       const big = /profondeur|hebdo|special|^as-|miroir|tuile/.test(it.id) ? 0 : 1;
+      if (it.zone && !zoneOf.has(it.title)) zoneOf.set(it.title, it.zone);
       if (st.get(it.id) === 'done') { n++; if (!done.has(it.title)) done.set(it.title, big); } else if (!left.has(it.title)) left.set(it.title, big);
     }
     for (const fl of s.flags || []) flags.push(fl);
     if (s.handoff?.trim()) notes.push({ name: s.name.split(' ')[0], text: s.handoff.trim() });
   }
   const order = (m) => [...m.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => k);
-  return { shifts: list, n, tot, pct: tot ? Math.round((100 * n) / tot) : 0, done: order(done), left: order(left).filter((k) => !done.has(k)), flags, notes };
+  return { shifts: list, n, tot, pct: tot ? Math.round((100 * n) / tot) : 0, done: order(done), left: order(left).filter((k) => !done.has(k)), zoneOf, flags, notes };
 }
 const wkRing = (pct, cls = '') => `<span class="wk-ring${cls}" style="--p:${pct}"><b class="num">${pct}</b></span>`;
 function weekCard() {
@@ -5265,6 +5401,7 @@ function weekCard() {
   const lead = bossWatching();
   const label = off === 0 ? t('wkThis') : off === -1 ? t('wkLast') : off === 1 ? t('wkNext') : weekRange(mon);
   const loaded = mon > todayISO() || wk.days[mon];
+  let anyGone = false, anyMisc = false;
   const cells = weekDates(mon).map((d) => {
     const past = d < todayISO(), today = d === todayISO();
     const on = peopleOn(d);
@@ -5273,18 +5410,22 @@ function weekCard() {
     const off = !lead && !mine && extras.overrides?.[d]?.conge;
     const hol = holi(d);
     const dg = past || today ? dayDigest(d) : null;
+    // Un jour passé sans quart envoyé : on montre en gris combien étaient à l'horaire (Q52).
     const mark = dg && dg.tot ? wkRing(dg.pct, dg.pct >= 90 ? ' ok' : dg.pct >= 60 ? ' mid' : ' low')
-      : past ? `<span class="wk-none">${loaded ? '–' : '·'}</span>`
+      : past ? (loaded && people ? `<span class="wk-ppl gone">${HUB_ICO.team}<b class="num">${people}</b></span>` : `<span class="wk-none">${loaded ? '–' : '·'}</span>`)
       : `<span class="wk-ppl">${HUB_ICO.team}<b class="num">${people}</b></span>`;
+    if (past && loaded && !(dg && dg.tot) && people) anyGone = true;
+    const misc = dayTasks(d).length > 0; // une tâche spéciale ce jour-là (Q56)
+    if (misc) anyMisc = true;
     const dn = dateOf(d).toLocaleDateString(locale(), { weekday: 'short' }).replace('.', '');
-    return `<button type="button" class="wk-day${past ? ' past' : ''}${today ? ' today' : ''}${mine ? ' mine' : ''}${hol ? ' hol' : ''}" data-wk-day="${d}" aria-label="${esc([longDay(d), hol && t('holTitle', hol.name), off && t('congeShort')].filter(Boolean).join(' · '))}">
-      ${hol ? `<span class="wk-hol" aria-hidden="true">${HOL_ICO}</span>` : ''}<span class="wk-dn">${esc(dn)}</span><b class="wk-dd num">${dateOf(d).getDate()}</b>${mark}${mine ? `<span class="wk-mine num">${esc(hm(mine.start).replace(/\s/g, ' '))}</span>` : off ? `<span class="wk-mine off">${esc(t('congeShort'))}</span>` : '<span class="wk-mine none"></span>'}</button>`;
+    return `<button type="button" class="wk-day${past ? ' past' : ''}${today ? ' today' : ''}${mine ? ' mine' : ''}${hol ? ' hol' : ''}" data-wk-day="${d}" aria-label="${esc([longDay(d), hol && t('holTitle', hol.name), off && t('congeShort'), misc && t('wkSpecial'), past && !(dg && dg.tot) && loaded && people && t('rcNoShift')].filter(Boolean).join(' · '))}">
+      ${hol ? `<span class="wk-hol" aria-hidden="true">${HOL_ICO}</span>` : ''}${misc ? `<span class="wk-misc" aria-hidden="true">${HUB_ICO.misc}</span>` : ''}<span class="wk-dn">${esc(dn)}</span><b class="wk-dd num">${dateOf(d).getDate()}</b>${mark}${mine ? `<span class="wk-mine num">${esc(hm(mine.start).replace(/\s/g, ' '))}</span>` : off ? `<span class="wk-mine off">${esc(t('congeShort'))}</span>` : '<span class="wk-mine none"></span>'}</button>`;
   }).join('');
   return `<section class="hb-week" id="hbWeek">
     <div class="wk-head"><h2>${hubIco('week')}${esc(t(lead ? 'wkTitleBoss' : 'wkTitle'))}</h2>
       <div class="wk-nav"><button type="button" class="wk-arrow" data-wk-nav="-1" aria-label="${esc(t('wkPrev'))}"${off <= -WK_BACK ? ' disabled' : ''}>${CHEV_R}</button><span class="wk-label"><b>${esc(label)}</b><small class="num">${esc(weekRange(mon))}</small></span><button type="button" class="wk-arrow next" data-wk-nav="1" aria-label="${esc(t('wkNextBtn'))}"${off >= 1 ? ' disabled' : ''}>${CHEV_R}</button></div></div>
     <div class="wk-days">${cells}</div>
-    <p class="wk-legend"><span>${wkRing(100, ' ok tiny')}${esc(t('wkLegendDone'))}</span><span class="wk-ppl">${HUB_ICO.team}${esc(t('wkLegendPeople'))}</span>${lead ? '' : `<span><i class="wk-dot"></i>${esc(t('wkLegendMine'))}</span>`}</p>
+    <p class="wk-legend"><span>${wkRing(100, ' ok tiny')}${esc(t('wkLegendDone'))}</span><span class="wk-ppl">${HUB_ICO.team}${esc(t('wkLegendPeople'))}</span>${anyGone ? `<span class="wk-ppl gone">${HUB_ICO.team}${esc(t('rcNoShift'))}</span>` : ''}${anyMisc ? `<span class="wk-misc-l">${HUB_ICO.misc}${esc(t('wkSpecial'))}</span>` : ''}${lead ? '' : `<span><i class="wk-dot"></i>${esc(t('wkLegendMine'))}</span>`}</p>
   </section>`;
 }
 document.addEventListener('click', (e) => {
@@ -5293,6 +5434,8 @@ document.addEventListener('click', (e) => {
   const day = e.target.closest('[data-wk-day]');
   if (day) openDaySheet(day.dataset.wkDay);
 });
+// Les tâches spéciales d'un jour (pour moi, ou toutes pour un superviseur).
+const dayTasks = (d) => (teamPlan.tasks || []).concat(extras.tasks || []).filter((x, i, a) => x.date === d && a.findIndex((y) => y.id === x.id) === i && (bossWatching() || x.who === '*' || x.who === myEmail()));
 // La journée : qui a travaillé (ou travaillera), ce qui a été fait, ce qui reste, les mots laissés.
 async function openDaySheet(d) {
   const mon = mondayOf(d);
@@ -5303,8 +5446,10 @@ async function openDaySheet(d) {
   const byName = (n) => (boss.team || []).find((u) => (u.name || '').split(' ')[0].toLowerCase() === (n || '').split(' ')[0].toLowerCase());
   const chip = (name, sub, avatar, isLead) => `<span class="dy-person${isLead ? ' lead' : ''}"><span class="tw-av mini${avatar ? ' has-pic' : ''}">${avatarOf({ avatar }, esc((name[0] || '?').toUpperCase()))}</span><span><b>${esc(name)}</b><small class="num">${esc(sub)}</small></span></span>`;
   // Qui : pour un jour passé, ceux qui ont envoyé leur quart (+ les superviseurs à l'horaire); sinon l'horaire.
+  const canOpen = bossWatching();
   const worked = dg && dg.shifts.length
-    ? dg.shifts.map((s) => chip(s.name.split(' ')[0], s.start ? `${hm(s.start)} – ${hm(s.end)}` : SHIFTS[s.shift][lang()].short, byName(s.name)?.avatar, false)).join('')
+    ? dg.shifts.map((s, i) => { const c = chip(s.name.split(' ')[0], s.start ? `${hm(s.start)} – ${hm(s.end)}` : SHIFTS[s.shift][lang()].short, byName(s.name)?.avatar, false);
+      return canOpen ? `<button type="button" class="dy-open" data-dy-rep="${i}" aria-label="${esc(t('dyOpenReport', s.name.split(' ')[0]))}">${c}${CHEV_R}</button>` : c; }).join('')
     : on.emp.map((x) => chip(x.name, `${hm(x.start)} – ${hm(x.end)}`, x.avatar, false)).join('');
   const leads = on.lead.map((x) => chip(x.name, `${hm(x.start)} – ${hm(x.end)}`, x.avatar, true)).join('');
   const status = past ? `<span class="pill dy-done">${HUB_ICO.check}${esc(t('wkDayDone'))}</span>` : today ? `<span class="pill is-live">${esc(t('today'))}</span>` : `<span class="pill">${esc(t('wkDayAhead'))}</span>`;
@@ -5314,15 +5459,24 @@ async function openDaySheet(d) {
     : past ? `<p class="hb-quiet">${esc(t('wkNoReport'))}</p>` : '';
   const list = (k, arr, cls) => (arr.length ? `<p class="block-label">${esc(t(k))} <span class="num">${arr.length}</span></p><div class="dy-chips ${cls}">${arr.slice(0, 10).map((x) => `<span>${cls === 'ok' ? HUB_ICO.check : ''}${esc(x)}</span>`).join('')}${arr.length > 10 ? `<span class="more">+${arr.length - 10}</span>` : ''}</div>` : '');
   const flags = dg?.flags.length ? `<p class="block-label">${esc(t('wkFlags'))} <span class="num">${dg.flags.length}</span></p><div class="dy-flags">${dg.flags.map((fl) => `<span class="pb-mini${fl.urgent ? ' urgent' : ''}">${catIcon(fl.category)}<span><b>${esc(catName(fl.category))}</b><small>${esc(fl.location || fl.text || '')}</small></span></span>`).join('')}</div>` : '';
+  // « Ce qui a été fait », rangé par zone (A, B, C), puis le reste du gym (Q59).
+  const doneByZone = (g) => {
+    if (!g.done.length) return '';
+    const zs = [...new Set(g.done.map((x) => g.zoneOf.get(x)).filter(Boolean))].sort();
+    if (!zs.length) return list('wkWhatDone', g.done, 'ok');
+    const grp = (lab, arr) => (arr.length ? `<p class="dy-zone">${esc(lab)}</p><div class="dy-chips ok">${arr.map((x) => `<span>${HUB_ICO.check}${esc(x)}</span>`).join('')}</div>` : '');
+    return `<p class="block-label">${esc(t('wkWhatDone'))} <span class="num">${g.done.length}</span></p>${zs.map((z) => grp(`Zone ${z}`, g.done.filter((x) => g.zoneOf.get(x) === z))).join('')}${grp(t('dyZoneRest'), g.done.filter((x) => !g.zoneOf.get(x)))}`;
+  };
   const notes = dg?.notes.length ? `<p class="block-label">${esc(t('wkNotes'))}</p>${dg.notes.map((x) => `<blockquote class="dy-note">« ${esc(x.text)} »<cite>${esc(x.name)}</cite></blockquote>`).join('')}` : '';
-  const tasks = (teamPlan.tasks || []).concat(extras.tasks || []).filter((x, i, a) => x.date === d && a.findIndex((y) => y.id === x.id) === i && (bossWatching() || x.who === '*' || x.who === myEmail()));
+  const tasks = dayTasks(d);
   const special = tasks.length ? `<p class="block-label">${esc(t('wkSpecial'))}</p><div class="dy-chips star">${tasks.map((x) => `<span>${HUB_ICO.misc}${esc(x.title)}${x.time ? ` · ${hm(x.time)}` : ''}</span>`).join('')}</div>` : '';
   openSheet(`<div class="sheet-head"><p class="eyebrow">${HUB_ICO.week.replace('<svg ', '<svg class="ico" aria-hidden="true" ')}${esc(t(past ? 'wkEyebrowPast' : 'wkEyebrowDay'))}</p><h2>${esc(longDay(d))}</h2>${status}</div>
     ${holi(d) ? holidayNotice(d, 0) : ''}${myCard}${summary}${congeLine(d)}
-    ${leads ? `<p class="block-label">${esc(t('grpLead'))} <span class="num">${on.lead.length}</span></p><div class="dy-people">${leads}</div>` : ''}
+    ${leads ? `<p class="block-label">${esc(t(past ? 'dyLeadSched' : 'grpLead'))} <span class="num">${on.lead.length}</span></p><div class="dy-people">${leads}</div>` : ''}
     ${worked ? `<p class="block-label">${esc(t(past || (dg && dg.shifts.length) ? 'wkWorked' : 'wkWorking'))} <span class="num">${dg && dg.shifts.length ? dg.shifts.length : on.emp.length}</span></p><div class="dy-people">${worked}</div>` : `<p class="hb-quiet">${esc(t('twNobody'))}</p>`}
-    ${dg ? list('wkWhatDone', dg.done, 'ok') + list(past ? 'wkNotDone' : 'wkWhatLeft', dg.left, 'left') : ''}
+    ${dg ? doneByZone(dg) + list(past ? 'wkNotDone' : 'wkWhatLeft', dg.left, 'left') : ''}
     ${special}${flags}${notes}`, (root) => {
+    for (const b of root.querySelectorAll('[data-dy-rep]')) b.addEventListener('click', () => { const s = dg.shifts[Number(b.dataset.dyRep)]; if (!s || !bossWatching()) return; closeSheet(); setTimeout(() => openReview(summaryReport(s)), 320); });
     root.querySelector('[data-dy-glance]')?.addEventListener('click', () => { closeSheet(); const m = mySched(d); setTimeout(() => openGlance({ mine: true, live: false, date: d, start: m.start, end: m.end }), 320); });
   }, bossWatching() && dg && dg.shifts.length ? `<button type="button" class="btn ghost" data-hub="reports">${esc(t('wkSeeReports'))}</button>` : '');
 }

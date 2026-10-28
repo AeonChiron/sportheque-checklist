@@ -764,3 +764,20 @@ test('Critique : un seul preneur même en même temps, un congé n’est jamais 
   await go('plan', { action: 'conge', date: '2026-10-30', to: '2026-10-31', clear: true }, noah);
   assert.equal((await go('plan?from=2026-10-30&to=2026-10-30', null, noah)).data.overrides['noah@x.ca']['2026-10-30'].start, '10:00');
 });
+
+// ---------- Ronde 6 (rapports) ----------
+test('Résumé du mois, fait tout seul le 1er à 9 h, pour les superviseurs seulement, une fois', async () => {
+  const { a, go, sign, sent } = kit();
+  const boss = await sign('Martine', 'boss'), noah = await sign('Noah');
+  for (const [w, tk] of [['martine', boss], ['noah', noah]]) await go('push', { action: 'subscribe', sub: { endpoint: `https://p/${w}`, keys: { p256dh: 'k', auth: 'a' } } }, tk);
+  await go('board', { date: '2026-10-21', shift: 2, name: 'Noah', items: [{ id: 'a', status: 'done' }, { id: 'b', status: 'done' }, { id: 'c', status: 'notdone' }, { id: 'd', status: 'done' }], flags: [] }, noah);
+  const id = (await go('problems', { method: 'POST', category: 'machine', location: 'Tapis 3' }, noah)).data.id;
+  await go('problems', { action: 'status', id, status: 'resolved' }, boss);
+  const n0 = sent.length;
+  await a.remindDue(new Date('2026-11-01T09:05:00-05:00'));
+  const m = sent.slice(n0).filter((x) => /résumé d/.test(x.title));
+  assert.equal(m.length, 1); assert.equal(m[0].to, 'https://p/martine');
+  assert.match(m[0].title, /octobre/); assert.match(m[0].body, /75 %/); assert.match(m[0].body, /1 problème réglé/);
+  await a.remindDue(new Date('2026-11-01T09:10:00-05:00'));
+  assert.equal(sent.filter((x) => /résumé d/.test(x.title)).length, 1);
+});

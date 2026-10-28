@@ -3934,3 +3934,79 @@ body:has(#sheet.open) .tabbar { opacity: 0; pointer-events: none; transform: tra
 /* Très grand texte : le volume sur sa propre ligne (il était écrasé). */
 html[data-text="xl"] .pr-vol { grid-template-columns: 1fr auto; }
 html[data-text="xl"] .pr-vol input { grid-column: 1 / -1; grid-row: 2; }
+
+/* ---------- Ronde 6 : les rapports des superviseurs ---------- */
+.rc-cards { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; margin: 0 0 12px; }
+.rc-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rc-card .rc-l { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.rc-card .num { font: 800 28px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.rc-card .num small { font-size: 16px; margin-left: 1px; }
+.rc-card.main.ok .num { color: var(--ok); }
+.rc-card.main.mid .num { color: var(--warn); }
+.rc-card.main.low .num, .rc-card.bad .num { color: var(--bad); }
+.rc-d { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.rc-d.up { color: var(--ok); }
+.rc-d.down { color: var(--bad); }
+.rc-trend { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px 14px 8px; margin: 0 0 12px; }
+.rc-th { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 2px 4px; }
+.rc-th h2 { font-size: 17px; margin: 0; }
+.rc-th small { font-size: 12.5px; color: var(--muted); }
+.rc-chart { position: relative; }
+.rc-chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.rc-bar { fill: var(--accent); opacity: .78; transition: opacity .15s; }
+.rc-bar.now { opacity: 1; }
+.rc-bar.hover { opacity: 1; }
+.rc-hit { fill: transparent; cursor: pointer; }
+.rc-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 3; }
+.rc-grid.base { stroke-dasharray: none; stroke: color-mix(in srgb, var(--muted) 45%, transparent); }
+.rc-x, .rc-y { fill: var(--muted); font: 600 9.5px/1 var(--font); }
+.rc-x.now { fill: var(--ink); font-weight: 800; }
+.rc-empty { fill: color-mix(in srgb, var(--muted) 50%, transparent); }
+.rc-tip { position: absolute; top: -6px; transform: translateY(-100%); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 600; padding: 6px 9px; border-radius: 9px; white-space: nowrap; pointer-events: none; box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .5); z-index: 2; }
+.rc-filters { margin-top: 2px; }
+.rc-dayhead { align-items: center; justify-content: flex-start; }
+.rc-dayhead h2 { flex: 1; min-width: 0; }
+.rc-day + .rc-day { margin-top: 4px; }
+.rc-month-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+.rc-month-acts .btn { flex: 1 1 180px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.rc-month-acts .btn svg { width: 18px; height: 18px; flex: none; }
+.rc-recap-banner { display: flex; align-items: stretch; gap: 6px; margin: 0 0 12px; background: var(--accent-soft, color-mix(in srgb, var(--accent) 12%, var(--surface))); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; }
+.rc-rb-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 6px 12px 14px; background: none; border: 0; color: inherit; text-align: left; font: inherit; cursor: pointer; min-height: 56px; }
+.rc-rb-main > span:not(.rc-rb-ico) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rc-rb-main b { font-size: 15.5px; }
+.rc-rb-main small { font-size: 13px; color: var(--muted); }
+.rc-rb-main > svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.rc-rb-ico { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: var(--accent); color: var(--surface); flex: none; }
+.rc-rb-ico svg { width: 20px; height: 20px; }
+.rc-rb-x { width: 44px; min-height: 44px; flex: none; background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; border-radius: 0 18px 18px 0; }
+.rc-recap-top { display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; }
+.rc-recap-top > div { display: flex; flex-direction: column; gap: 2px; }
+.rc-recap-top b { font-size: 18px; }
+.rc-recap-top small { color: var(--muted); font-size: 14px; }
+.wk-ring.big { width: 64px; height: 64px; }
+.wk-ring.big::before { inset: 7px; }
+.wk-ring.big b { font-size: 17px; }
+.rc-recap-list { list-style: none; margin: 0 0 16px; padding: 0; }
+.rc-recap-list li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.rc-recap-list li:first-child { border-top: 0; }
+.rc-recap-list li b { color: var(--bad); }
+.rc-recap-list.ideas li { flex-direction: column; gap: 2px; }
+.rc-recap-list.ideas small { color: var(--muted); font-size: 13px; }
+.rc-recap-n { margin: 0 0 16px; font-size: 15px; }
+.rc-recap-n b { font: 800 22px/1 var(--display); margin-right: 4px; }
+@media (max-width: 360px) { .rc-cards { grid-template-columns: 1fr 1fr; } .rc-card.main { grid-column: 1 / -1; } }
+@media (forced-colors: active) { .rc-bar { fill: CanvasText; opacity: 1; } .rc-bar.now { fill: Highlight; } }
+/* Semaine : jour passé sans quart envoyé (gris), tâche spéciale (petite icône à gauche). */
+.wk-ppl.gone, .wk-ppl.gone b { color: var(--muted); opacity: .7; }
+.wk-misc { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; color: var(--accent); }
+.wk-misc svg, .wk-misc-l svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wk-misc-l { color: var(--muted); }
+.wk-misc-l svg { color: var(--accent); }
+/* Fiche du jour : toucher une personne ouvre son rapport (superviseurs seulement). */
+.dy-open { display: inline-flex; align-items: center; gap: 2px; padding: 0; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 99px; text-align: left; }
+.dy-open > svg { width: 16px; height: 16px; color: var(--muted); fill: none; stroke: currentColor; stroke-width: 2; }
+.dy-open:hover .dy-person, .dy-open:focus-visible .dy-person { border-color: var(--accent); }
+.dy-zone { margin: 8px 2px 6px; font: 700 13px/1.2 var(--font); color: var(--muted); }
+.rc-rb-ico svg, .rc-month-acts .btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wk-misc { top: -6px; left: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; z-index: 1; }
+.wk-misc svg { width: 12px; height: 12px; }
