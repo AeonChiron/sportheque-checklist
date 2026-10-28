@@ -40,6 +40,14 @@ const LOGIN_LOCK_MS = 24 * 3600e3;
 const UNDO_HOURS = 12; // annuler son propre signalement
 const MAX_PHOTO_BYTES = 900_000;
 
+// Tâches faites / prévues d'un quart, comme l'app les compte : les tâches du plan seulement
+// (sans le pointage ni les tâches « en plus » qui débordent du quart).
+function shiftCount(s) {
+  const items = s.items || [], pt = items.find((i) => i.id === 'pointage');
+  if (Number.isFinite(s.total) && Number.isFinite(s.done) && s.total >= (pt ? 1 : 0)) return { done: Math.max(0, s.done - (pt?.status === 'done' ? 1 : 0)), total: s.total - (pt ? 1 : 0) };
+  const it = items.filter((i) => i.id !== 'pointage');
+  return { done: it.filter((i) => i.status === 'done').length, total: it.length };
+}
 const localDay = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
 const PHOTO_DAYS = 90;
 const sha = (s) => createHash('sha256').update(s).digest('hex');
@@ -78,7 +86,7 @@ const webPush = {
   },
 };
 const PUSH_TEXT = {
-  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' }, conge: (who, when) => ({ title: `${who} prend congé`, body: `${when}. C’est dans l’horaire de l’équipe.` }), swapAsk: (who, when, h) => ({ title: `${who} cherche quelqu’un`, body: `Pour son quart du ${when} (${h}). Touche pour répondre.` }), swapOk: (who, when) => ({ title: 'Ton quart est pris', body: `${who} prend ton quart du ${when}. Merci !` }), swapNo: (who, when) => ({ title: 'Pas cette fois', body: `${who} ne peut pas prendre ton quart du ${when}.` }), swapDone: (a, b, when) => ({ title: 'Échange de quart', body: `${b} prend le quart de ${a} le ${when}.` }), monthly: (m, pct, fixed) => ({ title: `Le résumé de ${m} est prêt`, body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`} · ${fixed} problème${fixed > 1 ? 's' : ''} réglé${fixed > 1 ? 's' : ''}.` }), nosched: { title: 'Ton horaire est vide', body: 'Entre tes jours de travail une fois : ton quart partira tout seul.' }, weekly: (pct, urgent) => ({ title: 'Ta semaine au gym', body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`}${urgent ? ` · ${urgent} urgent${urgent > 1 ? 's' : ''} à régler` : ' · rien d’urgent'}.` }) },
+  fr: { sched: (by) => ({ title: 'Ton horaire a changé', body: `${by} a modifié ton horaire. Touchez pour le voir.` }), day: (by, d) => ({ title: 'Ton quart a changé', body: `${by} a changé ton quart du ${d}.` }), task: (by, title, h) => ({ title: `Nouvelle tâche : ${title}`, body: `Ajoutée par ${by}${h ? `, à ${h}` : ''}.` }), remind: (h) => ({ title: 'Ton quart commence bientôt', body: `À ${h}. Bon quart !` }), urgent: (cat, by) => ({ title: `⚑ Urgent : ${cat}`, body: `Signalé par ${by}. Touchez pour voir.` }), test: { title: 'Ça marche !', body: 'Les notifications sont activées.' }, conge: (who, when) => ({ title: `${who} prend congé`, body: `${when}. C’est dans l’horaire de l’équipe.` }), swapAsk: (who, when, h) => ({ title: `${who} cherche quelqu’un`, body: `Pour son quart du ${when} (${h}). Touche pour répondre.` }), swapOk: (who, when) => ({ title: 'Ton quart est pris', body: `${who} prend ton quart du ${when}. Merci !` }), swapNo: (who, when) => ({ title: 'Pas cette fois', body: `${who} ne peut pas prendre ton quart du ${when}.` }), swapDone: (a, b, when) => ({ title: 'Échange de quart', body: `${b} prend le quart de ${a} le ${when}.` }), monthly: (m, pct, fixed) => ({ title: `Le résumé ${/^[aeiouéh]/i.test(m) ? `d’${m}` : `de ${m}`} est prêt`, body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`} · ${fixed} problème${fixed > 1 ? 's' : ''} réglé${fixed > 1 ? 's' : ''}.` }), nosched: { title: 'Ton horaire est vide', body: 'Entre tes jours de travail une fois : ton quart partira tout seul.' }, weekly: (pct, urgent) => ({ title: 'Ta semaine au gym', body: `${pct === null ? 'Aucun quart envoyé' : `Le gym : ${pct} % des tâches faites`}${urgent ? ` · ${urgent} urgent${urgent > 1 ? 's' : ''} à régler` : ' · rien d’urgent'}.` }) },
   en: { sched: (by) => ({ title: 'Your schedule changed', body: `${by} changed your schedule. Tap to see it.` }), day: (by, d) => ({ title: 'Your shift changed', body: `${by} changed your shift on ${d}.` }), task: (by, title, h) => ({ title: `New task: ${title}`, body: `Added by ${by}${h ? `, at ${h}` : ''}.` }), remind: (h) => ({ title: 'Your shift starts soon', body: `At ${h}. Have a good shift!` }), urgent: (cat, by) => ({ title: `⚑ Urgent: ${cat}`, body: `Reported by ${by}. Tap to see it.` }), test: { title: 'It works!', body: 'Notifications are on.' }, conge: (who, when) => ({ title: `${who} is taking time off`, body: `${when}. It’s in the team schedule.` }), swapAsk: (who, when, h) => ({ title: `${who} is looking for someone`, body: `For their shift on ${when} (${h}). Tap to answer.` }), swapOk: (who, when) => ({ title: 'Your shift is taken', body: `${who} is taking your shift on ${when}. Thanks!` }), swapNo: (who, when) => ({ title: 'Not this time', body: `${who} can’t take your shift on ${when}.` }), swapDone: (a, b, when) => ({ title: 'Shift swap', body: `${b} is taking ${a}’s shift on ${when}.` }), monthly: (m, pct, fixed) => ({ title: `Your ${m} summary is ready`, body: `${pct === null ? 'No shift sent' : `The gym: ${pct}% of tasks done`} · ${fixed} problem${fixed === 1 ? '' : 's'} fixed.` }), nosched: { title: 'Your schedule is empty', body: 'Enter your work days once: your shift will start by itself.' }, weekly: (pct, urgent) => ({ title: 'Your week at the gym', body: `${pct === null ? 'No shift sent' : `The gym: ${pct}% of tasks done`}${urgent ? ` · ${urgent} urgent to fix` : ' · nothing urgent'}.` }) },
 };
 
@@ -603,12 +611,13 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     if (!leads.length) return 0;
     let done = 0, total = 0;
     for (const d of datesIn(first, last, 31)) {
-      for (const sh of (await board().get(d, { type: 'json' })) || []) if (!sh.open && !sh.ghost) { const it = (sh.items || []).filter((i) => i.id !== 'pointage'); done += it.filter((i) => i.status === 'done').length; total += it.length; }
+      for (const sh of (await board().get(d, { type: 'json' })) || []) if (!sh.open && !sh.ghost) { const c = shiftCount(sh); done += c.done; total += c.total; }
     }
     const pct = total ? Math.round((100 * done) / total) : null;
     const { blobs: pb } = await problems().list();
     let fixed = 0;
-    for (const { key } of pb) { const pr = await problems().get(key, { type: 'json' }); const at = pr?.resolvedAt ? localDay(pr.resolvedAt) : ''; if (pr?.status === 'resolved' && at >= first && at <= last) fixed += 1; }
+    for (const { key } of pb) { const pr = await problems().get(key, { type: 'json' }); const at = pr?.resolvedAt ? localDay(pr.resolvedAt) : ''; if (pr?.status === 'resolved' && !pr.ghost && at >= first && at <= last) fixed += 1; }
+    if (pct === null && !fixed) return 0; // un mois vide : rien à résumer
     let sent = 0;
     for (const [key, rec] of leads) {
       await pushes().setJSON(key, { ...rec, monthlyFor: day });
@@ -653,7 +662,7 @@ export function createApi({ getStore, env, push = webPush, fetchFn = (...a) => f
     let done = 0, total = 0;
     for (let i = 0; i < 7; i++) {
       const d = localDay(now.getTime() - i * 864e5);
-      for (const s of (await board().get(d, { type: 'json' })) || []) if (!s.open && !s.ghost) { const it = (s.items || []).filter((i) => i.id !== 'pointage'); done += it.filter((i) => i.status === 'done').length; total += it.length; }
+      for (const s of (await board().get(d, { type: 'json' })) || []) if (!s.open && !s.ghost) { const c = shiftCount(s); done += c.done; total += c.total; }
     }
     const pct = total ? Math.round((100 * done) / total) : null;
     const { blobs: pb } = await problems().list();

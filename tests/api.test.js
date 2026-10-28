@@ -777,7 +777,27 @@ test('Résumé du mois, fait tout seul le 1er à 9 h, pour les superviseurs seul
   await a.remindDue(new Date('2026-11-01T09:05:00-05:00'));
   const m = sent.slice(n0).filter((x) => /résumé d/.test(x.title));
   assert.equal(m.length, 1); assert.equal(m[0].to, 'https://p/martine');
-  assert.match(m[0].title, /octobre/); assert.match(m[0].body, /75 %/); assert.match(m[0].body, /1 problème réglé/);
+  assert.equal(m[0].title, 'Le résumé d’octobre est prêt'); assert.match(m[0].body, /75 %/); assert.match(m[0].body, /1 problème réglé/);
   await a.remindDue(new Date('2026-11-01T09:10:00-05:00'));
   assert.equal(sent.filter((x) => /résumé d/.test(x.title)).length, 1);
+});
+
+test('Équipe ronde 6 : le % du résumé = celui de l’app, anglais, désactivable, rien pour un mois vide', async () => {
+  const { a, go, sign, sent } = kit();
+  const boss = await sign('Martine', 'boss'), ann = await sign('Ann', 'boss'), quiet = await sign('Paul', 'boss'), noah = await sign('Noah');
+  for (const [w, tk, lang] of [['martine', boss, 'fr'], ['ann', ann, 'en'], ['paul', quiet, 'fr']]) await go('push', { action: 'subscribe', lang, sub: { endpoint: `https://p/${w}`, keys: { p256dh: 'k', auth: 'a' } } }, tk);
+  await go('push', { action: 'prefs', weekly: false }, quiet);
+  // Rien en octobre : pas de résumé le 1er novembre.
+  let n0 = sent.length;
+  await a.remindDue(new Date('2026-11-01T09:05:00-05:00'));
+  assert.equal(sent.length - n0, 0);
+  // Novembre : le pointage et les tâches « en plus » ne comptent pas (comme dans l'app) → 2 sur 2 = 100 %.
+  await go('board', { date: '2026-11-10', shift: 2, name: 'Noah', done: 3, total: 3, items: [{ id: 'pointage', status: 'done' }, { id: 'a', status: 'done' }, { id: 'b', status: 'done' }, { id: 'x1', status: 'unchecked' }, { id: 'x2', status: 'unchecked' }], flags: [] }, noah);
+  n0 = sent.length;
+  await a.remindDue(new Date('2026-12-01T09:05:00-05:00'));
+  const got = sent.slice(n0);
+  assert.equal(got.length, 2); // Martine et Ann; Paul a fermé les résumés
+  const fr = got.find((x) => x.to === 'https://p/martine'), en = got.find((x) => x.to === 'https://p/ann');
+  assert.equal(fr.title, 'Le résumé de novembre est prêt'); assert.match(fr.body, /100 %/);
+  assert.equal(en.title, 'Your November summary is ready'); assert.match(en.body, /100%/);
 });
