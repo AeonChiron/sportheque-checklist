@@ -72,7 +72,7 @@ export function mountPool(root) {
   }
   function resize() {
     const r = root.getBoundingClientRect();
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = Math.min(1.5, window.devicePixelRatio || 1); // 1.5 : l'eau et la lumière sont floues de toute façon, moins de travail
     W = r.width; H = r.height;
     const head = root.parentElement.querySelector('.pool-head')?.getBoundingClientRect(), foot = root.parentElement.querySelector('.pool-bottom')?.getBoundingClientRect();
     edges.top = head?.height ? head.bottom - r.top : 96;
@@ -82,16 +82,20 @@ export function mountPool(root) {
     const big = root.closest('#auth')?.classList.contains('inside'); // connecté : moins de boutons, lapin plus grand
     // Grand écran (ordinateur) : le lapin grandit avec la hauteur de l'écran (propriétaire).
     const cap = big ? Math.max(250, Math.min(500, H * 0.4)) : Math.max(170, Math.min(380, H * 0.3));
-    s.size = Math.max(84, Math.min(cap, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
+    s.size = Math.max(56, Math.min(cap, W * (big ? 0.56 : 0.38), (edges.bottom - edges.top - 40) / RATIO));
     // Écran large (ordinateur, tablette couchée) : la colonne du milieu est pleine, mais les côtés sont
     // vides. Le lapin se tient debout à gauche, grand, à côté des boutons (ronde 7).
     const side = (W - Math.min(640, W)) / 2;
-    s.wide = side >= 230 && H >= 480;
-    if (s.wide) s.size = Math.max(s.size, Math.min(420, H * 0.46 / RATIO * 1.25, side * 0.78));
+    s.wide = side >= 170 && H >= 480; // 170 : la tablette couchée (1024 px) aussi
+    if (s.wide) s.size = Math.max(s.size, Math.min(420, H * 0.46 / RATIO * 1.25, side * (side < 300 ? 0.98 : 0.78)));
+    // Téléphone couché : pas la place entre le titre et le bouton. Le lapin se cache plutôt que de couvrir le texte.
+    hero.style.display = !s.wide && edges.bottom - edges.top < 56 * RATIO ? 'none' : '';
     hero.style.width = `${s.size}px`;
     hero.style.transformOrigin = `${FOOT_X * 100}% ${FOOT_Y * 100}%`;
     readObstacles();
     // Au repos : pile au milieu de l'espace libre entre le titre et le bouton.
+    // Déplacé puis écran tourné : s'il sort de l'écran ou tombe sur les boutons, il revient à sa place.
+    if (s.touched && !s.drag && (s.x < 0 || s.x > W || s.y > H || s.y - s.size * RATIO < 0 || s.y - s.size * RATIO * 0.5 > edges.bottom)) s.touched = false;
     if (!s.touched && W > 200) {
       const h = s.size * RATIO;
       if (s.wide) { s.x = side / 2 + (FOOT_X - LOOK_X) * s.size; s.y = Math.min(H - 24, Math.max(h + 20, (foot?.bottom ?? H) - r.top)); } // debout au niveau du bas des boutons
@@ -154,6 +158,9 @@ export function mountPool(root) {
     { tx: 0.45, bw: 0.12, a: 0.34, sp: 0.08, ph: 5.0, layer: 1 },
     { tx: 0.72, bw: 0.06, a: 0.42, sp: 0.1, ph: 0.2, layer: 1 },
     { tx: 0.87, bw: 0.1, a: 0.36, sp: 0.07, ph: 2.0, layer: 1 },
+    // De longues stries fines au milieu (ronde 7 : la lumière doit se voir partout, pas juste en haut).
+    { tx: 0.56, bw: 0.04, a: 0.5, sp: 0.12, ph: 4.4, layer: 1 },
+    { tx: 0.18, bw: 0.035, a: 0.5, sp: 0.1, ph: 0.9, layer: 1 },
   ];
   const sprites = {}; // une série par thème : blanc le jour, bleu argenté au clair de lune
   // Des grains de poussière qui flottent dans la lumière.
@@ -178,12 +185,13 @@ export function mountPool(root) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     BEAMS.forEach((b, i) => {
+      if (b.bw > 0.5 && W < 700) return; // téléphone : le grand voile coûte cher pour peu d'effet
       const sway = Math.sin(t * b.sp + b.ph) * 0.045 + Math.sin(t * b.sp * 2.3 + b.ph * 1.7) * 0.015;
       const tx = W * (b.tx + sway) + (R - W) * 0.25 * b.tx;
       const dx = tx - Sx, dy = ty - Sy, d = Math.hypot(dx, dy);
       const breathe = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(t * (0.21 + b.sp) + b.ph * 2));
       const shimmer = 1 + 0.07 * Math.sin(t * 1.9 + b.ph * 3) * Math.sin(t * 1.3 + b.ph);
-      ctx.globalAlpha = Math.min(1, b.a * breathe * shimmer * (D ? 0.72 : 1));
+      ctx.globalAlpha = Math.min(1, b.a * breathe * shimmer * (D ? 0.95 : 1) * (b.layer ? 1.2 : 1.15));
       const L = d * 1.75, wb = R * b.bw * (1 + 0.12 * Math.sin(t * 0.17 + b.ph)) * 1.75;
       ctx.save();
       ctx.translate(Sx, Sy); ctx.rotate(Math.atan2(-dx, dy));
@@ -242,10 +250,10 @@ export function mountPool(root) {
     if (!still) light(D); else { t = 3; light(D); }
     // Une lueur douce au sol sous le lapin, là où les rayons se croisent (Q63).
     {
-      const hh = s.size * RATIO, gx = s.x, gy = s.y - hh * 0.08, gr = s.size * 1.05;
+      const hh = s.size * RATIO, gx = s.x, gy = s.y - hh * 0.08, gr = s.size * 1.3;
       const pool = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
-      const c = D ? '190,215,255' : '255,250,235', k = 0.55 + 0.08 * Math.sin(t * 0.6);
-      pool.addColorStop(0, `rgba(${c},${0.5 * k})`); pool.addColorStop(0.45, `rgba(${c},${0.2 * k})`); pool.addColorStop(1, `rgba(${c},0)`);
+      const c = D ? '190,215,255' : '255,250,235', k = 0.8 + 0.08 * Math.sin(t * 0.6);
+      pool.addColorStop(0, `rgba(${c},${0.72 * k})`); pool.addColorStop(0.45, `rgba(${c},${0.3 * k})`); pool.addColorStop(1, `rgba(${c},0)`);
       ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.translate(gx, gy); ctx.scale(1, 0.55); ctx.translate(-gx, -gy);
       ctx.fillStyle = pool; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
@@ -340,11 +348,11 @@ export function mountPool(root) {
   function down(e) {
     if (e.target.closest('button, a, .auth-sheet, .pool-ui')) return;
     const [x, y] = pt(e);
-    s.touched = true;
     // Une zone généreuse autour de l'image (un doigt sur iPad est large) : on l'attrape facilement.
     const r = hero.getBoundingClientRect(), o = root.getBoundingClientRect(), pad = 60;
     const onHim = x > r.left - o.left - pad && x < r.right - o.left + pad && y > r.top - o.top - pad && y < r.bottom - o.top + pad;
     if (!onHim) return; // ailleurs : rien ne bouge (il ne s'échappe pas et ne vient pas tout seul)
+    s.touched = true; // seulement quand on l'attrape : un toucher sur le plancher ne fige pas sa place
     e.preventDefault(); // iPad : pas de loupe, de sélection ni de défilement pendant qu'on le tient
     try { root.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     s.drag = { id: e.pointerId, ox: x - s.x, oy: y - s.y, tx: s.x, ty: s.y, px: x, py: y, pt: performance.now(), vx: 0, vy: 0 };
@@ -386,10 +394,11 @@ export function mountPool(root) {
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (W) resize(); }) : null;
   for (const el of [root.parentElement?.querySelector('.pool-head'), root.parentElement?.querySelector('.pool-bottom')]) if (el) ro?.observe(el);
 
+  let settle = 0;
   return {
     // (Les boutons du bas entrent en glissant : on remesure quand ils sont à leur place.)
-    start() { requestAnimationFrame(resize); setTimeout(() => { if (!s.touched) resize(); }, 1600); if (!still && !raf) { last = 0; raf = requestAnimationFrame(step); } else requestAnimationFrame(() => { resize(); draw(); }); },
-    stop() { cancelAnimationFrame(raf); raf = 0; },
+    start() { requestAnimationFrame(resize); clearTimeout(settle); settle = setTimeout(() => { if (!s.touched) resize(); }, 1600); if (!still && !raf) { last = 0; raf = requestAnimationFrame(step); } else requestAnimationFrame(() => { resize(); draw(); }); },
+    stop() { cancelAnimationFrame(raf); raf = 0; clearTimeout(settle); },
     cheer() {
       for (let k = 0; k < 4; k++) setTimeout(() => ripples.push({ x: s.x + (Math.random() - 0.5) * 30, y: s.y + (Math.random() - 0.5) * 10, age: 0, str: 1 - k * 0.15, seed: Math.random() * 6.28 }), 380 + k * 90);
     },

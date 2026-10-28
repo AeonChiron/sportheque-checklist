@@ -1892,9 +1892,11 @@ function mountMap(box, { highlight = null, mirrors = null, states = {}, date = t
 // Le pourquoi vient de La méthode (même ordre que le plan : it.ref = l'étape); jamais inventé.
 function whyOf(it) {
   if (it.noWhy) return '';
+  const flat = (x) => String(x).replace(/\*\*/g, '').toLowerCase().replace(/[^a-zà-ÿ0-9]/g, '');
   const sh = Number((/^q([12])-/.exec(it.id || '') || [])[1]);
   const step = sh && Number.isInteger(it.ref) ? METHOD[lang()].flows[sh]?.[it.ref] : null;
-  return step && !step.kind && step.why ? step.why : '';
+  if (!step || step.kind || !step.why) return '';
+  return (it.tips || []).some((x) => flat(x).includes(flat(step.why))) ? '' : step.why; // déjà dans les trucs : pas deux fois
 }
 const whyBox = (it) => { const w = whyOf(it); return w ? `<details class="why-box"><summary>${esc(METHOD[lang()].why)}</summary><p>${md(w)}</p><button type="button" class="link" data-method-link>${esc(t('whyMethod'))}</button></details>` : ''; };
 // Où dans le gym : la zone (profondeur, miroirs) ou la pièce, seulement quand c'est sûr.
@@ -1909,6 +1911,10 @@ function miniMap(spot, date, label = t('mmWhere')) {
 function openFullMap(date) {
   ap.day = date; ap.week = mondayOf(date); ap.tab = 'day'; ap.keepNext = true;
   openApercu({ keep: true });
+  // Le focus suit : sur le titre du grand plan (clavier, lecteur d'écran).
+  const t0 = performance.now();
+  const focusTitle = () => { const h = $('#apTitle'); if (h && !$('#apercu').hidden && h.offsetParent) { h.tabIndex = -1; h.focus({ preventScroll: true }); } else if (performance.now() - t0 < 2000) requestAnimationFrame(focusTitle); };
+  requestAnimationFrame(focusTitle);
 }
 document.addEventListener('click', (e) => {
   const m = e.target.closest('[data-fullmap]');
@@ -4174,11 +4180,12 @@ if (FICTIVE) {
   // un toucher la fait grandir à nouveau, un deuxième ouvre « Quitter ».
   const fx = $('#fictExit');
   let fxTimer = 0;
-  const shrinkSoon = () => { clearTimeout(fxTimer); fxTimer = setTimeout(() => fx.classList.add('mini'), 5000); };
+  const shrinkSoon = () => { clearTimeout(fxTimer); fxTimer = setTimeout(() => (document.activeElement === fx ? shrinkSoon() : fx.classList.add('mini')), 5000); };
   shrinkSoon();
-  fx.addEventListener('click', () => {
-    if (fx.classList.contains('mini')) { fx.classList.remove('mini'); sfx('tick'); shrinkSoon(); return; }
-    shrinkSoon();
+  // Clavier ou lecteur d'écran (detail 0) : pas de petite étape muette, « Quitter » s'ouvre tout de suite.
+  fx.addEventListener('click', (e) => {
+    if (fx.classList.contains('mini') && e.detail !== 0) { fx.classList.remove('mini'); sfx('tick'); shrinkSoon(); return; }
+    fx.classList.remove('mini'); shrinkSoon();
     openSheet(`<div class="sheet-head"><h2>${esc(t('fictExitTitle'))}</h2></div><p class="lede">${esc(t('fictExitBody'))}</p>`, () => {
       $('#fxYes').onclick = () => exitFictive();
       $('#fxNo').onclick = closeSheet;
@@ -5229,6 +5236,7 @@ function applyTextSize() {
   const k = prefs.textSize || (prefs.large ? 'large' : 'normal');
   const z = Math.round(iosTextRatio() * ({ large: 1.15, xl: 1.3 }[k] || 1) * 100) / 100;
   document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  document.documentElement.style.setProperty('--zoom', String(z)); // la page bleue (plein écran) se remet à la taille de l'écran
   document.documentElement.dataset.text = k;
 }
 document.documentElement.classList.toggle('large', Boolean(prefs.large));
